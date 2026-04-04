@@ -1,202 +1,137 @@
 :root {
-  --bg: #f3f5f9;
-  --card: #ffffff;
-  --text: #1a1f2f;
-  --muted: #677089;
-  --accent: #375bff;
-  --border: #dbe1f0;
-  --success: #0ea46f;
+  --panel: #ffffff;
+  --text: #172033;
+  --muted: #6f7a8d;
+  --line: #e0eaf2;
+  --accent: #ffbe0b;
+  --ok: #0fb981;
+  --bg: #eef2f7;
+  --radius: 16px;
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   color: var(--text);
   background: var(--bg);
 }
 
-.topbar {
-  padding: 1rem 1.25rem;
-  background: linear-gradient(110deg, #1f3cb8, #3f68ff);
-  color: white;
-}
-.topbar h1 { margin: 0; font-size: 1.35rem; }
-.topbar p { margin: .35rem 0 0; opacity: .9; }
-
-.layout {
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 1rem;
-  padding: 1rem;
+.page {
+  width: min(1300px, 96vw);
+  margin: 14px auto;
 }
 
-.panel {
+.header {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
   display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.panel section {
-  background: var(--card);
-  border-radius: .75rem;
-  border: 1px solid var(--border);
-  padding: .9rem;
+.nav, .actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.btn {
+  border: 1px solid #cfd8e3;
+  background: #f7f9fc;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.icon { width: 42px; padding: 0; font-size: 16px; }
+.month-label { font-size: 28px; font-weight: 700; min-width: 220px; }
+.btn-ok { background: #c9f3e3; color: #0b8d64; border-color: #a6e8cf; }
+.btn-accent { background: var(--accent); border-color: #e2a600; }
+
+.content {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 14px;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
 }
 
 h2 {
-  margin: 0 0 .7rem;
-  font-size: 1rem;
+  margin: 0;
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 30px;
 }
 
-.stack {
-  display: grid;
-  gap: .5rem;
-}
+.table-wrap { overflow: auto; }
 
-input, select, button {
+table {
   width: 100%;
-  border: 1px solid var(--border);
-  border-radius: .55rem;
-  padding: .52rem .6rem;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+th, td {
+  border-bottom: 1px solid var(--line);
+  padding: 10px 8px;
+  text-align: left;
+}
+
+th { color: #6a7688; text-transform: uppercase; font-size: 13px; letter-spacing: .04em; }
+
+.day-col { width: 80px; }
+.week-col { width: 110px; }
+
+.status-select {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #d7dee8;
+  padding: 8px 12px;
   font: inherit;
+  font-size: 20px;
+  background: #f4f7fb;
 }
 
-button {
-  cursor: pointer;
-  background: var(--accent);
-  color: white;
-  border: none;
+.status-select[data-status="work"] { background: #f8efc9; border-color: #edc54b; }
+.status-select[data-status="off"] { background: #e7edf3; color: #49566b; }
+.status-select[data-status="vacation"] { background: #d8e9f7; border-color: #7baad7; }
+.status-select[data-status="sick"] { background: #e6def8; border-color: #b8a4ea; }
+.status-select[data-status="absent"] { background: #f6dddd; border-color: #ef9999; }
+
+.side-card { padding-bottom: 8px; }
+.salary-list { padding: 12px; display: grid; gap: 10px; }
+
+.salary-item {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px;
 }
 
-button:hover { filter: brightness(.95); }
-
-.employee-list {
-  margin: .7rem 0 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: .45rem;
-}
-
-.employee-item {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: .4rem;
-  align-items: center;
-  border: 1px solid var(--border);
-  border-radius: .6rem;
-  padding: .45rem .55rem;
-  background: #f9fbff;
-}
-
-.employee-meta {
-  font-size: .82rem;
-  color: var(--muted);
-}
-
-.delete-btn {
-  width: auto;
-  background: #ef4444;
-  padding-inline: .55rem;
-}
-
-.month-controls {
-  display: grid;
-  grid-template-columns: 42px 1fr 42px;
-  align-items: center;
-  gap: .5rem;
-}
-
-.month-controls button { padding: .42rem 0; }
-.month-controls strong { text-align: center; }
-
-.summary {
-  display: grid;
-  gap: .45rem;
-  max-height: 250px;
-  overflow: auto;
-}
-
-.summary-row {
-  border: 1px solid var(--border);
-  background: #fbfdff;
-  border-radius: .6rem;
-  padding: .5rem;
-  font-size: .86rem;
-}
-
-.summary-row b { color: var(--success); }
-
-.calendar-wrap {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: .75rem;
-  overflow: auto;
-  padding: .9rem;
-}
-
-.calendar {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(230px, 1fr));
-  gap: .7rem;
-  min-width: 980px;
-}
-
-.day-cell {
-  border: 1px solid var(--border);
-  border-radius: .75rem;
-  background: #fff;
-  padding: .5rem;
-  min-height: 200px;
-}
-
-.day-head {
+.salary-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: .5rem;
+  align-items: baseline;
 }
 
-.day-num {
-  font-weight: 700;
-}
+.salary-name { font-size: 30px; font-weight: 700; }
+.salary-shifts { color: #708095; font-size: 22px; font-weight: 700; }
+.small { color: #77859a; font-size: 22px; margin-top: 8px; }
+.big { color: var(--ok); font-size: 52px; margin: 4px 0; font-weight: 800; }
 
-.day-shifts {
-  display: grid;
-  gap: .45rem;
-}
-
-.shift-row {
-  display: grid;
-  gap: .35rem;
-  font-size: .8rem;
-}
-
-.shift-row label {
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.shift-row select {
-  padding: .35rem .45rem;
-  font-size: .82rem;
-}
-
-.weekday-header {
-  background: #eef3ff;
-  border: 1px dashed #cdd9ff;
-  border-radius: .6rem;
-  padding: .45rem;
-  text-align: center;
-  font-size: .84rem;
-  font-weight: 600;
-}
-
-@media (max-width: 980px) {
-  .layout { grid-template-columns: 1fr; }
-  .calendar { min-width: 100%; grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 1150px) {
+  .content { grid-template-columns: 1fr; }
+  .month-label, h2, .salary-name { font-size: 22px; }
+  .status-select { font-size: 16px; }
+  .small, .salary-shifts { font-size: 16px; }
+  .big { font-size: 36px; }
 }

@@ -3,56 +3,46 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>График и зарплата сотрудников</title>
+  <title>PVZ — график смен</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <h1>График и зарплата сотрудников</h1>
-    <p>Прототип для планирования смен и расчета выплат</p>
-  </header>
+  <main class="page">
+    <header class="header">
+      <div class="nav">
+        <button class="btn icon" id="prevMonth">←</button>
+        <div id="monthLabel" class="month-label"></div>
+        <button class="btn icon" id="nextMonth">→</button>
+        <button class="btn" id="todayBtn">Сегодня</button>
+      </div>
+      <div class="actions">
+        <button class="btn btn-ok" id="issuePayout">Выдать выплату</button>
+        <button class="btn btn-accent" id="exportCsv">Экспорт в Excel</button>
+      </div>
+    </header>
 
-  <main class="layout">
-    <aside class="panel">
-      <section>
-        <h2>Сотрудники</h2>
-        <form id="employeeForm" class="stack">
-          <input id="employeeName" type="text" placeholder="Имя сотрудника" required />
-          <input id="employeeRate" type="number" min="0" step="1" placeholder="Ставка ₽/час" required />
-          <button type="submit">Добавить сотрудника</button>
-        </form>
-        <ul id="employeeList" class="employee-list"></ul>
-      </section>
-
-      <section>
-        <h2>Месяц</h2>
-        <div class="month-controls">
-          <button id="prevMonth">←</button>
-          <strong id="monthLabel"></strong>
-          <button id="nextMonth">→</button>
+    <section class="content">
+      <section class="card table-card">
+        <h2>График смен (выбор статуса на каждый день)</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr id="tableHeadRow">
+                <th>День</th>
+                <th>Неделя</th>
+              </tr>
+            </thead>
+            <tbody id="scheduleBody"></tbody>
+          </table>
         </div>
       </section>
 
-      <section>
-        <h2>Отчет за месяц</h2>
-        <div id="payrollSummary" class="summary"></div>
-        <button id="exportCsv">Экспорт CSV</button>
-      </section>
-    </aside>
-
-    <section class="calendar-wrap">
-      <div id="calendar" class="calendar"></div>
+      <aside class="card side-card">
+        <h2>Зарплата и выплаты</h2>
+        <div id="salaryCards" class="salary-list"></div>
+      </aside>
     </section>
   </main>
-
-  <template id="dayTemplate">
-    <article class="day-cell">
-      <div class="day-head">
-        <span class="day-num"></span>
-      </div>
-      <div class="day-shifts"></div>
-    </article>
-  </template>
 
   <script src="app.js"></script>
 </body>

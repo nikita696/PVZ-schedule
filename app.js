@@ -1,275 +1,236 @@
-const STORAGE_KEY = 'pvz-schedule-v1';
+const STORAGE_KEY = 'pvz-schedule-v2';
 
-const weekdayNames = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-const shiftOptions = [
-  { value: 'off', label: 'Выходной', hours: 0 },
-  { value: 'day', label: 'Дневная (8ч)', hours: 8 },
-  { value: 'night', label: 'Ночная (12ч)', hours: 12 },
-  { value: 'half', label: 'Половина (4ч)', hours: 4 },
-  { value: 'custom', label: 'Свои часы', hours: null },
-];
+const statuses = {
+  work: { label: 'Рабочий', paid: true },
+  off: { label: 'Выходной', paid: false },
+  vacation: { label: 'Отпуск', paid: false },
+  sick: { label: 'Больничный', paid: false },
+  absent: { label: 'Невыход', paid: false },
+};
+
+const weekdayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 
 const state = loadState();
 
-const calendarEl = document.getElementById('calendar');
-const monthLabel = document.getElementById('monthLabel');
-const employeeForm = document.getElementById('employeeForm');
-const employeeNameInput = document.getElementById('employeeName');
-const employeeRateInput = document.getElementById('employeeRate');
-const employeeListEl = document.getElementById('employeeList');
-const payrollSummaryEl = document.getElementById('payrollSummary');
-const dayTemplate = document.getElementById('dayTemplate');
+const monthLabelEl = document.getElementById('monthLabel');
+const tableHeadRowEl = document.getElementById('tableHeadRow');
+const scheduleBodyEl = document.getElementById('scheduleBody');
+const salaryCardsEl = document.getElementById('salaryCards');
 
-document.getElementById('prevMonth').addEventListener('click', () => {
-  state.currentMonth -= 1;
-  normalizeMonth();
-  persistAndRender();
-});
-
-document.getElementById('nextMonth').addEventListener('click', () => {
-  state.currentMonth += 1;
-  normalizeMonth();
-  persistAndRender();
-});
-
+document.getElementById('prevMonth').addEventListener('click', () => changeMonth(-1));
+document.getElementById('nextMonth').addEventListener('click', () => changeMonth(1));
+document.getElementById('todayBtn').addEventListener('click', toToday);
+document.getElementById('issuePayout').addEventListener('click', issuePayout);
 document.getElementById('exportCsv').addEventListener('click', exportCsv);
-
-employeeForm.addEventListener('submit', (event) => {
-  event.preventDefault();
-  const name = employeeNameInput.value.trim();
-  const rate = Number(employeeRateInput.value);
-  if (!name || Number.isNaN(rate) || rate < 0) return;
-
-  state.employees.push({
-    id: crypto.randomUUID(),
-    name,
-    rate,
-  });
-
-  employeeForm.reset();
-  persistAndRender();
-});
 
 function loadState() {
   const today = new Date();
   const fallback = {
-    currentYear: today.getFullYear(),
-    currentMonth: today.getMonth(),
+    year: today.getFullYear(),
+    month: today.getMonth(),
     employees: [
-      { id: crypto.randomUUID(), name: 'Иван', rate: 450 },
-      { id: crypto.randomUUID(), name: 'Мария', rate: 500 },
+      { id: 'pavel', name: 'Павел', rate: 2500, paid: 30000, rateFrom: '2026-04-15' },
+      { id: 'nikita', name: 'Никита', rate: 2500, paid: 32500, rateFrom: '2026-01-01' },
     ],
     assignments: {},
   };
 
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (!saved) return fallback;
-    return {
-      ...fallback,
-      ...saved,
-      employees: Array.isArray(saved.employees) ? saved.employees : fallback.employees,
-      assignments: saved.assignments || {},
-    };
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    return raw ? { ...fallback, ...raw } : fallback;
   } catch {
     return fallback;
   }
 }
 
-function normalizeMonth() {
-  if (state.currentMonth < 0) {
-    state.currentYear -= 1;
-    state.currentMonth = 11;
-  }
-  if (state.currentMonth > 11) {
-    state.currentYear += 1;
-    state.currentMonth = 0;
-  }
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-function persistAndRender() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+function changeMonth(step) {
+  state.month += step;
+  if (state.month < 0) {
+    state.month = 11;
+    state.year -= 1;
+  }
+  if (state.month > 11) {
+    state.month = 0;
+    state.year += 1;
+  }
   render();
 }
 
+function toToday() {
+  const now = new Date();
+  state.month = now.getMonth();
+  state.year = now.getFullYear();
+  render();
+}
+
+function getDateKey(day) {
+  const dt = new Date(state.year, state.month, day);
+  return dt.toISOString().slice(0, 10);
+}
+
+function getAssignment(day, employeeId) {
+  const key = `${getDateKey(day)}|${employeeId}`;
+  return state.assignments[key] || 'off';
+}
+
+function setAssignment(day, employeeId, status) {
+  const key = `${getDateKey(day)}|${employeeId}`;
+  state.assignments[key] = status;
+  saveState();
+  renderSalary();
+}
+
+function applyStatusColor(selectEl) {
+  const value = selectEl.value || 'off';
+  selectEl.setAttribute('data-status', value);
+}
+
 function render() {
-  renderMonthLabel();
-  renderEmployees();
-  renderCalendar();
-  renderSummary();
+  renderHeader();
+  renderTable();
+  renderSalary();
+  saveState();
 }
 
-function renderMonthLabel() {
-  const dt = new Date(state.currentYear, state.currentMonth, 1);
-  monthLabel.textContent = dt.toLocaleDateString('ru-RU', {
-    month: 'long',
-    year: 'numeric',
-  });
-}
+function renderHeader() {
+  const dt = new Date(state.year, state.month, 1);
+  monthLabelEl.textContent = dt.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
 
-function renderEmployees() {
-  employeeListEl.innerHTML = '';
+  tableHeadRowEl.innerHTML = '<th class="day-col">День</th><th class="week-col">День недели</th>';
   state.employees.forEach((employee) => {
-    const item = document.createElement('li');
-    item.className = 'employee-item';
-    item.innerHTML = `
-      <div>
-        <div>${employee.name}</div>
-        <div class="employee-meta">${employee.rate.toLocaleString('ru-RU')} ₽/ч</div>
-      </div>
-      <button class="delete-btn" data-id="${employee.id}">✕</button>
-    `;
-    employeeListEl.appendChild(item);
-  });
-
-  employeeListEl.querySelectorAll('.delete-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const id = btn.dataset.id;
-      state.employees = state.employees.filter((emp) => emp.id !== id);
-      Object.keys(state.assignments).forEach((key) => {
-        if (key.endsWith(`|${id}`)) delete state.assignments[key];
-      });
-      persistAndRender();
-    });
+    const th = document.createElement('th');
+    th.textContent = employee.name;
+    tableHeadRowEl.appendChild(th);
   });
 }
 
-function renderCalendar() {
-  calendarEl.innerHTML = '';
-  weekdayNames.forEach((wd) => {
-    const header = document.createElement('div');
-    header.className = 'weekday-header';
-    header.textContent = wd;
-    calendarEl.appendChild(header);
-  });
-
-  const first = new Date(state.currentYear, state.currentMonth, 1);
-  const daysInMonth = new Date(state.currentYear, state.currentMonth + 1, 0).getDate();
-  const leading = (first.getDay() + 6) % 7;
-
-  for (let i = 0; i < leading; i++) {
-    calendarEl.appendChild(document.createElement('div'));
-  }
+function renderTable() {
+  scheduleBodyEl.innerHTML = '';
+  const daysInMonth = new Date(state.year, state.month + 1, 0).getDate();
 
   for (let day = 1; day <= daysInMonth; day++) {
-    const date = new Date(state.currentYear, state.currentMonth, day);
-    const dateKey = date.toISOString().slice(0, 10);
-    const cell = dayTemplate.content.firstElementChild.cloneNode(true);
-    cell.querySelector('.day-num').textContent = day;
-    const shiftsBox = cell.querySelector('.day-shifts');
+    const tr = document.createElement('tr');
+    const date = new Date(state.year, state.month, day);
 
-    if (state.employees.length === 0) {
-      shiftsBox.innerHTML = '<small>Добавьте сотрудника</small>';
-    } else {
-      state.employees.forEach((employee) => {
-        const row = document.createElement('div');
-        row.className = 'shift-row';
-        const key = `${dateKey}|${employee.id}`;
-        const current = state.assignments[key] || { type: 'off', hours: 0 };
+    const tdDay = document.createElement('td');
+    tdDay.textContent = String(day);
+    tr.appendChild(tdDay);
 
-        const select = document.createElement('select');
-        shiftOptions.forEach((opt) => {
-          const option = document.createElement('option');
-          option.value = opt.value;
-          option.textContent = opt.label;
-          if (opt.value === current.type) option.selected = true;
-          select.appendChild(option);
-        });
+    const tdWeek = document.createElement('td');
+    tdWeek.textContent = weekdayNames[date.getDay()];
+    tr.appendChild(tdWeek);
 
-        select.addEventListener('change', () => {
-          const selected = shiftOptions.find((x) => x.value === select.value);
-          let hours = selected.hours;
+    state.employees.forEach((employee) => {
+      const td = document.createElement('td');
+      const select = document.createElement('select');
+      select.className = 'status-select';
 
-          if (selected.value === 'custom') {
-            const input = prompt(`Введите часы для ${employee.name} (${dateKey})`, String(current.hours || 8));
-            const parsed = Number(input);
-            if (Number.isNaN(parsed) || parsed < 0 || parsed > 24) {
-              alert('Нужно число от 0 до 24. Изменение отменено.');
-              select.value = current.type;
-              return;
-            }
-            hours = parsed;
-          }
-
-          state.assignments[key] = {
-            type: selected.value,
-            hours,
-          };
-          persistAndRender();
-        });
-
-        row.innerHTML = `<label>${employee.name}</label>`;
-        row.appendChild(select);
-        shiftsBox.appendChild(row);
+      Object.entries(statuses).forEach(([value, item]) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = item.label;
+        select.appendChild(option);
       });
-    }
 
-    calendarEl.appendChild(cell);
+      select.value = getAssignment(day, employee.id);
+      applyStatusColor(select);
+      select.addEventListener('change', () => {
+        applyStatusColor(select);
+        setAssignment(day, employee.id, select.value);
+      });
+
+      td.appendChild(select);
+      tr.appendChild(td);
+    });
+
+    scheduleBodyEl.appendChild(tr);
   }
 }
 
-function renderSummary() {
-  payrollSummaryEl.innerHTML = '';
-
-  if (state.employees.length === 0) {
-    payrollSummaryEl.textContent = 'Сотрудников пока нет';
-    return;
-  }
-
-  const totals = calculateMonthTotals();
-  state.employees.forEach((employee) => {
-    const total = totals[employee.id] || { hours: 0, pay: 0, shifts: 0 };
-    const row = document.createElement('div');
-    row.className = 'summary-row';
-    row.innerHTML = `
-      <div><strong>${employee.name}</strong></div>
-      <div>Смен: ${total.shifts}</div>
-      <div>Часов: ${total.hours}</div>
-      <div>К выплате: <b>${Math.round(total.pay).toLocaleString('ru-RU')} ₽</b></div>
-    `;
-    payrollSummaryEl.appendChild(row);
-  });
-}
-
-function calculateMonthTotals() {
+function calculateTotals() {
   const totals = {};
-  const prefix = `${state.currentYear}-${String(state.currentMonth + 1).padStart(2, '0')}-`;
+  const monthPrefix = `${state.year}-${String(state.month + 1).padStart(2, '0')}-`;
 
   state.employees.forEach((employee) => {
-    totals[employee.id] = { hours: 0, pay: 0, shifts: 0 };
+    totals[employee.id] = { shifts: 0, earned: 0 };
   });
 
-  Object.entries(state.assignments).forEach(([key, value]) => {
+  Object.entries(state.assignments).forEach(([key, status]) => {
     const [datePart, employeeId] = key.split('|');
-    if (!datePart.startsWith(prefix)) return;
-
-    const employee = state.employees.find((e) => e.id === employeeId);
-    if (!employee) return;
-
-    totals[employeeId].hours += Number(value.hours) || 0;
-    if ((Number(value.hours) || 0) > 0) totals[employeeId].shifts += 1;
-    totals[employeeId].pay = totals[employeeId].hours * employee.rate;
+    if (!datePart.startsWith(monthPrefix)) return;
+    if (!totals[employeeId]) return;
+    if (statuses[status]?.paid) {
+      totals[employeeId].shifts += 1;
+      const employee = state.employees.find((x) => x.id === employeeId);
+      totals[employeeId].earned += employee.rate;
+    }
   });
 
   return totals;
 }
 
-function exportCsv() {
-  const totals = calculateMonthTotals();
-  const rows = [['Сотрудник', 'Ставка', 'Часы', 'Смены', 'К выплате']];
+function renderSalary() {
+  salaryCardsEl.innerHTML = '';
+  const totals = calculateTotals();
 
   state.employees.forEach((employee) => {
-    const t = totals[employee.id] || { hours: 0, pay: 0, shifts: 0 };
-    rows.push([employee.name, employee.rate, t.hours, t.shifts, Math.round(t.pay)]);
+    const total = totals[employee.id] || { shifts: 0, earned: 0 };
+    const due = Math.max(total.earned - (employee.paid || 0), 0);
+
+    const card = document.createElement('article');
+    card.className = 'salary-item';
+    card.innerHTML = `
+      <div class="salary-row">
+        <div class="salary-name">${employee.name}</div>
+        <div class="salary-shifts">${total.shifts} смен</div>
+      </div>
+      <div class="small">К выплате сейчас</div>
+      <div class="big">${Math.round(due).toLocaleString('ru-RU')} ₽</div>
+      <div class="small">Уже выплачено: <b>${(employee.paid || 0).toLocaleString('ru-RU')} ₽</b></div>
+      <div class="small">Ставка: ${employee.rate.toLocaleString('ru-RU')} ₽/смена (с ${formatDate(employee.rateFrom)})</div>
+    `;
+    salaryCardsEl.appendChild(card);
+  });
+}
+
+function formatDate(str) {
+  if (!str) return '—';
+  const dt = new Date(str);
+  return dt.toLocaleDateString('ru-RU');
+}
+
+function issuePayout() {
+  const totals = calculateTotals();
+  state.employees = state.employees.map((employee) => {
+    const due = Math.max((totals[employee.id]?.earned || 0) - (employee.paid || 0), 0);
+    return { ...employee, paid: (employee.paid || 0) + due };
+  });
+  render();
+}
+
+function exportCsv() {
+  const totals = calculateTotals();
+  const rows = [['Сотрудник', 'Ставка за смену', 'Рабочих смен', 'Начислено', 'Уже выплачено', 'К выплате']];
+
+  state.employees.forEach((employee) => {
+    const t = totals[employee.id] || { shifts: 0, earned: 0 };
+    const due = Math.max(t.earned - (employee.paid || 0), 0);
+    rows.push([employee.name, employee.rate, t.shifts, t.earned, employee.paid || 0, due]);
   });
 
-  const csv = rows.map((r) => r.join(';')).join('\n');
+  const csv = rows.map((line) => line.join(';')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
+
   const a = document.createElement('a');
   a.href = url;
-  a.download = `payroll-${state.currentYear}-${state.currentMonth + 1}.csv`;
+  a.download = `payroll-${state.year}-${state.month + 1}.csv`;
   a.click();
+
   URL.revokeObjectURL(url);
 }
 
