@@ -1,57 +1,12 @@
 <!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PVZ — график смен</title>
-  <link rel="stylesheet" href="styles.css" />
-</head>
-<body>
-  <main class="page">
-    <header class="header">
-      <div class="nav">
-        <button class="btn icon" id="prevMonth">←</button>
-        <div id="monthLabel" class="month-label"></div>
-        <button class="btn icon" id="nextMonth">→</button>
-        <button class="btn" id="todayBtn">Сегодня</button>
-      </div>
-      <div class="actions">
-        <button class="btn btn-ok" id="issuePayout">Выдать выплату</button>
-        <button class="btn btn-accent" id="exportCsv">Экспорт в Excel</button>
-      </div>
-    </header>
-
-    <section class="content">
-      <section class="card table-card">
-        <div class="card-top">
-          <h2>График смен (выбор статуса на каждый день)</h2>
-          <form id="employeeForm" class="emp-form">
-            <input id="employeeName" type="text" placeholder="Имя" required />
-            <input id="employeeRate" type="number" min="0" step="100" placeholder="Ставка/смена" required />
-            <button class="btn" type="submit">Добавить</button>
-          </form>
-        </div>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr id="tableHeadRow">
-                <th>День</th>
-                <th>Неделя</th>
-              </tr>
-            </thead>
-            <tbody id="scheduleBody"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <aside class="card side-card">
-        <h2>Зарплата и выплаты</h2>
-        <div id="salaryCards" class="salary-list"></div>
-      </aside>
-    </section>
-  </main>
-
-  <script src="app.js"></script>
-</body>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shift and Salary Tracker</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+  </body>
 </html>
