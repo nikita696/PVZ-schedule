@@ -7,6 +7,7 @@ const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
 export function Calendar() {
   const { employees, shifts, selectedMonth, selectedYear, updateShift } = useApp();
+  const activeEmployees = employees.filter((e) => !e.archived);
 
   const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
@@ -31,15 +32,15 @@ export function Calendar() {
 
   const getWorkingCount = (day: number) => {
     let count = 0;
-    employees.forEach((emp) => {
+    activeEmployees.forEach((emp) => {
       const status = getShiftStatus(emp.id, day);
       if (status === 'working') count++;
     });
     return count;
   };
 
-  const gridTemplate = `44px 46px repeat(${employees.length}, minmax(150px, 1fr)) 48px`;
-  const minTableWidth = 44 + 46 + employees.length * 150 + 48;
+  const gridTemplate = `44px 46px repeat(${activeEmployees.length}, minmax(150px, 1fr)) 48px`;
+  const minTableWidth = 44 + 46 + activeEmployees.length * 150 + 48;
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-16">
@@ -60,7 +61,7 @@ export function Calendar() {
               >
                 <div>День</div>
                 <div>Нед.</div>
-                {employees.map((emp) => (
+                {activeEmployees.map((emp) => (
                   <div key={emp.id} className="truncate">{emp.name}</div>
                 ))}
                 <div className="text-center">∑</div>
@@ -82,7 +83,7 @@ export function Calendar() {
                       <div className="flex items-center font-semibold text-neutral-900">{day}</div>
                       <div className="flex items-center text-xs text-neutral-500">{weekday}</div>
 
-                      {employees.map((emp) => {
+                      {activeEmployees.map((emp) => {
                         const status = getShiftStatus(emp.id, day);
                         return (
                           <div key={emp.id} className="flex items-center">

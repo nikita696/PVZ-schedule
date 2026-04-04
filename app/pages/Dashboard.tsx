@@ -21,6 +21,7 @@ export function Dashboard() {
   } = useApp();
 
   const navigate = useNavigate();
+  const activeEmployees = employees.filter((e) => !e.archived);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | undefined>();
   const [newEmployeeName, setNewEmployeeName] = useState('');
@@ -44,7 +45,7 @@ export function Dashboard() {
     setNewEmployeeName('');
   };
 
-  const totalDueMonth = employees.reduce((sum, emp) => {
+  const totalDueMonth = activeEmployees.reduce((sum, emp) => {
     const stats = getEmployeeStats(emp.id, selectedMonth, selectedYear);
     return sum + stats.due;
   }, 0);
@@ -102,7 +103,7 @@ export function Dashboard() {
           </div>
         )}
 
-        {employees.map((employee) => {
+        {activeEmployees.map((employee) => {
           const stats = getEmployeeStats(employee.id, selectedMonth, selectedYear);
           return (
             <EmployeeCard
