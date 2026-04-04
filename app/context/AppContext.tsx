@@ -45,8 +45,8 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // Mock data
 const initialEmployees: Employee[] = [
-  { id: 'pavel', name: 'Pavel', dailyRate: 2500 },
-  { id: 'nikita', name: 'Nikita', dailyRate: 2500 },
+  { id: 'pavel', name: 'Павел', dailyRate: 2500 },
+  { id: 'nikita', name: 'Никита', dailyRate: 2500 },
 ];
 
 // Generate mock shifts for March 2026
@@ -89,21 +89,21 @@ const initialPayments: Payment[] = [
     employeeId: 'pavel',
     amount: 7000,
     date: '2026-03-10',
-    comment: 'salary',
+    comment: 'зарплата',
   },
   {
     id: '2',
     employeeId: 'pavel',
     amount: 3000,
     date: '2026-03-25',
-    comment: 'advance',
+    comment: 'аванс',
   },
   {
     id: '3',
     employeeId: 'nikita',
     amount: 5000,
     date: '2026-03-31',
-    comment: 'manual payout',
+    comment: 'ручная выплата',
   },
 ];
 
