@@ -21,7 +21,6 @@ export function Dashboard() {
     navigate(`/payments?employee=${employeeId}`);
   };
 
-  // Calculate total due
   const totalDue = employees.reduce((sum, emp) => {
     const stats = getEmployeeStats(emp.id, selectedMonth, selectedYear);
     return sum + stats.due;
@@ -43,7 +42,7 @@ export function Dashboard() {
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-start gap-2">
             <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-medium text-orange-900">Total due this month</p>
+              <p className="text-sm font-medium text-orange-900">Итого к выплате за месяц</p>
               <p className="text-lg font-semibold text-orange-700">{totalDue.toLocaleString()} ₽</p>
             </div>
           </div>
