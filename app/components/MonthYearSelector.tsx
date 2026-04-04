@@ -22,7 +22,8 @@ const MONTHS = [
   'Декабрь',
 ];
 
-const YEARS = [2024, 2025, 2026, 2027];
+const currentYear = new Date().getFullYear();
+const YEARS = Array.from({ length: 7 }, (_, i) => currentYear - 3 + i);
 
 export function MonthYearSelector() {
   const { selectedMonth, selectedYear, setSelectedMonth, setSelectedYear } = useApp();

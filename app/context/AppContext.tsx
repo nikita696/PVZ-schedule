@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 export type ShiftStatus = 'working' | 'day-off' | 'sick' | 'no-show' | 'none';
 
@@ -22,12 +23,15 @@ export interface Payment {
   comment: string;
 }
 
-interface AppContextType {
+interface PersistedState {
   employees: Employee[];
   shifts: Shift[];
   payments: Payment[];
   selectedMonth: number;
   selectedYear: number;
+}
+
+interface AppContextType extends PersistedState {
   setSelectedMonth: (month: number) => void;
   setSelectedYear: (year: number) => void;
   updateShift: (employeeId: string, date: string, status: ShiftStatus) => void;
@@ -42,132 +46,133 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+const STORAGE_KEY = 'pvz-schedule-state-v1';
+const SUPABASE_TABLE = 'app_state';
+const SUPABASE_ROW_ID = 'main';
 
-// Mock data
-const initialEmployees: Employee[] = [
-  { id: 'pavel', name: 'Павел', dailyRate: 2500 },
-  { id: 'nikita', name: 'Никита', dailyRate: 2500 },
-];
+const now = new Date();
 
-// Generate mock shifts for March 2026
-const generateInitialShifts = (): Shift[] => {
-  const shifts: Shift[] = [];
-  const daysInMarch = 31;
-  
-  for (let day = 1; day <= daysInMarch; day++) {
-    const date = `2026-03-${String(day).padStart(2, '0')}`;
-    
-    // Pavel works most days
-    if (day <= 15) {
-      shifts.push({ employeeId: 'pavel', date, status: 'working' });
-    } else if (day === 16 || day === 17) {
-      shifts.push({ employeeId: 'pavel', date, status: 'sick' });
-    } else if (day % 2 === 0) {
-      shifts.push({ employeeId: 'pavel', date, status: 'day-off' });
-    } else {
-      shifts.push({ employeeId: 'pavel', date, status: 'working' });
-    }
-    
-    // Nikita works alternating days mostly
-    if (day <= 14) {
-      shifts.push({ employeeId: 'nikita', date, status: 'working' });
-    } else if (day === 15) {
-      shifts.push({ employeeId: 'nikita', date, status: 'no-show' });
-    } else if (day % 2 === 1) {
-      shifts.push({ employeeId: 'nikita', date, status: 'working' });
-    } else {
-      shifts.push({ employeeId: 'nikita', date, status: 'day-off' });
-    }
-  }
-  
-  return shifts;
+const defaultState: PersistedState = {
+  employees: [
+    { id: 'pavel', name: 'Павел', dailyRate: 2500 },
+    { id: 'nikita', name: 'Никита', dailyRate: 2500 },
+  ],
+  shifts: [],
+  payments: [],
+  selectedMonth: now.getMonth() + 1,
+  selectedYear: now.getFullYear(),
 };
 
-const initialPayments: Payment[] = [
-  {
-    id: '1',
-    employeeId: 'pavel',
-    amount: 7000,
-    date: '2026-03-10',
-    comment: 'зарплата',
-  },
-  {
-    id: '2',
-    employeeId: 'pavel',
-    amount: 3000,
-    date: '2026-03-25',
-    comment: 'аванс',
-  },
-  {
-    id: '3',
-    employeeId: 'nikita',
-    amount: 5000,
-    date: '2026-03-31',
-    comment: 'ручная выплата',
-  },
-];
+const makeSupabase = (): SupabaseClient | null => {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key);
+};
+
+const loadFromLocalStorage = (): PersistedState => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultState;
+    return { ...defaultState, ...JSON.parse(raw) };
+  } catch {
+    return defaultState;
+  }
+};
+
+const isWorkedUntilToday = (shiftDate: Date, month: number, year: number): boolean => {
+  const today = new Date();
+  const isCurrentPeriod = today.getMonth() + 1 === month && today.getFullYear() === year;
+  if (!isCurrentPeriod) return true;
+  return shiftDate <= today;
+};
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [employees] = useState<Employee[]>(initialEmployees);
-  const [shifts, setShifts] = useState<Shift[]>(generateInitialShifts());
-  const [payments, setPayments] = useState<Payment[]>(initialPayments);
-  const [selectedMonth, setSelectedMonth] = useState(3); // March
-  const [selectedYear, setSelectedYear] = useState(2026);
+  const [state, setState] = useState<PersistedState>(loadFromLocalStorage);
+  const [supabase] = useState(() => makeSupabase());
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }, [state]);
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    (async () => {
+      const { data } = await supabase
+        .from(SUPABASE_TABLE)
+        .select('payload')
+        .eq('id', SUPABASE_ROW_ID)
+        .maybeSingle();
+
+      if (data?.payload) {
+        setState({ ...defaultState, ...data.payload });
+      }
+    })();
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    const timeout = setTimeout(async () => {
+      await supabase
+        .from(SUPABASE_TABLE)
+        .upsert({ id: SUPABASE_ROW_ID, payload: state, updated_at: new Date().toISOString() });
+    }, 500);
+
+    return () => clearTimeout(timeout);
+  }, [state, supabase]);
 
   const updateShift = (employeeId: string, date: string, status: ShiftStatus) => {
-    setShifts((prevShifts) => {
-      const existingIndex = prevShifts.findIndex(
-        (s) => s.employeeId === employeeId && s.date === date
-      );
-
+    setState((prev) => {
+      const existingIndex = prev.shifts.findIndex((s) => s.employeeId === employeeId && s.date === date);
       if (existingIndex >= 0) {
-        const newShifts = [...prevShifts];
-        newShifts[existingIndex] = { employeeId, date, status };
-        return newShifts;
-      } else {
-        return [...prevShifts, { employeeId, date, status }];
+        const shifts = [...prev.shifts];
+        shifts[existingIndex] = { employeeId, date, status };
+        return { ...prev, shifts };
       }
+      return { ...prev, shifts: [...prev.shifts, { employeeId, date, status }] };
     });
   };
 
   const addPayment = (payment: Omit<Payment, 'id'>) => {
-    const newPayment: Payment = {
-      ...payment,
-      id: Date.now().toString(),
-    };
-    setPayments((prev) => [newPayment, ...prev]);
+    const newPayment: Payment = { ...payment, id: Date.now().toString() };
+    setState((prev) => ({ ...prev, payments: [newPayment, ...prev.payments] }));
   };
 
   const deletePayment = (id: string) => {
-    setPayments((prev) => prev.filter((p) => p.id !== id));
+    setState((prev) => ({ ...prev, payments: prev.payments.filter((p) => p.id !== id) }));
+  };
+
+  const setSelectedMonth = (month: number) => {
+    setState((prev) => ({ ...prev, selectedMonth: month }));
+  };
+
+  const setSelectedYear = (year: number) => {
+    setState((prev) => ({ ...prev, selectedYear: year }));
   };
 
   const getEmployeeStats = (employeeId: string, month: number, year: number) => {
-    const employee = employees.find((e) => e.id === employeeId);
+    const employee = state.employees.find((e) => e.id === employeeId);
     if (!employee) return { shiftsWorked: 0, earned: 0, paid: 0, due: 0 };
 
-    // Filter shifts for the selected month/year
-    const monthShifts = shifts.filter((shift) => {
-      if (shift.employeeId !== employeeId) return false;
+    const monthShifts = state.shifts.filter((shift) => {
+      if (shift.employeeId !== employeeId || shift.status !== 'working') return false;
       const shiftDate = new Date(shift.date);
       return (
         shiftDate.getMonth() + 1 === month &&
         shiftDate.getFullYear() === year &&
-        shift.status === 'working'
+        isWorkedUntilToday(shiftDate, month, year)
       );
     });
 
     const shiftsWorked = monthShifts.length;
     const earned = shiftsWorked * employee.dailyRate;
 
-    // Calculate total paid for this month
-    const monthPayments = payments.filter((payment) => {
+    const monthPayments = state.payments.filter((payment) => {
       if (payment.employeeId !== employeeId) return false;
       const paymentDate = new Date(payment.date);
-      return (
-        paymentDate.getMonth() + 1 === month &&
-        paymentDate.getFullYear() === year
-      );
+      return paymentDate.getMonth() + 1 === month && paymentDate.getFullYear() === year;
     });
 
     const paid = monthPayments.reduce((sum, p) => sum + p.amount, 0);
@@ -176,31 +181,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { shiftsWorked, earned, paid, due };
   };
 
-  return (
-    <AppContext.Provider
-      value={{
-        employees,
-        shifts,
-        payments,
-        selectedMonth,
-        selectedYear,
-        setSelectedMonth,
-        setSelectedYear,
-        updateShift,
-        addPayment,
-        deletePayment,
-        getEmployeeStats,
-      }}
-    >
-      {children}
-    </AppContext.Provider>
-  );
+  const value: AppContextType = {
+    ...state,
+    setSelectedMonth,
+    setSelectedYear,
+    updateShift,
+    addPayment,
+    deletePayment,
+    getEmployeeStats,
+  };
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
 export function useApp() {
   const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within AppProvider');
-  }
+  if (!context) throw new Error('useApp must be used within AppProvider');
   return context;
 }

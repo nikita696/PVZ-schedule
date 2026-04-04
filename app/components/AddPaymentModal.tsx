@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Button } from './ui/button';
@@ -25,6 +25,13 @@ export function AddPaymentModal({ isOpen, onClose, preselectedEmployeeId }: AddP
   const [amount, setAmount] = useState('');
   const [comment, setComment] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+
+
+  useEffect(() => {
+    if (isOpen && preselectedEmployeeId) {
+      setEmployeeId(preselectedEmployeeId);
+    }
+  }, [isOpen, preselectedEmployeeId]);
 
   if (!isOpen) return null;
 

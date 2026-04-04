@@ -1,6 +1,6 @@
 # PVZ-schedule (Figma version)
 
-Проект переведен на структуру, экспортированную из Figma Make (React + Vite).
+Проект на React + Vite для учета смен и выплат сотрудников ПВЗ.
 
 ## Запуск
 
@@ -16,4 +16,25 @@ npm run build
 npm run preview
 ```
 
-Основная логика и UI находятся в папке `app/`, стили — в `styles/`.
+## Хранение данных
+
+По умолчанию данные сохраняются в `localStorage` и не теряются при перезагрузке страницы.
+
+Дополнительно можно подключить Supabase (рекомендуется для синхронизации между устройствами):
+
+1. Создайте таблицу `app_state`:
+
+```sql
+create table if not exists app_state (
+  id text primary key,
+  payload jsonb not null,
+  updated_at timestamptz default now()
+);
+```
+
+2. Добавьте переменные окружения в Vercel/локально:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+Если переменные не заданы, приложение продолжит работать только через `localStorage`.

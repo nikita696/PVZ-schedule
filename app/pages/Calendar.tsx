@@ -38,6 +38,8 @@ export function Calendar() {
     return count;
   };
 
+  const gridTemplate = `60px 50px repeat(${employees.length}, minmax(0, 1fr)) 50px`;
+
   return (
     <div className="min-h-screen bg-neutral-50 pb-20">
       <div className="bg-white border-b border-neutral-200">
@@ -51,7 +53,7 @@ export function Calendar() {
 
       <div className="max-w-4xl mx-auto px-4 py-4">
         <div className="bg-white rounded-lg border border-neutral-200 overflow-hidden">
-          <div className="grid grid-cols-[60px_50px_1fr_1fr_50px] gap-2 p-3 bg-neutral-100 border-b border-neutral-200 text-xs font-semibold text-neutral-700">
+          <div className="grid gap-2 p-3 bg-neutral-100 border-b border-neutral-200 text-xs font-semibold text-neutral-700" style={{ gridTemplateColumns: gridTemplate }}>
             <div>День</div>
             <div>Нед.</div>
             {employees.map((emp) => (
@@ -70,7 +72,7 @@ export function Calendar() {
               return (
                 <div
                   key={day}
-                  className={`grid grid-cols-[60px_50px_1fr_1fr_50px] gap-2 p-3 ${
+                  className={`grid gap-2 p-3 ${
                     isWeekend ? 'bg-neutral-50' : ''
                   }`}
                 >
