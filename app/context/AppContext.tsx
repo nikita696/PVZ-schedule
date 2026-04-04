@@ -11,7 +11,7 @@ export interface Employee {
 
 export interface Shift {
   employeeId: string;
-  date: string; // YYYY-MM-DD
+  date: string;
   status: ShiftStatus;
 }
 
@@ -19,7 +19,7 @@ export interface Payment {
   id: string;
   employeeId: string;
   amount: number;
-  date: string; // YYYY-MM-DD
+  date: string;
   comment: string;
 }
 
@@ -31,18 +31,21 @@ interface PersistedState {
   selectedYear: number;
 }
 
+interface EmployeeStats {
+  shiftsWorked: number;
+  earned: number;
+  paid: number;
+  due: number;
+}
+
 interface AppContextType extends PersistedState {
   setSelectedMonth: (month: number) => void;
   setSelectedYear: (year: number) => void;
   updateShift: (employeeId: string, date: string, status: ShiftStatus) => void;
   addPayment: (payment: Omit<Payment, 'id'>) => void;
   deletePayment: (id: string) => void;
-  getEmployeeStats: (employeeId: string, month: number, year: number) => {
-    shiftsWorked: number;
-    earned: number;
-    paid: number;
-    due: number;
-  };
+  getEmployeeStats: (employeeId: string, month: number, year: number) => EmployeeStats;
+  getEmployeeLifetimeStats: (employeeId: string) => EmployeeStats;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -152,34 +155,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, selectedYear: year }));
   };
 
-  const getEmployeeStats = (employeeId: string, month: number, year: number) => {
+  const calculateStats = (
+    employeeId: string,
+    isShiftIncluded: (date: Date) => boolean,
+    isPaymentIncluded: (date: Date) => boolean,
+  ): EmployeeStats => {
     const employee = state.employees.find((e) => e.id === employeeId);
     if (!employee) return { shiftsWorked: 0, earned: 0, paid: 0, due: 0 };
 
-    const monthShifts = state.shifts.filter((shift) => {
-      if (shift.employeeId !== employeeId || shift.status !== 'working') return false;
-      const shiftDate = new Date(shift.date);
-      return (
-        shiftDate.getMonth() + 1 === month &&
-        shiftDate.getFullYear() === year &&
-        isWorkedUntilToday(shiftDate, month, year)
-      );
-    });
+    const shiftsWorked = state.shifts.filter((shift) => (
+      shift.employeeId === employeeId &&
+      shift.status === 'working' &&
+      isShiftIncluded(new Date(shift.date))
+    )).length;
 
-    const shiftsWorked = monthShifts.length;
     const earned = shiftsWorked * employee.dailyRate;
 
-    const monthPayments = state.payments.filter((payment) => {
-      if (payment.employeeId !== employeeId) return false;
-      const paymentDate = new Date(payment.date);
-      return paymentDate.getMonth() + 1 === month && paymentDate.getFullYear() === year;
-    });
+    const paid = state.payments
+      .filter((payment) => payment.employeeId === employeeId && isPaymentIncluded(new Date(payment.date)))
+      .reduce((sum, p) => sum + p.amount, 0);
 
-    const paid = monthPayments.reduce((sum, p) => sum + p.amount, 0);
-    const due = earned - paid;
-
-    return { shiftsWorked, earned, paid, due };
+    return { shiftsWorked, earned, paid, due: earned - paid };
   };
+
+  const getEmployeeStats = (employeeId: string, month: number, year: number): EmployeeStats => (
+    calculateStats(
+      employeeId,
+      (shiftDate) =>
+        shiftDate.getMonth() + 1 === month &&
+        shiftDate.getFullYear() === year &&
+        isWorkedUntilToday(shiftDate, month, year),
+      (paymentDate) => paymentDate.getMonth() + 1 === month && paymentDate.getFullYear() === year,
+    )
+  );
+
+  const getEmployeeLifetimeStats = (employeeId: string): EmployeeStats => (
+    calculateStats(employeeId, () => true, () => true)
+  );
 
   const value: AppContextType = {
     ...state,
@@ -189,6 +201,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addPayment,
     deletePayment,
     getEmployeeStats,
+    getEmployeeLifetimeStats,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

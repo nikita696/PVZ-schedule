@@ -38,3 +38,14 @@ create table if not exists app_state (
 - `VITE_SUPABASE_ANON_KEY`
 
 Если переменные не заданы, приложение продолжит работать только через `localStorage`.
+
+
+## Stage 2: схема БД (Supabase)
+
+В репозитории добавлен файл `supabase/schema.sql` с нормализованными таблицами:
+- `employees`
+- `shifts`
+- `payments`
+- `app_state` (для обратной совместимости)
+
+Переменные окружения можно взять из `.env.example`.

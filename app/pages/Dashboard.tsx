@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router';
 import { AlertCircle } from 'lucide-react';
 
 export function Dashboard() {
-  const { employees, selectedMonth, selectedYear, getEmployeeStats } = useApp();
+  const { employees, selectedMonth, selectedYear, getEmployeeStats, getEmployeeLifetimeStats } = useApp();
   const navigate = useNavigate();
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | undefined>();
@@ -21,8 +21,13 @@ export function Dashboard() {
     navigate(`/payments?employee=${employeeId}`);
   };
 
-  const totalDue = employees.reduce((sum, emp) => {
+  const totalDueMonth = employees.reduce((sum, emp) => {
     const stats = getEmployeeStats(emp.id, selectedMonth, selectedYear);
+    return sum + stats.due;
+  }, 0);
+
+  const totalDueAllTime = employees.reduce((sum, emp) => {
+    const stats = getEmployeeLifetimeStats(emp.id);
     return sum + stats.due;
   }, 0);
 
@@ -38,12 +43,12 @@ export function Dashboard() {
       </div>
 
       <div className="max-w-md mx-auto px-4 py-4 space-y-4">
-        {totalDue > 0 && (
+        {(totalDueMonth > 0 || totalDueAllTime > 0) && (
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-start gap-2">
             <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-medium text-orange-900">Итого к выплате за месяц</p>
-              <p className="text-lg font-semibold text-orange-700">{totalDue.toLocaleString()} ₽</p>
+              <p className="text-sm font-medium text-orange-900">К выплате за месяц: {totalDueMonth.toLocaleString()} ₽</p>
+              <p className="text-sm font-medium text-orange-900">К выплате всего: {totalDueAllTime.toLocaleString()} ₽</p>
             </div>
           </div>
         )}
