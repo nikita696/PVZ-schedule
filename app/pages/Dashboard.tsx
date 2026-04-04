@@ -7,10 +7,24 @@ import { useNavigate } from 'react-router';
 import { AlertCircle } from 'lucide-react';
 
 export function Dashboard() {
-  const { employees, selectedMonth, selectedYear, getEmployeeStats, getEmployeeLifetimeStats } = useApp();
+  const {
+    employees,
+    selectedMonth,
+    selectedYear,
+    getEmployeeStats,
+    getEmployeeLifetimeStats,
+    addEmployee,
+    removeEmployee,
+    updateEmployeeRate,
+    syncStatus,
+    syncError,
+  } = useApp();
+
   const navigate = useNavigate();
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | undefined>();
+  const [newEmployeeName, setNewEmployeeName] = useState('');
+  const [newEmployeeRate, setNewEmployeeRate] = useState('2500');
 
   const handleAddPayment = (employeeId: string) => {
     setSelectedEmployeeId(employeeId);
@@ -19,6 +33,15 @@ export function Dashboard() {
 
   const handleViewHistory = (employeeId: string) => {
     navigate(`/payments?employee=${employeeId}`);
+  };
+
+  const handleAddEmployee = () => {
+    const name = newEmployeeName.trim();
+    const rate = Number(newEmployeeRate);
+    if (!name || Number.isNaN(rate) || rate < 0) return;
+
+    addEmployee(name, rate);
+    setNewEmployeeName('');
   };
 
   const totalDueMonth = employees.reduce((sum, emp) => {
@@ -35,10 +58,36 @@ export function Dashboard() {
     <div className="min-h-screen bg-neutral-50 pb-20">
       <div className="bg-white border-b border-neutral-200">
         <div className="max-w-md mx-auto px-4 py-4">
-          <h1 className="text-xl font-semibold text-neutral-900 mb-3">
-            ПВЗ: смены и выплаты
-          </h1>
+          <h1 className="text-xl font-semibold text-neutral-900 mb-3">ПВЗ: смены и выплаты</h1>
           <MonthYearSelector />
+
+          <div className="mt-3 flex gap-2">
+            <input
+              value={newEmployeeName}
+              onChange={(e) => setNewEmployeeName(e.target.value)}
+              placeholder="Имя сотрудника"
+              className="flex-1 h-9 px-3 rounded-md border border-neutral-300 text-sm"
+            />
+            <input
+              type="number"
+              min={0}
+              step={100}
+              value={newEmployeeRate}
+              onChange={(e) => setNewEmployeeRate(e.target.value)}
+              className="w-24 h-9 px-2 rounded-md border border-neutral-300 text-sm"
+            />
+            <button
+              onClick={handleAddEmployee}
+              className="h-9 px-3 rounded-md bg-orange-600 text-white text-sm"
+            >
+              +
+            </button>
+          </div>
+
+          <div className="mt-2 text-[11px] text-neutral-500">
+            Синхронизация: {syncStatus === 'synced' ? 'облако ✓' : syncStatus === 'syncing' ? 'сохранение…' : syncStatus === 'error' ? 'ошибка' : 'локально'}
+          </div>
+          {syncError && <div className="text-[11px] text-red-600 mt-1">{syncError}</div>}
         </div>
       </div>
 
@@ -62,6 +111,8 @@ export function Dashboard() {
               stats={stats}
               onAddPayment={() => handleAddPayment(employee.id)}
               onViewHistory={() => handleViewHistory(employee.id)}
+              onRateChange={(rate) => updateEmployeeRate(employee.id, rate)}
+              onRemove={() => removeEmployee(employee.id)}
             />
           );
         })}

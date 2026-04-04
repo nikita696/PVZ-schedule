@@ -19,13 +19,18 @@ interface AddPaymentModalProps {
   preselectedEmployeeId?: string;
 }
 
+const getLocalISODate = () => {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+};
+
 export function AddPaymentModal({ isOpen, onClose, preselectedEmployeeId }: AddPaymentModalProps) {
   const { employees, addPayment } = useApp();
   const [employeeId, setEmployeeId] = useState(preselectedEmployeeId || employees[0]?.id || '');
   const [amount, setAmount] = useState('');
   const [comment, setComment] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-
+  const [date, setDate] = useState(getLocalISODate());
 
   useEffect(() => {
     if (isOpen && preselectedEmployeeId) {
@@ -54,7 +59,7 @@ export function AddPaymentModal({ isOpen, onClose, preselectedEmployeeId }: AddP
 
     setAmount('');
     setComment('');
-    setDate(new Date().toISOString().split('T')[0]);
+    setDate(getLocalISODate());
     onClose();
   };
 

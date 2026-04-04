@@ -13,6 +13,11 @@ import {
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router';
 
+const parseLocalDate = (dateStr: string) => {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1, 12, 0, 0, 0);
+};
+
 export function Payments() {
   const { employees, payments, deletePayment } = useApp();
   const [searchParams] = useSearchParams();
@@ -33,7 +38,7 @@ export function Payments() {
   });
 
   const sortedPayments = [...filteredPayments].sort((a, b) => {
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
+    return parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime();
   });
 
   const handleDelete = (id: string) => {
@@ -48,7 +53,7 @@ export function Payments() {
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = parseLocalDate(dateStr);
     return new Intl.DateTimeFormat('ru-RU', {
       day: 'numeric',
       month: 'short',

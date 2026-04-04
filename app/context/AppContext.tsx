@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 export type ShiftStatus = 'working' | 'day-off' | 'sick' | 'no-show' | 'none';
+type SyncStatus = 'local' | 'syncing' | 'synced' | 'error';
 
 export interface Employee {
   id: string;
@@ -44,8 +45,13 @@ interface AppContextType extends PersistedState {
   updateShift: (employeeId: string, date: string, status: ShiftStatus) => void;
   addPayment: (payment: Omit<Payment, 'id'>) => void;
   deletePayment: (id: string) => void;
+  addEmployee: (name: string, dailyRate: number) => void;
+  removeEmployee: (id: string) => void;
+  updateEmployeeRate: (id: string, dailyRate: number) => void;
   getEmployeeStats: (employeeId: string, month: number, year: number) => EmployeeStats;
   getEmployeeLifetimeStats: (employeeId: string) => EmployeeStats;
+  syncStatus: SyncStatus;
+  syncError: string | null;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -83,16 +89,23 @@ const loadFromLocalStorage = (): PersistedState => {
   }
 };
 
-const isWorkedUntilToday = (shiftDate: Date, month: number, year: number): boolean => {
+const parseLocalDate = (dateString: string): Date => {
+  const [y, m, d] = dateString.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1, 12, 0, 0, 0);
+};
+
+const isWorkedByToday = (date: Date): boolean => {
   const today = new Date();
-  const isCurrentPeriod = today.getMonth() + 1 === month && today.getFullYear() === year;
-  if (!isCurrentPeriod) return true;
-  return shiftDate <= today;
+  const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+  return date <= todayLocal;
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PersistedState>(loadFromLocalStorage);
   const [supabase] = useState(() => makeSupabase());
+  const [isRemoteReady, setIsRemoteReady] = useState(!supabase);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(supabase ? 'syncing' : 'local');
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -102,29 +115,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!supabase) return;
 
     (async () => {
-      const { data } = await supabase
-        .from(SUPABASE_TABLE)
-        .select('payload')
-        .eq('id', SUPABASE_ROW_ID)
-        .maybeSingle();
+      try {
+        setSyncStatus('syncing');
+        const { data, error } = await supabase
+          .from(SUPABASE_TABLE)
+          .select('payload')
+          .eq('id', SUPABASE_ROW_ID)
+          .maybeSingle();
 
-      if (data?.payload) {
-        setState({ ...defaultState, ...data.payload });
+        if (error) throw error;
+        if (data?.payload) {
+          setState({ ...defaultState, ...data.payload });
+        }
+        setSyncStatus('synced');
+      } catch (error) {
+        setSyncStatus('error');
+        setSyncError('Не удалось загрузить данные из Supabase. Используется локальный режим.');
+        console.error(error);
+      } finally {
+        setIsRemoteReady(true);
       }
     })();
   }, [supabase]);
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase || !isRemoteReady) return;
 
     const timeout = setTimeout(async () => {
-      await supabase
-        .from(SUPABASE_TABLE)
-        .upsert({ id: SUPABASE_ROW_ID, payload: state, updated_at: new Date().toISOString() });
-    }, 500);
+      try {
+        setSyncStatus('syncing');
+        const { error } = await supabase
+          .from(SUPABASE_TABLE)
+          .upsert({ id: SUPABASE_ROW_ID, payload: state, updated_at: new Date().toISOString() });
+        if (error) throw error;
+        setSyncStatus('synced');
+        setSyncError(null);
+      } catch (error) {
+        setSyncStatus('error');
+        setSyncError('Не удалось синхронизировать изменения. Данные сохранены локально.');
+        console.error(error);
+      }
+    }, 600);
 
     return () => clearTimeout(timeout);
-  }, [state, supabase]);
+  }, [state, supabase, isRemoteReady]);
 
   const updateShift = (employeeId: string, date: string, status: ShiftStatus) => {
     setState((prev) => {
@@ -147,6 +181,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, payments: prev.payments.filter((p) => p.id !== id) }));
   };
 
+  const addEmployee = (name: string, dailyRate: number) => {
+    setState((prev) => ({
+      ...prev,
+      employees: [...prev.employees, { id: crypto.randomUUID(), name, dailyRate }],
+    }));
+  };
+
+  const removeEmployee = (id: string) => {
+    setState((prev) => ({
+      ...prev,
+      employees: prev.employees.filter((e) => e.id !== id),
+      shifts: prev.shifts.filter((s) => s.employeeId !== id),
+      payments: prev.payments.filter((p) => p.employeeId !== id),
+    }));
+  };
+
+  const updateEmployeeRate = (id: string, dailyRate: number) => {
+    setState((prev) => ({
+      ...prev,
+      employees: prev.employees.map((e) => (e.id === id ? { ...e, dailyRate } : e)),
+    }));
+  };
+
   const setSelectedMonth = (month: number) => {
     setState((prev) => ({ ...prev, selectedMonth: month }));
   };
@@ -166,13 +223,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const shiftsWorked = state.shifts.filter((shift) => (
       shift.employeeId === employeeId &&
       shift.status === 'working' &&
-      isShiftIncluded(new Date(shift.date))
+      isShiftIncluded(parseLocalDate(shift.date))
     )).length;
 
     const earned = shiftsWorked * employee.dailyRate;
 
     const paid = state.payments
-      .filter((payment) => payment.employeeId === employeeId && isPaymentIncluded(new Date(payment.date)))
+      .filter((payment) => payment.employeeId === employeeId && isPaymentIncluded(parseLocalDate(payment.date)))
       .reduce((sum, p) => sum + p.amount, 0);
 
     return { shiftsWorked, earned, paid, due: earned - paid };
@@ -184,25 +241,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
       (shiftDate) =>
         shiftDate.getMonth() + 1 === month &&
         shiftDate.getFullYear() === year &&
-        isWorkedUntilToday(shiftDate, month, year),
+        isWorkedByToday(shiftDate),
       (paymentDate) => paymentDate.getMonth() + 1 === month && paymentDate.getFullYear() === year,
     )
   );
 
   const getEmployeeLifetimeStats = (employeeId: string): EmployeeStats => (
-    calculateStats(employeeId, () => true, () => true)
+    calculateStats(employeeId, (date) => isWorkedByToday(date), () => true)
   );
 
-  const value: AppContextType = {
+  const value = useMemo<AppContextType>(() => ({
     ...state,
     setSelectedMonth,
     setSelectedYear,
     updateShift,
     addPayment,
     deletePayment,
+    addEmployee,
+    removeEmployee,
+    updateEmployeeRate,
     getEmployeeStats,
     getEmployeeLifetimeStats,
-  };
+    syncStatus,
+    syncError,
+  }), [state, syncStatus, syncError]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
