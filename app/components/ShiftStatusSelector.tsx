@@ -25,7 +25,7 @@ export function ShiftStatusSelector({ value, onChange }: ShiftStatusSelectorProp
 
   return (
     <Select value={value} onValueChange={(val) => onChange(val as ShiftStatus)}>
-      <SelectTrigger className="w-full h-9 text-xs">
+      <SelectTrigger className="w-full h-8 text-[12px] px-2">
         <SelectValue>
           <span className={currentOption?.color}>{currentOption?.label}</span>
         </SelectValue>
