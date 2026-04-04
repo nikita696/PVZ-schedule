@@ -13,6 +13,8 @@ export function Dashboard() {
     selectedYear,
     getEmployeeStats,
     getEmployeeLifetimeStats,
+    getEmployeeMonthlyBreakdown,
+    getCompanyMonthlyBreakdown,
     addEmployee,
     removeEmployee,
     updateEmployeeRate,
@@ -26,6 +28,9 @@ export function Dashboard() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | undefined>();
   const [newEmployeeName, setNewEmployeeName] = useState('');
   const [newEmployeeRate, setNewEmployeeRate] = useState('2500');
+  const [selectedStatsEmployeeId, setSelectedStatsEmployeeId] = useState<string>('company');
+
+  const monthNames = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
 
   const handleAddPayment = (employeeId: string) => {
     setSelectedEmployeeId(employeeId);
@@ -54,6 +59,15 @@ export function Dashboard() {
     const stats = getEmployeeLifetimeStats(emp.id);
     return sum + stats.due;
   }, 0);
+
+  const statsRows = selectedStatsEmployeeId === 'company'
+    ? getCompanyMonthlyBreakdown(selectedYear)
+    : getEmployeeMonthlyBreakdown(selectedStatsEmployeeId, selectedYear);
+
+  const monthEmployeeRows = activeEmployees.map((employee) => {
+    const stats = getEmployeeStats(employee.id, selectedMonth, selectedYear);
+    return { employee, stats };
+  });
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-20">
@@ -117,6 +131,70 @@ export function Dashboard() {
             />
           );
         })}
+
+        <div className="bg-white rounded-lg border border-neutral-200 p-3">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h2 className="text-sm font-semibold text-neutral-900">Сводка за месяц</h2>
+            <span className="text-xs text-neutral-500">{monthNames[selectedMonth - 1]} {selectedYear}</span>
+          </div>
+          <div className="space-y-2">
+            {monthEmployeeRows.map(({ employee, stats }) => (
+              <div key={employee.id} className="text-sm border border-neutral-100 rounded-md p-2">
+                <div className="font-medium text-neutral-900">{employee.name}</div>
+                <div className="text-xs text-neutral-600 mt-1">
+                  Начислено: {stats.earned.toLocaleString()} ₽ · Выплачено: {stats.paid.toLocaleString()} ₽ · К выплате: {stats.due.toLocaleString()} ₽
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-neutral-200 p-3">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h2 className="text-sm font-semibold text-neutral-900">Статистика по месяцам</h2>
+            <select
+              value={selectedStatsEmployeeId}
+              onChange={(e) => setSelectedStatsEmployeeId(e.target.value)}
+              className="h-8 rounded-md border border-neutral-300 text-xs px-2"
+            >
+              <option value="company">Все сотрудники</option>
+              {employees.map((emp) => (
+                <option key={emp.id} value={emp.id}>{emp.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs min-w-[520px]">
+              <thead>
+                <tr className="text-left text-neutral-500 border-b border-neutral-200">
+                  <th className="py-1.5 pr-2">Месяц</th>
+                  <th className="py-1.5 pr-2 text-right">Смен</th>
+                  <th className="py-1.5 pr-2 text-right">Начислено</th>
+                  <th className="py-1.5 pr-2 text-right">Выплачено</th>
+                  <th className="py-1.5 pr-2 text-right">Разница</th>
+                  <th className="py-1.5 text-right">Остаток</th>
+                </tr>
+              </thead>
+              <tbody>
+                {statsRows.map((row) => (
+                  <tr key={row.month} className="border-b border-neutral-100 last:border-b-0">
+                    <td className="py-1.5 pr-2 text-neutral-800">{monthNames[row.month - 1]}</td>
+                    <td className="py-1.5 pr-2 text-right text-neutral-700">{row.shiftsWorked}</td>
+                    <td className="py-1.5 pr-2 text-right text-neutral-700">{row.accrued.toLocaleString()} ₽</td>
+                    <td className="py-1.5 pr-2 text-right text-neutral-700">{row.paid.toLocaleString()} ₽</td>
+                    <td className={`py-1.5 pr-2 text-right ${row.delta >= 0 ? 'text-orange-700' : 'text-emerald-700'}`}>
+                      {row.delta >= 0 ? '+' : ''}{row.delta.toLocaleString()} ₽
+                    </td>
+                    <td className={`py-1.5 text-right font-medium ${row.balanceEnd >= 0 ? 'text-neutral-900' : 'text-emerald-700'}`}>
+                      {row.balanceEnd.toLocaleString()} ₽
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <AddPaymentModal

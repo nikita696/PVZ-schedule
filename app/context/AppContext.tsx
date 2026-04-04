@@ -41,6 +41,15 @@ interface EmployeeStats {
   due: number;
 }
 
+export interface MonthlyBreakdownRow {
+  month: number;
+  shiftsWorked: number;
+  accrued: number;
+  paid: number;
+  delta: number;
+  balanceEnd: number;
+}
+
 interface AppContextType extends PersistedState {
   setSelectedMonth: (month: number) => void;
   setSelectedYear: (year: number) => void;
@@ -52,6 +61,8 @@ interface AppContextType extends PersistedState {
   updateEmployeeRate: (id: string, dailyRate: number) => void;
   getEmployeeStats: (employeeId: string, month: number, year: number) => EmployeeStats;
   getEmployeeLifetimeStats: (employeeId: string) => EmployeeStats;
+  getEmployeeMonthlyBreakdown: (employeeId: string, year: number) => MonthlyBreakdownRow[];
+  getCompanyMonthlyBreakdown: (year: number) => MonthlyBreakdownRow[];
   syncStatus: SyncStatus;
   syncError: string | null;
 }
@@ -274,6 +285,73 @@ export function AppProvider({ children }: { children: ReactNode }) {
     calculateStats(employeeId, (date) => isWorkedByToday(date), () => true)
   );
 
+  const getEmployeeMonthlyBreakdown = (employeeId: string, year: number): MonthlyBreakdownRow[] => {
+    const opening = calculateStats(
+      employeeId,
+      (shiftDate) => (
+        isWorkedByToday(shiftDate) &&
+        (shiftDate.getFullYear() < year)
+      ),
+      (paymentDate) => paymentDate.getFullYear() < year,
+    );
+
+    let runningBalance = opening.due;
+
+    return Array.from({ length: 12 }, (_, index) => {
+      const month = index + 1;
+      const monthStats = getEmployeeStats(employeeId, month, year);
+      const delta = monthStats.earned - monthStats.paid;
+      runningBalance += delta;
+
+      return {
+        month,
+        shiftsWorked: monthStats.shiftsWorked,
+        accrued: monthStats.earned,
+        paid: monthStats.paid,
+        delta,
+        balanceEnd: runningBalance,
+      };
+    });
+  };
+
+  const getCompanyMonthlyBreakdown = (year: number): MonthlyBreakdownRow[] => {
+    const employeeIds = state.employees.map((employee) => employee.id);
+
+    const openingBalance = employeeIds.reduce((sum, employeeId) => {
+      const previous = calculateStats(
+        employeeId,
+        (shiftDate) => isWorkedByToday(shiftDate) && shiftDate.getFullYear() < year,
+        (paymentDate) => paymentDate.getFullYear() < year,
+      );
+      return sum + previous.due;
+    }, 0);
+
+    let runningBalance = openingBalance;
+
+    return Array.from({ length: 12 }, (_, index) => {
+      const month = index + 1;
+      const total = employeeIds.reduce((acc, employeeId) => {
+        const stats = getEmployeeStats(employeeId, month, year);
+        acc.shiftsWorked += stats.shiftsWorked;
+        acc.accrued += stats.earned;
+        acc.paid += stats.paid;
+        return acc;
+      }, { shiftsWorked: 0, accrued: 0, paid: 0 });
+
+      const delta = total.accrued - total.paid;
+      runningBalance += delta;
+
+      return {
+        month,
+        shiftsWorked: total.shiftsWorked,
+        accrued: total.accrued,
+        paid: total.paid,
+        delta,
+        balanceEnd: runningBalance,
+      };
+    });
+  };
+
   const value = useMemo<AppContextType>(() => ({
     ...state,
     setSelectedMonth,
@@ -286,6 +364,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updateEmployeeRate,
     getEmployeeStats,
     getEmployeeLifetimeStats,
+    getEmployeeMonthlyBreakdown,
+    getCompanyMonthlyBreakdown,
     syncStatus,
     syncError,
   }), [state, syncStatus, syncError]);
