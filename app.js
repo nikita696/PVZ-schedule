@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'pvz-schedule-v2';
+const STORAGE_KEY = 'pvz-schedule-v3';
 
 const statuses = {
   work: { label: 'Рабочий', paid: true },
@@ -16,6 +16,9 @@ const monthLabelEl = document.getElementById('monthLabel');
 const tableHeadRowEl = document.getElementById('tableHeadRow');
 const scheduleBodyEl = document.getElementById('scheduleBody');
 const salaryCardsEl = document.getElementById('salaryCards');
+const employeeForm = document.getElementById('employeeForm');
+const employeeNameInput = document.getElementById('employeeName');
+const employeeRateInput = document.getElementById('employeeRate');
 
 document.getElementById('prevMonth').addEventListener('click', () => changeMonth(-1));
 document.getElementById('nextMonth').addEventListener('click', () => changeMonth(1));
@@ -23,16 +26,32 @@ document.getElementById('todayBtn').addEventListener('click', toToday);
 document.getElementById('issuePayout').addEventListener('click', issuePayout);
 document.getElementById('exportCsv').addEventListener('click', exportCsv);
 
+employeeForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const name = employeeNameInput.value.trim();
+  const rate = Number(employeeRateInput.value);
+  if (!name || Number.isNaN(rate) || rate < 0) return;
+
+  state.employees.push({
+    id: crypto.randomUUID(),
+    name,
+    rate,
+  });
+  employeeForm.reset();
+  render();
+});
+
 function loadState() {
   const today = new Date();
   const fallback = {
     year: today.getFullYear(),
     month: today.getMonth(),
     employees: [
-      { id: 'pavel', name: 'Павел', rate: 2500, paid: 30000, rateFrom: '2026-04-15' },
-      { id: 'nikita', name: 'Никита', rate: 2500, paid: 32500, rateFrom: '2026-01-01' },
+      { id: 'pavel', name: 'Павел', rate: 2500 },
+      { id: 'nikita', name: 'Никита', rate: 2500 },
     ],
     assignments: {},
+    paidByMonth: {},
   };
 
   try {
@@ -67,6 +86,10 @@ function toToday() {
   render();
 }
 
+function getMonthKey() {
+  return `${state.year}-${String(state.month + 1).padStart(2, '0')}`;
+}
+
 function getDateKey(day) {
   const dt = new Date(state.year, state.month, day);
   return dt.toISOString().slice(0, 10);
@@ -85,8 +108,26 @@ function setAssignment(day, employeeId, status) {
 }
 
 function applyStatusColor(selectEl) {
-  const value = selectEl.value || 'off';
-  selectEl.setAttribute('data-status', value);
+  selectEl.setAttribute('data-status', selectEl.value || 'off');
+}
+
+function removeEmployee(employeeId) {
+  state.employees = state.employees.filter((employee) => employee.id !== employeeId);
+  Object.keys(state.assignments).forEach((key) => {
+    if (key.endsWith(`|${employeeId}`)) delete state.assignments[key];
+  });
+  Object.keys(state.paidByMonth).forEach((key) => {
+    if (key.endsWith(`|${employeeId}`)) delete state.paidByMonth[key];
+  });
+  render();
+}
+
+function updateRate(employeeId, rate) {
+  state.employees = state.employees.map((employee) => (
+    employee.id === employeeId ? { ...employee, rate } : employee
+  ));
+  saveState();
+  renderSalary();
 }
 
 function render() {
@@ -103,8 +144,17 @@ function renderHeader() {
   tableHeadRowEl.innerHTML = '<th class="day-col">День</th><th class="week-col">День недели</th>';
   state.employees.forEach((employee) => {
     const th = document.createElement('th');
-    th.textContent = employee.name;
+    th.innerHTML = `
+      <div class="employee-head">
+        <span>${employee.name}</span>
+        <button class="remove-emp" data-emp-id="${employee.id}" title="Удалить">×</button>
+      </div>
+    `;
     tableHeadRowEl.appendChild(th);
+  });
+
+  tableHeadRowEl.querySelectorAll('.remove-emp').forEach((btn) => {
+    btn.addEventListener('click', () => removeEmployee(btn.dataset.empId));
   });
 }
 
@@ -116,13 +166,7 @@ function renderTable() {
     const tr = document.createElement('tr');
     const date = new Date(state.year, state.month, day);
 
-    const tdDay = document.createElement('td');
-    tdDay.textContent = String(day);
-    tr.appendChild(tdDay);
-
-    const tdWeek = document.createElement('td');
-    tdWeek.textContent = weekdayNames[date.getDay()];
-    tr.appendChild(tdWeek);
+    tr.innerHTML = `<td>${day}</td><td>${weekdayNames[date.getDay()]}</td>`;
 
     state.employees.forEach((employee) => {
       const td = document.createElement('td');
@@ -153,7 +197,7 @@ function renderTable() {
 
 function calculateTotals() {
   const totals = {};
-  const monthPrefix = `${state.year}-${String(state.month + 1).padStart(2, '0')}-`;
+  const monthPrefix = `${getMonthKey()}-`;
 
   state.employees.forEach((employee) => {
     totals[employee.id] = { shifts: 0, earned: 0 };
@@ -163,6 +207,7 @@ function calculateTotals() {
     const [datePart, employeeId] = key.split('|');
     if (!datePart.startsWith(monthPrefix)) return;
     if (!totals[employeeId]) return;
+
     if (statuses[status]?.paid) {
       totals[employeeId].shifts += 1;
       const employee = state.employees.find((x) => x.id === employeeId);
@@ -176,50 +221,59 @@ function calculateTotals() {
 function renderSalary() {
   salaryCardsEl.innerHTML = '';
   const totals = calculateTotals();
+  const monthKey = getMonthKey();
 
   state.employees.forEach((employee) => {
     const total = totals[employee.id] || { shifts: 0, earned: 0 };
-    const due = Math.max(total.earned - (employee.paid || 0), 0);
+    const paid = state.paidByMonth[`${monthKey}|${employee.id}`] || 0;
+    const due = Math.max(total.earned - paid, 0);
 
     const card = document.createElement('article');
     card.className = 'salary-item';
     card.innerHTML = `
       <div class="salary-row">
         <div class="salary-name">${employee.name}</div>
-        <div class="salary-shifts">${total.shifts} смен</div>
+        <div class="salary-shifts">${total.shifts} раб. смен</div>
       </div>
-      <div class="small">К выплате сейчас</div>
-      <div class="big">${Math.round(due).toLocaleString('ru-RU')} ₽</div>
-      <div class="small">Уже выплачено: <b>${(employee.paid || 0).toLocaleString('ru-RU')} ₽</b></div>
-      <div class="small">Ставка: ${employee.rate.toLocaleString('ru-RU')} ₽/смена (с ${formatDate(employee.rateFrom)})</div>
+      <div class="small">Начислено за месяц (только рабочие): <b>${total.earned.toLocaleString('ru-RU')} ₽</b></div>
+      <div class="small">Уже выплачено: <b>${paid.toLocaleString('ru-RU')} ₽</b></div>
+      <div class="big">${due.toLocaleString('ru-RU')} ₽</div>
+      <div class="small">Ставка за смену:</div>
+      <input class="rate-input" type="number" min="0" step="100" value="${employee.rate}" data-rate-id="${employee.id}" />
     `;
     salaryCardsEl.appendChild(card);
   });
-}
 
-function formatDate(str) {
-  if (!str) return '—';
-  const dt = new Date(str);
-  return dt.toLocaleDateString('ru-RU');
+  salaryCardsEl.querySelectorAll('[data-rate-id]').forEach((input) => {
+    input.addEventListener('change', () => {
+      const rate = Number(input.value);
+      if (!Number.isNaN(rate) && rate >= 0) updateRate(input.dataset.rateId, rate);
+    });
+  });
 }
 
 function issuePayout() {
   const totals = calculateTotals();
-  state.employees = state.employees.map((employee) => {
-    const due = Math.max((totals[employee.id]?.earned || 0) - (employee.paid || 0), 0);
-    return { ...employee, paid: (employee.paid || 0) + due };
+  const monthKey = getMonthKey();
+
+  state.employees.forEach((employee) => {
+    const key = `${monthKey}|${employee.id}`;
+    state.paidByMonth[key] = totals[employee.id]?.earned || 0;
   });
+
   render();
 }
 
 function exportCsv() {
   const totals = calculateTotals();
+  const monthKey = getMonthKey();
   const rows = [['Сотрудник', 'Ставка за смену', 'Рабочих смен', 'Начислено', 'Уже выплачено', 'К выплате']];
 
   state.employees.forEach((employee) => {
     const t = totals[employee.id] || { shifts: 0, earned: 0 };
-    const due = Math.max(t.earned - (employee.paid || 0), 0);
-    rows.push([employee.name, employee.rate, t.shifts, t.earned, employee.paid || 0, due]);
+    const paid = state.paidByMonth[`${monthKey}|${employee.id}`] || 0;
+    const due = Math.max(t.earned - paid, 0);
+    rows.push([employee.name, employee.rate, t.shifts, t.earned, paid, due]);
   });
 
   const csv = rows.map((line) => line.join(';')).join('\n');
@@ -228,7 +282,7 @@ function exportCsv() {
 
   const a = document.createElement('a');
   a.href = url;
-  a.download = `payroll-${state.year}-${state.month + 1}.csv`;
+  a.download = `payroll-${monthKey}.csv`;
   a.click();
 
   URL.revokeObjectURL(url);
