@@ -233,11 +233,12 @@ function renderSalary() {
     card.innerHTML = `
       <div class="salary-row">
         <div class="salary-name">${employee.name}</div>
-        <div class="salary-shifts">${total.shifts} раб. смен</div>
+        <div class="salary-shifts">${total.shifts} смен</div>
       </div>
-      <div class="small">Начислено за месяц (только рабочие): <b>${total.earned.toLocaleString('ru-RU')} ₽</b></div>
-      <div class="small">Уже выплачено: <b>${paid.toLocaleString('ru-RU')} ₽</b></div>
+      <div class="small">К выплате сейчас</div>
       <div class="big">${due.toLocaleString('ru-RU')} ₽</div>
+      <div class="small">Уже выплачено: <b>${paid.toLocaleString('ru-RU')} ₽</b></div>
+      <div class="small">Начислено за месяц (только рабочие): <b>${total.earned.toLocaleString('ru-RU')} ₽</b></div>
       <div class="small">Ставка за смену:</div>
       <input class="rate-input" type="number" min="0" step="100" value="${employee.rate}" data-rate-id="${employee.id}" />
     `;
