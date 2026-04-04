@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>График и зарплата сотрудников</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>График и зарплата сотрудников</h1>
+    <p>Прототип для планирования смен и расчета выплат</p>
+  </header>
+
+  <main class="layout">
+    <aside class="panel">
+      <section>
+        <h2>Сотрудники</h2>
+        <form id="employeeForm" class="stack">
+          <input id="employeeName" type="text" placeholder="Имя сотрудника" required />
+          <input id="employeeRate" type="number" min="0" step="1" placeholder="Ставка ₽/час" required />
+          <button type="submit">Добавить сотрудника</button>
+        </form>
+        <ul id="employeeList" class="employee-list"></ul>
+      </section>
+
+      <section>
+        <h2>Месяц</h2>
+        <div class="month-controls">
+          <button id="prevMonth">←</button>
+          <strong id="monthLabel"></strong>
+          <button id="nextMonth">→</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Отчет за месяц</h2>
+        <div id="payrollSummary" class="summary"></div>
+        <button id="exportCsv">Экспорт CSV</button>
+      </section>
+    </aside>
+
+    <section class="calendar-wrap">
+      <div id="calendar" class="calendar"></div>
+    </section>
+  </main>
+
+  <template id="dayTemplate">
+    <article class="day-cell">
+      <div class="day-head">
+        <span class="day-num"></span>
+      </div>
+      <div class="day-shifts"></div>
+    </article>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
