@@ -13,11 +13,11 @@ interface ShiftStatusSelectorProps {
 }
 
 const statusOptions: { value: ShiftStatus; label: string; color: string }[] = [
-  { value: 'working', label: 'Working', color: 'text-orange-700' },
-  { value: 'day-off', label: 'Day off', color: 'text-green-700' },
-  { value: 'sick', label: 'Sick leave', color: 'text-blue-700' },
-  { value: 'no-show', label: 'No-show', color: 'text-red-700' },
-  { value: 'none', label: 'No shift', color: 'text-neutral-500' },
+  { value: 'working', label: 'Рабочий', color: 'text-orange-700' },
+  { value: 'day-off', label: 'Выходной', color: 'text-green-700' },
+  { value: 'sick', label: 'Больничный', color: 'text-blue-700' },
+  { value: 'no-show', label: 'Невыход', color: 'text-red-700' },
+  { value: 'none', label: 'Без смены', color: 'text-neutral-500' },
 ];
 
 export function ShiftStatusSelector({ value, onChange }: ShiftStatusSelectorProps) {
