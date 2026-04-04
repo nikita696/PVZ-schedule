@@ -22,7 +22,7 @@ export function BottomNav() {
           }`}
         >
           <Home className="w-5 h-5" />
-          <span className="text-xs">Dashboard</span>
+          <span className="text-xs">Главная</span>
         </Link>
         
         <Link
@@ -34,7 +34,7 @@ export function BottomNav() {
           }`}
         >
           <Calendar className="w-5 h-5" />
-          <span className="text-xs">Calendar</span>
+          <span className="text-xs">Календарь</span>
         </Link>
         
         <Link
@@ -46,7 +46,7 @@ export function BottomNav() {
           }`}
         >
           <Wallet className="w-5 h-5" />
-          <span className="text-xs">Payments</span>
+          <span className="text-xs">Выплаты</span>
         </Link>
       </div>
     </nav>
