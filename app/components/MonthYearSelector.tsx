@@ -8,18 +8,18 @@ import {
 } from './ui/select';
 
 const MONTHS = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
+  'Январь',
+  'Февраль',
+  'Март',
+  'Апрель',
+  'Май',
+  'Июнь',
+  'Июль',
+  'Август',
+  'Сентябрь',
+  'Октябрь',
+  'Ноябрь',
+  'Декабрь',
 ];
 
 const YEARS = [2024, 2025, 2026, 2027];
@@ -33,7 +33,7 @@ export function MonthYearSelector() {
         value={selectedMonth.toString()}
         onValueChange={(value) => setSelectedMonth(parseInt(value))}
       >
-        <SelectTrigger className="w-[140px]">
+        <SelectTrigger className="w-[160px]">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
