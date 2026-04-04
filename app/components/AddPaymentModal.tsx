@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
-import { useApp, Employee } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -30,9 +30,9 @@ export function AddPaymentModal({ isOpen, onClose, preselectedEmployeeId }: AddP
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!employeeId || !amount || parseFloat(amount) <= 0) {
-      toast.error('Please fill in all required fields');
+      toast.error('Заполните обязательные поля');
       return;
     }
 
@@ -40,12 +40,11 @@ export function AddPaymentModal({ isOpen, onClose, preselectedEmployeeId }: AddP
       employeeId,
       amount: parseFloat(amount),
       date,
-      comment: comment || 'payment',
+      comment: comment || 'выплата',
     });
 
-    toast.success('Payment added successfully');
-    
-    // Reset form
+    toast.success('Выплата добавлена');
+
     setAmount('');
     setComment('');
     setDate(new Date().toISOString().split('T')[0]);
@@ -56,7 +55,7 @@ export function AddPaymentModal({ isOpen, onClose, preselectedEmployeeId }: AddP
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center">
       <div className="bg-white w-full md:max-w-md md:rounded-lg rounded-t-2xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-neutral-200 px-4 py-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-neutral-900">Add Payment</h2>
+          <h2 className="text-lg font-semibold text-neutral-900">Добавить выплату</h2>
           <button
             onClick={onClose}
             className="p-2 hover:bg-neutral-100 rounded-full transition-colors"
@@ -67,7 +66,7 @@ export function AddPaymentModal({ isOpen, onClose, preselectedEmployeeId }: AddP
 
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           <div>
-            <Label htmlFor="employee">Employee</Label>
+            <Label htmlFor="employee">Сотрудник</Label>
             <Select value={employeeId} onValueChange={setEmployeeId}>
               <SelectTrigger className="w-full mt-1.5">
                 <SelectValue />
@@ -83,7 +82,7 @@ export function AddPaymentModal({ isOpen, onClose, preselectedEmployeeId }: AddP
           </div>
 
           <div>
-            <Label htmlFor="amount">Amount (₽)</Label>
+            <Label htmlFor="amount">Сумма (₽)</Label>
             <Input
               id="amount"
               type="number"
@@ -98,7 +97,7 @@ export function AddPaymentModal({ isOpen, onClose, preselectedEmployeeId }: AddP
           </div>
 
           <div>
-            <Label htmlFor="date">Date</Label>
+            <Label htmlFor="date">Дата</Label>
             <Input
               id="date"
               type="date"
@@ -110,13 +109,13 @@ export function AddPaymentModal({ isOpen, onClose, preselectedEmployeeId }: AddP
           </div>
 
           <div>
-            <Label htmlFor="comment">Comment</Label>
+            <Label htmlFor="comment">Комментарий</Label>
             <Input
               id="comment"
               type="text"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              placeholder="salary, advance, etc."
+              placeholder="зарплата, аванс и т.д."
               className="mt-1.5"
             />
           </div>
@@ -125,7 +124,7 @@ export function AddPaymentModal({ isOpen, onClose, preselectedEmployeeId }: AddP
             type="submit"
             className="w-full bg-orange-600 hover:bg-orange-700 text-white h-12"
           >
-            Add payment
+            Добавить выплату
           </Button>
         </form>
       </div>
