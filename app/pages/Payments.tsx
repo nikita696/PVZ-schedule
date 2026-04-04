@@ -17,7 +17,7 @@ export function Payments() {
   const { employees, payments, deletePayment } = useApp();
   const [searchParams] = useSearchParams();
   const preselectedEmployee = searchParams.get('employee');
-  
+
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('all');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
@@ -37,9 +37,9 @@ export function Payments() {
   });
 
   const handleDelete = (id: string) => {
-    if (window.confirm('Delete this payment?')) {
+    if (window.confirm('Удалить эту выплату?')) {
       deletePayment(id);
-      toast.success('Payment deleted');
+      toast.success('Выплата удалена');
     }
   };
 
@@ -49,7 +49,7 @@ export function Payments() {
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return new Intl.DateTimeFormat('en-GB', {
+    return new Intl.DateTimeFormat('ru-RU', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -61,16 +61,16 @@ export function Payments() {
       <div className="bg-white border-b border-neutral-200">
         <div className="max-w-md mx-auto px-4 py-4">
           <h1 className="text-xl font-semibold text-neutral-900 mb-3">
-            Payment History
+            История выплат
           </h1>
-          
+
           <div className="flex gap-2">
             <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
               <SelectTrigger className="flex-1">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All employees</SelectItem>
+                <SelectItem value="all">Все сотрудники</SelectItem>
                 {employees.map((emp) => (
                   <SelectItem key={emp.id} value={emp.id}>
                     {emp.name}
@@ -84,7 +84,7 @@ export function Payments() {
               className="bg-orange-600 hover:bg-orange-700 text-white"
             >
               <Plus className="w-4 h-4 mr-1" />
-              Add
+              Добавить
             </Button>
           </div>
         </div>
@@ -93,7 +93,7 @@ export function Payments() {
       <div className="max-w-md mx-auto px-4 py-4">
         {sortedPayments.length === 0 ? (
           <div className="bg-white rounded-lg border border-neutral-200 p-8 text-center">
-            <p className="text-neutral-500">No payments found</p>
+            <p className="text-neutral-500">Выплат пока нет</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -114,7 +114,7 @@ export function Payments() {
                   <p className="text-sm text-neutral-600 mb-1">{payment.comment}</p>
                   <p className="text-xs text-neutral-500">{formatDate(payment.date)}</p>
                 </div>
-                
+
                 <button
                   onClick={() => handleDelete(payment.id)}
                   className="p-2 hover:bg-red-50 rounded-lg transition-colors group"
