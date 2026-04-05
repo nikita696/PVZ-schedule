@@ -103,6 +103,12 @@ const isWorkedByToday = (date: Date): boolean => {
   return date <= todayLocal;
 };
 
+const isDateByToday = (date: Date): boolean => {
+  const today = new Date();
+  const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+  return date <= todayLocal;
+};
+
 const loadFromLocalStorage = (): { state: PersistedState; updatedAt: string } => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -277,12 +283,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     calculateStats(
       employeeId,
       (shiftDate) => shiftDate.getMonth() + 1 === month && shiftDate.getFullYear() === year && isWorkedByToday(shiftDate),
-      (paymentDate) => paymentDate.getMonth() + 1 === month && paymentDate.getFullYear() === year,
+      (paymentDate) => paymentDate.getMonth() + 1 === month && paymentDate.getFullYear() === year && isDateByToday(paymentDate),
     )
   );
 
   const getEmployeeLifetimeStats = (employeeId: string): EmployeeStats => (
-    calculateStats(employeeId, (date) => isWorkedByToday(date), () => true)
+    calculateStats(employeeId, (date) => isWorkedByToday(date), (date) => isDateByToday(date))
   );
 
   const getEmployeeMonthlyBreakdown = (employeeId: string, year: number): MonthlyBreakdownRow[] => {

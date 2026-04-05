@@ -5,6 +5,7 @@ import { MonthYearSelector } from '../components/MonthYearSelector';
 import { AddPaymentModal } from '../components/AddPaymentModal';
 import { useNavigate } from 'react-router';
 import { AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 export function Dashboard() {
   const {
@@ -44,10 +45,28 @@ export function Dashboard() {
   const handleAddEmployee = () => {
     const name = newEmployeeName.trim();
     const rate = Number(newEmployeeRate);
-    if (!name || Number.isNaN(rate) || rate < 0) return;
+    if (!name) {
+      toast.error('Введите имя сотрудника');
+      return;
+    }
+
+    if (Number.isNaN(rate) || rate <= 0) {
+      toast.error('Ставка должна быть больше 0');
+      return;
+    }
 
     addEmployee(name, rate);
     setNewEmployeeName('');
+    toast.success('Сотрудник добавлен');
+  };
+
+  const handleArchiveEmployee = (employeeId: string, employeeName: string) => {
+    if (!window.confirm(`Отправить сотрудника «${employeeName}» в архив? История смен и выплат сохранится.`)) {
+      return;
+    }
+
+    removeEmployee(employeeId);
+    toast.success('Сотрудник отправлен в архив');
   };
 
   const totalDueMonth = activeEmployees.reduce((sum, emp) => {
@@ -127,7 +146,7 @@ export function Dashboard() {
               onAddPayment={() => handleAddPayment(employee.id)}
               onViewHistory={() => handleViewHistory(employee.id)}
               onRateChange={(rate) => updateEmployeeRate(employee.id, rate)}
-              onRemove={() => removeEmployee(employee.id)}
+              onRemove={() => handleArchiveEmployee(employee.id, employee.name)}
             />
           );
         })}
@@ -159,7 +178,9 @@ export function Dashboard() {
             >
               <option value="company">Все сотрудники</option>
               {employees.map((emp) => (
-                <option key={emp.id} value={emp.id}>{emp.name}</option>
+                <option key={emp.id} value={emp.id}>
+                  {emp.name}{emp.archived ? ' (архив)' : ''}
+                </option>
               ))}
             </select>
           </div>

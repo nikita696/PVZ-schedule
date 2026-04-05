@@ -20,6 +20,7 @@ const parseLocalDate = (dateStr: string) => {
 
 export function Payments() {
   const { employees, payments, deletePayment } = useApp();
+  const activeEmployees = employees.filter((employee) => !employee.archived);
   const [searchParams] = useSearchParams();
   const preselectedEmployee = searchParams.get('employee');
 
@@ -76,7 +77,7 @@ export function Payments() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Все сотрудники</SelectItem>
-                {employees.map((emp) => (
+                {activeEmployees.map((emp) => (
                   <SelectItem key={emp.id} value={emp.id}>
                     {emp.name}
                   </SelectItem>

@@ -1,4 +1,4 @@
-import { Clock, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
+import { Clock, CheckCircle, AlertCircle, Archive } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Employee } from '../context/AppContext';
@@ -81,8 +81,13 @@ export function EmployeeCard({
         <Button onClick={onViewHistory} variant="outline" className="flex-1 border-neutral-300 text-neutral-700">
           История
         </Button>
-        <Button onClick={onRemove} variant="outline" className="px-3 border-red-200 text-red-600 hover:bg-red-50">
-          <Trash2 className="w-4 h-4" />
+        <Button
+          onClick={onRemove}
+          variant="outline"
+          title="Архив (история сохраняется)"
+          className="px-3 border-amber-200 text-amber-700 hover:bg-amber-50"
+        >
+          <Archive className="w-4 h-4" />
         </Button>
       </div>
     </Card>

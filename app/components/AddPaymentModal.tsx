@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Button } from './ui/button';
@@ -27,7 +27,11 @@ const getLocalISODate = () => {
 
 export function AddPaymentModal({ isOpen, onClose, preselectedEmployeeId }: AddPaymentModalProps) {
   const { employees, addPayment } = useApp();
-  const [employeeId, setEmployeeId] = useState(preselectedEmployeeId || employees[0]?.id || '');
+  const activeEmployees = useMemo(
+    () => employees.filter((employee) => !employee.archived),
+    [employees],
+  );
+  const [employeeId, setEmployeeId] = useState(preselectedEmployeeId || activeEmployees[0]?.id || '');
   const [amount, setAmount] = useState('');
   const [comment, setComment] = useState('');
   const [date, setDate] = useState(getLocalISODate());
@@ -35,8 +39,13 @@ export function AddPaymentModal({ isOpen, onClose, preselectedEmployeeId }: AddP
   useEffect(() => {
     if (isOpen && preselectedEmployeeId) {
       setEmployeeId(preselectedEmployeeId);
+      return;
     }
-  }, [isOpen, preselectedEmployeeId]);
+
+    if (isOpen && activeEmployees.length > 0 && !activeEmployees.some((employee) => employee.id === employeeId)) {
+      setEmployeeId(activeEmployees[0].id);
+    }
+  }, [isOpen, preselectedEmployeeId, activeEmployees, employeeId]);
 
   if (!isOpen) return null;
 
@@ -84,7 +93,7 @@ export function AddPaymentModal({ isOpen, onClose, preselectedEmployeeId }: AddP
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {employees.map((emp) => (
+                {activeEmployees.map((emp) => (
                   <SelectItem key={emp.id} value={emp.id}>
                     {emp.name}
                   </SelectItem>
