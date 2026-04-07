@@ -6,7 +6,7 @@ interface ShiftStatusSelectorProps {
   onChange: (status: ShiftStatus) => void;
 }
 
-const ORDER: ShiftStatus[] = ['working', 'day-off', 'sick', 'no-show', 'none'];
+const ORDER: ShiftStatus[] = ['planned-work', 'worked', 'day-off', 'vacation', 'sick', 'no-show', 'none'];
 
 export function ShiftStatusSelector({ value, onChange }: ShiftStatusSelectorProps) {
   return (

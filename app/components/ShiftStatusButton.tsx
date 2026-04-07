@@ -8,13 +8,21 @@ interface ShiftStatusButtonProps {
 }
 
 const STATUS_META: Record<ShiftStatus, { label: string; activeClass: string }> = {
-  working: {
-    label: 'Работа',
+  'planned-work': {
+    label: 'План',
+    activeClass: 'border-blue-300 bg-blue-50 text-blue-700',
+  },
+  worked: {
+    label: 'Отработал',
     activeClass: 'border-emerald-300 bg-emerald-50 text-emerald-700',
   },
   'day-off': {
     label: 'Выходной',
     activeClass: 'border-slate-300 bg-slate-100 text-slate-700',
+  },
+  vacation: {
+    label: 'Отпуск',
+    activeClass: 'border-indigo-300 bg-indigo-50 text-indigo-700',
   },
   sick: {
     label: 'Больничный',
@@ -46,3 +54,4 @@ export function ShiftStatusButton({ status, active, onClick }: ShiftStatusButton
     </button>
   );
 }
+

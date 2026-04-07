@@ -1,4 +1,4 @@
-import { Shield, Database, CalendarDays } from 'lucide-react';
+import { Database, Shield, UserRound } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
@@ -11,44 +11,75 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 const FEATURE_CARDS = [
   {
     icon: Database,
-    title: 'Нормальная модель данных',
-    body: 'Сотрудники, смены и выплаты хранятся в таблицах Supabase, а не в одном app_state blob.',
+    title: 'Нормальная структура данных',
+    body: 'Сотрудники, смены и выплаты хранятся в таблицах Supabase, а не в одном app_state JSON.',
   },
   {
     icon: Shield,
-    title: 'Защищенный доступ',
-    body: 'Каждый пользователь видит только свои данные благодаря Supabase Auth и RLS-политикам.',
+    title: 'Защита по ролям',
+    body: 'Владелец видит весь ПВЗ, сотрудник видит только свои данные.',
   },
   {
-    icon: CalendarDays,
-    title: 'Рабочий процесс ПВЗ',
-    body: 'Смены, выплаты и баланс месяца собраны в одном месте под реальные задачи пункта выдачи.',
+    icon: UserRound,
+    title: 'Регистрация по invite code',
+    body: 'Сотрудник создает аккаунт по коду, который выдал владелец.',
   },
 ];
 
 export default function AuthPage() {
   const navigate = useNavigate();
-  const { signIn, signUp, status } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const { signIn, signUp, signUpEmployee, status } = useAuth();
 
-  const handleSubmit = async (mode: 'signin' | 'signup') => {
-    setSubmitting(true);
-    const result = mode === 'signin'
-      ? await signIn(email.trim(), password)
-      : await signUp(email.trim(), password);
-    setSubmitting(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [ownerEmail, setOwnerEmail] = useState('');
+  const [ownerPassword, setOwnerPassword] = useState('');
+  const [employeeEmail, setEmployeeEmail] = useState('');
+  const [employeePassword, setEmployeePassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
+  const [submitting, setSubmitting] = useState<'none' | 'login' | 'owner' | 'employee'>('none');
+
+  const isDisabled = status === 'loading' || status === 'missing-config' || submitting !== 'none';
+
+  const handleLogin = async () => {
+    setSubmitting('login');
+    const result = await signIn(loginEmail.trim(), loginPassword);
+    setSubmitting('none');
 
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
 
-    toast.success(result.message ?? (mode === 'signin' ? 'Вход выполнен.' : 'Аккаунт создан.'));
-    if (mode === 'signin') {
-      navigate('/', { replace: true });
+    toast.success(result.message ?? 'Вход выполнен.');
+    navigate('/', { replace: true });
+  };
+
+  const handleOwnerSignup = async () => {
+    setSubmitting('owner');
+    const result = await signUp(ownerEmail.trim(), ownerPassword);
+    setSubmitting('none');
+
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
     }
+
+    toast.success(result.message ?? 'Аккаунт владельца создан.');
+  };
+
+  const handleEmployeeSignup = async () => {
+    setSubmitting('employee');
+    const result = await signUpEmployee(employeeEmail.trim(), employeePassword, inviteCode);
+    setSubmitting('none');
+
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+
+    toast.success(result.message ?? 'Аккаунт сотрудника создан.');
+    navigate('/', { replace: true });
   };
 
   return (
@@ -63,11 +94,11 @@ export default function AuthPage() {
 
               <div className="max-w-2xl space-y-4">
                 <h1 className="text-4xl font-semibold tracking-tight text-stone-900 sm:text-5xl">
-                  Ведите смены и выплаты без таблиц в чате, блокнотов и случайных JSON-файлов.
+                  Учет смен и выплат для маленького ПВЗ без таблиц в чате и случайных JSON-файлов.
                 </h1>
                 <p className="max-w-xl text-base leading-7 text-stone-600">
-                  Приложение переведено на нормальную базу данных, авторизацию и понятный учет.
-                  Войдите, чтобы управлять сотрудниками, сменами и выплатами в одном рабочем окне.
+                  Владелец управляет графиком, ставками и подтверждением выплат. Сотрудник видит только свой
+                  календарь, расчет и выплаты.
                 </p>
               </div>
             </div>
@@ -87,53 +118,101 @@ export default function AuthPage() {
         <Card className="border-stone-200 bg-white/95 shadow-xl shadow-stone-200/40">
           <CardContent className="p-6 sm:p-8">
             <Tabs defaultValue="signin" className="gap-6">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="signin">Вход</TabsTrigger>
-                <TabsTrigger value="signup">Регистрация</TabsTrigger>
+                <TabsTrigger value="owner-signup">Владелец</TabsTrigger>
+                <TabsTrigger value="employee-signup">Сотрудник</TabsTrigger>
               </TabsList>
 
               <TabsContent value="signin" className="space-y-5">
-                <div className="space-y-2">
-                  <h2 className="text-3xl font-semibold tracking-tight text-stone-900">
-                    С возвращением
-                  </h2>
-                  <p className="text-sm leading-6 text-stone-500">
-                    Введите email и пароль, чтобы открыть рабочее пространство.
-                  </p>
-                </div>
+                <SectionTitle
+                  title="Вход в систему"
+                  subtitle="Email/пароль для владельца и сотрудника."
+                />
 
                 <AuthForm
-                  email={email}
-                  password={password}
+                  email={loginEmail}
+                  password={loginPassword}
                   status={status}
-                  submitting={submitting}
-                  onEmailChange={setEmail}
-                  onPasswordChange={setPassword}
-                  onSubmit={() => void handleSubmit('signin')}
+                  disabled={isDisabled}
+                  submitting={submitting === 'login'}
                   submitLabel="Войти"
+                  onEmailChange={setLoginEmail}
+                  onPasswordChange={setLoginPassword}
+                  onSubmit={() => void handleLogin()}
                 />
               </TabsContent>
 
-              <TabsContent value="signup" className="space-y-5">
-                <div className="space-y-2">
-                  <h2 className="text-3xl font-semibold tracking-tight text-stone-900">
-                    Создать аккаунт
-                  </h2>
-                  <p className="text-sm leading-6 text-stone-500">
-                    Создайте защищенное рабочее пространство ПВЗ на базе Supabase.
-                  </p>
-                </div>
+              <TabsContent value="owner-signup" className="space-y-5">
+                <SectionTitle
+                  title="Регистрация владельца"
+                  subtitle="Создает рабочее пространство ПВЗ."
+                />
 
                 <AuthForm
-                  email={email}
-                  password={password}
+                  email={ownerEmail}
+                  password={ownerPassword}
                   status={status}
-                  submitting={submitting}
-                  onEmailChange={setEmail}
-                  onPasswordChange={setPassword}
-                  onSubmit={() => void handleSubmit('signup')}
-                  submitLabel="Создать аккаунт"
+                  disabled={isDisabled}
+                  submitting={submitting === 'owner'}
+                  submitLabel="Создать аккаунт владельца"
+                  onEmailChange={setOwnerEmail}
+                  onPasswordChange={setOwnerPassword}
+                  onSubmit={() => void handleOwnerSignup()}
                 />
+              </TabsContent>
+
+              <TabsContent value="employee-signup" className="space-y-5">
+                <SectionTitle
+                  title="Регистрация сотрудника"
+                  subtitle="Нужен invite code от владельца ПВЗ."
+                />
+
+                {status === 'missing-config' ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                    Не настроены переменные Supabase. Добавьте `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`.
+                  </div>
+                ) : null}
+
+                <div className="grid gap-2">
+                  <label htmlFor="employee-email">Email</label>
+                  <Input
+                    id="employee-email"
+                    type="email"
+                    value={employeeEmail}
+                    onChange={(event) => setEmployeeEmail(event.target.value)}
+                    placeholder="you@example.com"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <label htmlFor="employee-password">Пароль</label>
+                  <Input
+                    id="employee-password"
+                    type="password"
+                    value={employeePassword}
+                    onChange={(event) => setEmployeePassword(event.target.value)}
+                    placeholder="Минимум 6 символов"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <label htmlFor="employee-invite">Invite code</label>
+                  <Input
+                    id="employee-invite"
+                    value={inviteCode}
+                    onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
+                    placeholder="Например: A1B2C3D4"
+                  />
+                </div>
+
+                <Button
+                  className="w-full bg-orange-600 hover:bg-orange-500"
+                  onClick={() => void handleEmployeeSignup()}
+                  disabled={isDisabled}
+                >
+                  {submitting === 'employee' ? 'Подождите...' : 'Создать аккаунт сотрудника'}
+                </Button>
               </TabsContent>
             </Tabs>
           </CardContent>
@@ -143,10 +222,20 @@ export default function AuthPage() {
   );
 }
 
+function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="space-y-2">
+      <h2 className="text-2xl font-semibold tracking-tight text-stone-900">{title}</h2>
+      <p className="text-sm leading-6 text-stone-500">{subtitle}</p>
+    </div>
+  );
+}
+
 interface AuthFormProps {
   email: string;
   password: string;
   status: string;
+  disabled: boolean;
   submitting: boolean;
   submitLabel: string;
   onEmailChange: (value: string) => void;
@@ -158,14 +247,13 @@ function AuthForm({
   email,
   password,
   status,
+  disabled,
   submitting,
   submitLabel,
   onEmailChange,
   onPasswordChange,
   onSubmit,
 }: AuthFormProps) {
-  const disabled = submitting || status === 'loading' || status === 'missing-config';
-
   return (
     <div className="space-y-4">
       {status === 'missing-config' ? (
@@ -181,7 +269,7 @@ function AuthForm({
           type="email"
           value={email}
           onChange={(event) => onEmailChange(event.target.value)}
-          placeholder="name@example.com"
+          placeholder="you@example.com"
         />
       </div>
 
@@ -202,3 +290,4 @@ function AuthForm({
     </div>
   );
 }
+

@@ -27,7 +27,7 @@ export function BottomNav() {
 
   return (
     <div className="sticky bottom-0 z-20 border-t bg-white/95 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-3">
         <div className="flex flex-1 gap-2">
           {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
             <NavLink
@@ -58,3 +58,4 @@ export function BottomNav() {
     </div>
   );
 }
+

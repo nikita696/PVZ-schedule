@@ -1,8 +1,9 @@
-import { Trash2, Wallet } from 'lucide-react';
+import { CheckCircle2, Pencil, Trash2, Wallet } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { AddPaymentModal } from '../components/AddPaymentModal';
 import { BottomNav } from '../components/BottomNav';
+import { PaymentStatusBadge } from '../components/PaymentStatusBadge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import {
@@ -26,20 +27,34 @@ export default function PaymentsPage() {
     employees,
     payments,
     addPayment,
+    updatePayment,
     deletePayment,
-    getEmployeeLifetimeStats,
+    confirmPayment,
+    isOwner,
+    myEmployeeId,
   } = useApp();
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('all');
   const [modalOpen, setModalOpen] = useState(false);
 
-  const activeEmployees = employees.filter((employee) => !employee.archived);
+  const visibleEmployees = useMemo(() => {
+    const active = employees.filter((employee) => !employee.archived);
+    if (isOwner) return active;
+    return active.filter((employee) => employee.id === myEmployeeId);
+  }, [employees, isOwner, myEmployeeId]);
 
-  const visiblePayments = useMemo(() => (
-    selectedEmployeeId === 'all'
+  const visiblePayments = useMemo(() => {
+    const scoped = isOwner
       ? payments
-      : payments.filter((payment) => payment.employeeId === selectedEmployeeId)
-  ), [payments, selectedEmployeeId]);
+      : payments.filter((payment) => payment.employeeId === myEmployeeId);
+
+    if (!isOwner || selectedEmployeeId === 'all') return scoped;
+    return scoped.filter((payment) => payment.employeeId === selectedEmployeeId);
+  }, [isOwner, myEmployeeId, payments, selectedEmployeeId]);
+
+  const pendingCount = useMemo(() => (
+    visiblePayments.filter((payment) => payment.status === 'entered').length
+  ), [visiblePayments]);
 
   const handleAddPayment = async (input: Parameters<typeof addPayment>[0]) => {
     const result = await addPayment(input);
@@ -62,21 +77,58 @@ export default function PaymentsPage() {
     toast.success(result.message ?? 'Выплата удалена.');
   };
 
+  const handleConfirmPayment = async (id: string) => {
+    const result = await confirmPayment(id);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+
+    toast.success(result.message ?? 'Выплата подтверждена.');
+  };
+
+  const handleEditPayment = async (paymentId: string, current: { amount: number; date: string; comment: string }) => {
+    const amountRaw = window.prompt('Сумма выплаты', String(current.amount));
+    if (amountRaw === null) return;
+    const amount = Number(amountRaw);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error('Введите корректную сумму.');
+      return;
+    }
+
+    const date = window.prompt('Дата выплаты (YYYY-MM-DD)', current.date);
+    if (date === null) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      toast.error('Введите дату в формате YYYY-MM-DD.');
+      return;
+    }
+
+    const comment = window.prompt('Комментарий', current.comment) ?? current.comment;
+    const result = await updatePayment(paymentId, { amount, date, comment });
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+
+    toast.success(result.message ?? 'Выплата обновлена.');
+  };
+
   return (
     <div className="min-h-screen bg-stone-50">
-      <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6">
+      <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6">
         <Card className="border-orange-100 bg-[radial-gradient(circle_at_top_left,#fff7ed,white_55%)]">
-          <CardContent className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
+          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="w-fit rounded-full bg-orange-100 px-4 py-1.5 text-sm font-semibold text-orange-700">
+              <div className="w-fit rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
                 Выплаты
               </div>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-stone-900">
-                История выплат и текущая задолженность
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-900">
+                {isOwner ? 'Журнал выплат по ПВЗ' : 'Мои выплаты'}
               </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-                Фиксируйте авансы, зарплату и корректировки. Баланс ниже считается по всем
-                отработанным сменам и всем сохраненным выплатам.
+              <p className="mt-1 text-sm text-stone-600">
+                {isOwner
+                  ? 'Владелец подтверждает выплаты сотрудников, внесенные вручную.'
+                  : 'Вы можете добавлять и редактировать свои выплаты до подтверждения владельцем.'}
               </p>
             </div>
 
@@ -87,40 +139,48 @@ export default function PaymentsPage() {
           </CardContent>
         </Card>
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {activeEmployees.map((employee) => {
-            const stats = getEmployeeLifetimeStats(employee.id);
-            return (
-              <Card key={employee.id}>
-                <CardContent className="p-5">
-                  <div className="text-sm text-muted-foreground">{employee.name}</div>
-                  <div className="mt-3 text-2xl font-semibold">{money(stats.due)}</div>
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    Общий долг | Начислено {money(stats.earned)} | Выплачено {money(stats.paid)}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-xs text-muted-foreground">Всего выплат</div>
+              <div className="mt-2 text-2xl font-semibold">{visiblePayments.length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-xs text-muted-foreground">Ожидают подтверждения</div>
+              <div className="mt-2 text-2xl font-semibold text-amber-700">{pendingCount}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-xs text-muted-foreground">Подтверждено</div>
+              <div className="mt-2 text-2xl font-semibold text-emerald-700">
+                {visiblePayments.filter((payment) => payment.status === 'confirmed').length}
+              </div>
+            </CardContent>
+          </Card>
         </section>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
             <CardTitle>Журнал выплат</CardTitle>
-            <select
-              className="h-10 rounded-md border bg-input-background px-3 text-sm"
-              value={selectedEmployeeId}
-              onChange={(event) => setSelectedEmployeeId(event.target.value)}
-            >
-              <option value="all">Все сотрудники</option>
-              {employees.map((employee) => (
-                <option key={employee.id} value={employee.id}>
-                  {employee.name}
-                </option>
-              ))}
-            </select>
+            {isOwner ? (
+              <select
+                className="h-10 rounded-md border bg-input-background px-3 text-sm"
+                value={selectedEmployeeId}
+                onChange={(event) => setSelectedEmployeeId(event.target.value)}
+              >
+                <option value="all">Все сотрудники</option>
+                {visibleEmployees.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -128,27 +188,61 @@ export default function PaymentsPage() {
                   <TableHead>Сотрудник</TableHead>
                   <TableHead>Сумма</TableHead>
                   <TableHead>Комментарий</TableHead>
-                  <TableHead className="w-[80px]">Действие</TableHead>
+                  <TableHead>Статус</TableHead>
+                  <TableHead className="w-[220px]">Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {visiblePayments.map((payment) => {
                   const employee = employees.find((item) => item.id === payment.employeeId);
+                  const canEdit = isOwner || payment.status === 'entered';
+                  const canDelete = isOwner || payment.status === 'entered';
+                  const canConfirm = isOwner && payment.status === 'entered';
 
                   return (
                     <TableRow key={payment.id}>
                       <TableCell>{payment.date}</TableCell>
-                      <TableCell>{employee?.name ?? 'Неизвестный сотрудник'}</TableCell>
+                      <TableCell>{employee?.name ?? 'Сотрудник'}</TableCell>
                       <TableCell>{money(payment.amount)}</TableCell>
                       <TableCell>{payment.comment || '-'}</TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => void handleDeletePayment(payment.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-rose-600" />
-                        </Button>
+                        <PaymentStatusBadge status={payment.status} />
+                      </TableCell>
+                      <TableCell className="space-x-2">
+                        {canConfirm ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void handleConfirmPayment(payment.id)}
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            Подтвердить
+                          </Button>
+                        ) : null}
+                        {canEdit ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void handleEditPayment(payment.id, {
+                              amount: payment.amount,
+                              date: payment.date,
+                              comment: payment.comment,
+                            })}
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Изменить
+                          </Button>
+                        ) : null}
+                        {canDelete ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void handleDeletePayment(payment.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-rose-600" />
+                            Удалить
+                          </Button>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   );
@@ -167,10 +261,12 @@ export default function PaymentsPage() {
 
       <AddPaymentModal
         open={modalOpen}
-        employees={activeEmployees}
+        employees={visibleEmployees}
+        fixedEmployeeId={isOwner ? null : myEmployeeId}
         onClose={() => setModalOpen(false)}
         onSubmit={handleAddPayment}
       />
     </div>
   );
 }
+

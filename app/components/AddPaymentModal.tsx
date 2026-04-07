@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import type { AddPaymentInput, Employee } from '../domain/types';
 import { getLocalISODate } from '../lib/date';
@@ -16,6 +16,7 @@ import { Input } from './ui/input';
 interface AddPaymentModalProps {
   open: boolean;
   employees: Employee[];
+  fixedEmployeeId?: string | null;
   onClose: () => void;
   onSubmit: (input: AddPaymentInput) => Promise<void>;
 }
@@ -23,9 +24,14 @@ interface AddPaymentModalProps {
 export function AddPaymentModal({
   open,
   employees,
+  fixedEmployeeId = null,
   onClose,
   onSubmit,
 }: AddPaymentModalProps) {
+  const activeEmployees = useMemo(
+    () => employees.filter((employee) => !employee.archived),
+    [employees],
+  );
   const [employeeId, setEmployeeId] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(getLocalISODate());
@@ -35,13 +41,13 @@ export function AddPaymentModal({
   useEffect(() => {
     if (!open) return;
 
-    const firstEmployee = employees.find((employee) => !employee.archived) ?? employees[0];
-    setEmployeeId(firstEmployee?.id ?? '');
+    const firstEmployee = activeEmployees[0];
+    setEmployeeId(fixedEmployeeId ?? firstEmployee?.id ?? '');
     setAmount('');
     setDate(getLocalISODate());
     setComment('');
     setSubmitting(false);
-  }, [employees, open]);
+  }, [activeEmployees, fixedEmployeeId, open]);
 
   const handleSubmit = async () => {
     const nextAmount = Number(amount);
@@ -71,7 +77,7 @@ export function AddPaymentModal({
         <DialogHeader>
           <DialogTitle>Добавить выплату</DialogTitle>
           <DialogDescription>
-            Зафиксируйте выплату сотруднику.
+            Сохраните выплату сотруднику. Сотрудник добавляет выплату как черновик, владелец затем подтверждает.
           </DialogDescription>
         </DialogHeader>
 
@@ -85,8 +91,9 @@ export function AddPaymentModal({
               className="h-10 rounded-md border bg-input-background px-3 text-sm"
               value={employeeId}
               onChange={(event) => setEmployeeId(event.target.value)}
+              disabled={Boolean(fixedEmployeeId)}
             >
-              {employees.filter((employee) => !employee.archived).map((employee) => (
+              {activeEmployees.map((employee) => (
                 <option key={employee.id} value={employee.id}>
                   {employee.name}
                 </option>
@@ -145,3 +152,4 @@ export function AddPaymentModal({
     </Dialog>
   );
 }
+

@@ -15,7 +15,7 @@ function RouteLoader() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-stone-50 px-4">
       <div className="rounded-2xl border bg-white px-6 py-4 text-sm text-muted-foreground shadow-sm">
-        Loading...
+        Загрузка...
       </div>
     </div>
   );
