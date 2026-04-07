@@ -1,27 +1,48 @@
-import { ShiftStatus } from '../context/AppContext';
+import { cn } from './ui/utils';
+import type { ShiftStatus } from '../domain/types';
 
 interface ShiftStatusButtonProps {
   status: ShiftStatus;
+  active: boolean;
   onClick: () => void;
 }
 
-const statusConfig: Record<ShiftStatus, { label: string; color: string; bg: string }> = {
-  working: { label: 'Работа', color: 'text-orange-700', bg: 'bg-orange-100 border-orange-200' },
-  'day-off': { label: 'Выходной', color: 'text-green-700', bg: 'bg-green-100 border-green-200' },
-  sick: { label: 'Больничный', color: 'text-blue-700', bg: 'bg-blue-100 border-blue-200' },
-  'no-show': { label: 'Невыход', color: 'text-red-700', bg: 'bg-red-100 border-red-200' },
-  none: { label: '—', color: 'text-neutral-500', bg: 'bg-neutral-50 border-neutral-200' },
+const STATUS_META: Record<ShiftStatus, { label: string; activeClass: string }> = {
+  working: {
+    label: 'Работа',
+    activeClass: 'border-emerald-300 bg-emerald-50 text-emerald-700',
+  },
+  'day-off': {
+    label: 'Выходной',
+    activeClass: 'border-slate-300 bg-slate-100 text-slate-700',
+  },
+  sick: {
+    label: 'Больничный',
+    activeClass: 'border-amber-300 bg-amber-50 text-amber-700',
+  },
+  'no-show': {
+    label: 'Не вышел',
+    activeClass: 'border-rose-300 bg-rose-50 text-rose-700',
+  },
+  none: {
+    label: 'Очистить',
+    activeClass: 'border-stone-300 bg-stone-50 text-stone-700',
+  },
 };
 
-export function ShiftStatusButton({ status, onClick }: ShiftStatusButtonProps) {
-  const config = statusConfig[status];
+export function ShiftStatusButton({ status, active, onClick }: ShiftStatusButtonProps) {
+  const meta = STATUS_META[status];
 
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={`${config.bg} ${config.color} border px-2 py-1 rounded text-xs font-medium transition-all hover:opacity-80 active:scale-95 min-w-[65px]`}
+      className={cn(
+        'rounded-full border px-3 py-1.5 text-xs transition hover:border-stone-300 hover:bg-stone-50',
+        active ? meta.activeClass : 'border-border bg-white text-muted-foreground',
+      )}
     >
-      {config.label}
+      {meta.label}
     </button>
   );
 }

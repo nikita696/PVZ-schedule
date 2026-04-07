@@ -1,125 +1,157 @@
-import { useApp, ShiftStatus } from '../context/AppContext';
+import { AlertTriangle } from 'lucide-react';
+import { useMemo } from 'react';
+import { toast } from 'sonner';
+import { BottomNav } from '../components/BottomNav';
 import { MonthYearSelector } from '../components/MonthYearSelector';
 import { ShiftStatusSelector } from '../components/ShiftStatusSelector';
-import { AlertTriangle } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { useApp } from '../context/AppContext';
 
-const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+const STATUS_LABELS = {
+  working: 'Работает',
+  'day-off': 'Выходной',
+  sick: 'Больничный',
+  'no-show': 'Не вышел',
+  none: 'Не выбрано',
+};
 
-export function Calendar() {
-  const { employees, shifts, selectedMonth, selectedYear, updateShift } = useApp();
-  const activeEmployees = employees.filter((e) => !e.archived);
+export default function CalendarPage() {
+  const {
+    employees,
+    shifts,
+    selectedMonth,
+    selectedYear,
+    setSelectedMonth,
+    setSelectedYear,
+    updateShift,
+  } = useApp();
 
-  const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const activeEmployees = employees.filter((employee) => !employee.archived);
 
-  const getShiftStatus = (employeeId: string, day: number): ShiftStatus => {
-    const date = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const shift = shifts.find((s) => s.employeeId === employeeId && s.date === date);
-    return shift?.status || 'none';
-  };
+  const days = useMemo(() => {
+    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
 
-  const handleStatusChange = (employeeId: string, day: number, status: ShiftStatus) => {
-    const date = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    updateShift(employeeId, date, status);
-  };
+    return Array.from({ length: daysInMonth }, (_, index) => {
+      const day = index + 1;
+      const isoDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const dayShifts = shifts.filter((shift) => shift.date === isoDate);
+      const workers = dayShifts.filter((shift) => shift.status === 'working').length;
+      const issue = workers !== 1;
 
-  const getWeekday = (day: number) => {
-    const date = new Date(selectedYear, selectedMonth - 1, day);
-    const dayIndex = date.getDay();
-    const adjustedIndex = dayIndex === 0 ? 6 : dayIndex - 1;
-    return WEEKDAYS[adjustedIndex];
-  };
-
-  const getWorkingCount = (day: number) => {
-    let count = 0;
-    activeEmployees.forEach((emp) => {
-      const status = getShiftStatus(emp.id, day);
-      if (status === 'working') count++;
+      return {
+        isoDate,
+        label: new Date(selectedYear, selectedMonth - 1, day).toLocaleDateString('ru-RU', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+        }),
+        issue,
+      };
     });
-    return count;
-  };
+  }, [selectedMonth, selectedYear, shifts]);
 
-  const gridTemplate = `44px 46px repeat(${activeEmployees.length}, minmax(150px, 1fr)) 48px`;
-  const minTableWidth = 44 + 46 + activeEmployees.length * 150 + 48;
+  const getStatus = (employeeId: string, date: string) => (
+    shifts.find((shift) => shift.employeeId === employeeId && shift.date === date)?.status ?? 'none'
+  );
+
+  const handleStatusChange = async (
+    employeeId: string,
+    date: string,
+    nextStatus: 'working' | 'day-off' | 'sick' | 'no-show' | 'none',
+  ) => {
+    const result = await updateShift(employeeId, date, nextStatus);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-neutral-50 pb-16">
-      <div className="bg-white border-b border-neutral-200">
-        <div className="max-w-3xl mx-auto px-3 py-3">
-          <h1 className="text-base font-semibold text-neutral-900 mb-2">Календарь смен</h1>
-          <MonthYearSelector />
-        </div>
-      </div>
-
-      <div className="max-w-3xl mx-auto px-3 py-3">
-        <div className="bg-white rounded-lg border border-neutral-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <div style={{ minWidth: `${minTableWidth}px` }}>
-              <div
-                className="grid gap-2 py-2 px-2 bg-neutral-100 border-b border-neutral-200 text-[11px] font-semibold text-neutral-700 uppercase"
-                style={{ gridTemplateColumns: gridTemplate }}
-              >
-                <div>День</div>
-                <div>Нед.</div>
-                {activeEmployees.map((emp) => (
-                  <div key={emp.id} className="truncate">{emp.name}</div>
-                ))}
-                <div className="text-center">∑</div>
+    <div className="min-h-screen bg-stone-50">
+      <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6">
+        <Card className="border-orange-100 bg-[radial-gradient(circle_at_top_left,#fff7ed,white_55%)]">
+          <CardContent className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="w-fit rounded-full bg-orange-100 px-4 py-1.5 text-sm font-semibold text-orange-700">
+                Календарь смен
               </div>
-
-              <div className="divide-y divide-neutral-200">
-                {days.map((day) => {
-                  const weekday = getWeekday(day);
-                  const workingCount = getWorkingCount(day);
-                  const isWeekend = weekday === 'Сб' || weekday === 'Вс';
-                  const hasIssue = workingCount === 0 || workingCount > 1;
-
-                  return (
-                    <div
-                      key={day}
-                      className={`grid gap-2 py-2 px-2 ${isWeekend ? 'bg-neutral-50' : ''}`}
-                      style={{ gridTemplateColumns: gridTemplate }}
-                    >
-                      <div className="flex items-center font-semibold text-neutral-900">{day}</div>
-                      <div className="flex items-center text-xs text-neutral-500">{weekday}</div>
-
-                      {activeEmployees.map((emp) => {
-                        const status = getShiftStatus(emp.id, day);
-                        return (
-                          <div key={emp.id} className="flex items-center">
-                            <ShiftStatusSelector
-                              value={status}
-                              onChange={(newStatus) => handleStatusChange(emp.id, day, newStatus)}
-                            />
-                          </div>
-                        );
-                      })}
-
-                      <div className="flex items-center justify-center">
-                        {hasIssue ? (
-                          <div className="flex items-center gap-1 text-orange-600">
-                            <AlertTriangle className="w-3.5 h-3.5" />
-                            <span className="text-xs font-medium">{workingCount}</span>
-                          </div>
-                        ) : (
-                          <span className="text-xs font-medium text-green-600">{workingCount}</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-stone-900">
+                Распределение смен по дням
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+                В идеале на каждый день должен быть ровно один сотрудник со статусом «Работа».
+                Календарь подсвечивает дни без назначенного сотрудника или с несколькими выходами.
+              </p>
             </div>
-          </div>
-        </div>
 
-        <div className="mt-3 p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-[11px] text-blue-900 leading-relaxed">
-            <strong>Подсказка:</strong> в идеале каждый день должен быть ровно 1 рабочий сотрудник.
-            Оранжевый индикатор означает 0 или 2+ сотрудников на смене.
-          </p>
+            <MonthYearSelector
+              month={selectedMonth}
+              year={selectedYear}
+              onMonthChange={setSelectedMonth}
+              onYearChange={setSelectedYear}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Легенда</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+            {Object.entries(STATUS_LABELS).map(([key, label]) => (
+              <div key={key} className="rounded-full border px-3 py-1.5">
+                {label}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4">
+          {days.map((day) => (
+            <Card key={day.isoDate} className={day.issue ? 'border-amber-300' : ''}>
+              <CardContent className="grid gap-4 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="text-lg font-semibold text-stone-900">{day.label}</div>
+                    {day.issue ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-700">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        Проблема в назначении
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-700">
+                        Закрыто
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid gap-4">
+                  {activeEmployees.map((employee) => (
+                    <div key={`${employee.id}-${day.isoDate}`} className="rounded-2xl border p-4">
+                      <div className="mb-3 text-sm font-semibold text-stone-900">{employee.name}</div>
+                      <ShiftStatusSelector
+                        value={getStatus(employee.id, day.isoDate)}
+                        onChange={(status) => void handleStatusChange(employee.id, day.isoDate, status)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+
+          {activeEmployees.length === 0 ? (
+            <Card>
+              <CardContent className="p-6 text-sm text-muted-foreground">
+                Сначала добавьте сотрудников на главной странице, затем заполняйте календарь.
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
-      </div>
+      </main>
+
+      <BottomNav />
     </div>
   );
 }

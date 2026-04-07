@@ -1,386 +1,389 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  archiveEmployeeRemote,
+  createEmployee,
+  createPaymentRemote,
+  deletePaymentRemote,
+  deleteShiftRemote,
+  fetchAppData,
+  replaceUserDataRemote,
+  updateEmployeeRateRemote,
+  upsertShiftRemote,
+} from '../data/appRepository';
+import {
+  getCompanyMonthlyBreakdown,
+  getEmployeeLifetimeStats,
+  getEmployeeMonthlyBreakdown,
+  getEmployeeStats,
+} from '../domain/payroll';
+import type {
+  AddPaymentInput,
+  AppDataStatus,
+  Employee,
+  EmployeeStats,
+  MonthlyBreakdownRow,
+  Payment,
+  Shift,
+  ShiftStatus,
+} from '../domain/types';
+import { createBackupPayload, parseBackupPayload } from '../lib/backup';
+import { loadUiPreferences, saveUiPreferences } from '../lib/preferences';
+import { errorResult, okResult, type ActionResult } from '../lib/result';
+import { useAuth } from './AuthContext';
 
-export type ShiftStatus = 'working' | 'day-off' | 'sick' | 'no-show' | 'none';
-type SyncStatus = 'local' | 'syncing' | 'synced' | 'error';
-
-export interface Employee {
-  id: string;
-  name: string;
-  dailyRate: number;
-  archived?: boolean;
-}
-
-export interface Shift {
-  employeeId: string;
-  date: string;
-  status: ShiftStatus;
-  dailyRate?: number;
-}
-
-export interface Payment {
-  id: string;
-  employeeId: string;
-  amount: number;
-  date: string;
-  comment: string;
-}
-
-interface PersistedState {
+interface AppContextType {
   employees: Employee[];
   shifts: Shift[];
   payments: Payment[];
   selectedMonth: number;
   selectedYear: number;
-}
-
-interface EmployeeStats {
-  shiftsWorked: number;
-  earned: number;
-  paid: number;
-  due: number;
-}
-
-export interface MonthlyBreakdownRow {
-  month: number;
-  shiftsWorked: number;
-  accrued: number;
-  paid: number;
-  delta: number;
-  balanceEnd: number;
-}
-
-interface AppContextType extends PersistedState {
+  status: AppDataStatus;
+  error: string | null;
   setSelectedMonth: (month: number) => void;
   setSelectedYear: (year: number) => void;
-  updateShift: (employeeId: string, date: string, status: ShiftStatus) => void;
-  addPayment: (payment: Omit<Payment, 'id'>) => void;
-  deletePayment: (id: string) => void;
-  addEmployee: (name: string, dailyRate: number) => void;
-  removeEmployee: (id: string) => void;
-  updateEmployeeRate: (id: string, dailyRate: number) => void;
+  refreshData: () => Promise<ActionResult<void>>;
+  updateShift: (employeeId: string, date: string, status: ShiftStatus) => Promise<ActionResult<void>>;
+  addPayment: (payment: AddPaymentInput) => Promise<ActionResult<void>>;
+  deletePayment: (id: string) => Promise<ActionResult<void>>;
+  addEmployee: (name: string, dailyRate: number) => Promise<ActionResult<void>>;
+  removeEmployee: (id: string) => Promise<ActionResult<void>>;
+  updateEmployeeRate: (id: string, dailyRate: number) => Promise<ActionResult<void>>;
   getEmployeeStats: (employeeId: string, month: number, year: number) => EmployeeStats;
   getEmployeeLifetimeStats: (employeeId: string) => EmployeeStats;
   getEmployeeMonthlyBreakdown: (employeeId: string, year: number) => MonthlyBreakdownRow[];
   getCompanyMonthlyBreakdown: (year: number) => MonthlyBreakdownRow[];
-  syncStatus: SyncStatus;
-  syncError: string | null;
+  exportBackup: () => object;
+  importAppState: (payload: unknown) => Promise<ActionResult<void>>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
-const STORAGE_KEY = 'pvz-schedule-state-v2';
-const SUPABASE_TABLE = 'app_state';
-const SUPABASE_ROW_ID = 'main';
 
-const now = new Date();
-
-const defaultState: PersistedState = {
-  employees: [
-    { id: 'pavel', name: 'Павел', dailyRate: 2500, archived: false },
-    { id: 'nikita', name: 'Никита', dailyRate: 2500, archived: false },
-  ],
-  shifts: [],
-  payments: [],
-  selectedMonth: now.getMonth() + 1,
-  selectedYear: now.getFullYear(),
-};
-
-const makeSupabase = (): SupabaseClient | null => {
-  const url = import.meta.env.VITE_SUPABASE_URL;
-  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key);
-};
-
-const parseLocalDate = (dateString: string): Date => {
-  const [y, m, d] = dateString.split('-').map(Number);
-  return new Date(y, (m || 1) - 1, d || 1, 12, 0, 0, 0);
-};
-
-const isWorkedByToday = (date: Date): boolean => {
-  const today = new Date();
-  const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
-  return date <= todayLocal;
-};
-
-const isDateByToday = (date: Date): boolean => {
-  const today = new Date();
-  const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
-  return date <= todayLocal;
-};
-
-const loadFromLocalStorage = (): { state: PersistedState; updatedAt: string } => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { state: defaultState, updatedAt: new Date(0).toISOString() };
-
-    const parsed = JSON.parse(raw);
-    if (parsed?.state) {
-      return {
-        state: { ...defaultState, ...parsed.state },
-        updatedAt: parsed.updatedAt || new Date(0).toISOString(),
-      };
+const sortEmployees = (items: Employee[]): Employee[] => (
+  [...items].sort((left, right) => {
+    if (left.archived !== right.archived) {
+      return Number(left.archived) - Number(right.archived);
     }
 
-    return { state: { ...defaultState, ...parsed }, updatedAt: new Date(0).toISOString() };
-  } catch {
-    return { state: defaultState, updatedAt: new Date(0).toISOString() };
-  }
-};
+    return left.name.localeCompare(right.name);
+  })
+);
+
+const sortShifts = (items: Shift[]): Shift[] => (
+  [...items].sort((left, right) => left.date.localeCompare(right.date))
+);
+
+const sortPayments = (items: Payment[]): Payment[] => (
+  [...items].sort((left, right) => {
+    if (left.date !== right.date) {
+      return right.date.localeCompare(left.date);
+    }
+
+    return right.createdAt.localeCompare(left.createdAt);
+  })
+);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const initial = loadFromLocalStorage();
-  const [state, setState] = useState<PersistedState>(initial.state);
-  const [supabase] = useState(() => makeSupabase());
-  const [isRemoteReady, setIsRemoteReady] = useState(!supabase);
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>(supabase ? 'syncing' : 'local');
-  const [syncError, setSyncError] = useState<string | null>(null);
-  const localUpdatedAtRef = useRef(initial.updatedAt);
+  const { status: authStatus, user } = useAuth();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [preferences, setPreferences] = useState(() => loadUiPreferences());
+  const [status, setStatus] = useState<AppDataStatus>('idle');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const updatedAt = new Date().toISOString();
-    localUpdatedAtRef.current = updatedAt;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ state, updatedAt }));
-  }, [state]);
+    saveUiPreferences(preferences);
+  }, [preferences]);
 
   useEffect(() => {
-    if (!supabase) return;
+    if (authStatus === 'loading') {
+      setStatus('loading');
+      setError(null);
+      return;
+    }
 
-    (async () => {
-      try {
-        setSyncStatus('syncing');
-        const { data, error } = await supabase
-          .from(SUPABASE_TABLE)
-          .select('payload, updated_at')
-          .eq('id', SUPABASE_ROW_ID)
-          .maybeSingle();
+    if (authStatus === 'missing-config') {
+      setEmployees([]);
+      setShifts([]);
+      setPayments([]);
+      setStatus('error');
+      setError('Supabase не настроен. Добавьте VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY.');
+      return;
+    }
 
-        if (error) throw error;
+    if (authStatus !== 'authenticated' || !user) {
+      setEmployees([]);
+      setShifts([]);
+      setPayments([]);
+      setStatus('idle');
+      setError(null);
+      return;
+    }
 
-        if (data?.payload) {
-          const remoteUpdatedAt = data.updated_at || new Date(0).toISOString();
-          if (new Date(remoteUpdatedAt).getTime() > new Date(localUpdatedAtRef.current).getTime()) {
-            setState({ ...defaultState, ...data.payload });
-            localUpdatedAtRef.current = remoteUpdatedAt;
-          }
-        }
+    let isActive = true;
+    setStatus('loading');
+    setError(null);
 
-        setSyncStatus('synced');
-      } catch (error) {
-        setSyncStatus('error');
-        setSyncError('Не удалось загрузить данные из Supabase. Используется локальный режим.');
-        console.error(error);
-      } finally {
-        setIsRemoteReady(true);
+    void (async () => {
+      const result = await fetchAppData(user.id);
+      if (!isActive) return;
+
+      if (!result.ok) {
+        setStatus('error');
+        setError(result.error);
+        return;
       }
+
+      setEmployees(sortEmployees(result.data.employees));
+      setShifts(sortShifts(result.data.shifts));
+      setPayments(sortPayments(result.data.payments));
+      setStatus('ready');
+      setError(null);
     })();
-  }, [supabase]);
 
-  useEffect(() => {
-    if (!supabase || !isRemoteReady) return;
+    return () => {
+      isActive = false;
+    };
+  }, [authStatus, user]);
 
-    const timeout = setTimeout(async () => {
-      try {
-        setSyncStatus('syncing');
-        const { error } = await supabase
-          .from(SUPABASE_TABLE)
-          .upsert({ id: SUPABASE_ROW_ID, payload: state, updated_at: localUpdatedAtRef.current });
+  const requireUser = (): ActionResult<string> => {
+    if (!user) {
+      return errorResult('Сначала нужно войти в аккаунт.');
+    }
 
-        if (error) throw error;
-        setSyncStatus('synced');
-        setSyncError(null);
-      } catch (error) {
-        setSyncStatus('error');
-        setSyncError('Не удалось синхронизировать изменения. Данные сохранены локально.');
-        console.error(error);
-      }
-    }, 600);
-
-    return () => clearTimeout(timeout);
-  }, [state, supabase, isRemoteReady]);
-
-  const updateShift = (employeeId: string, date: string, status: ShiftStatus) => {
-    setState((prev) => {
-      const employee = prev.employees.find((e) => e.id === employeeId);
-      const existingIndex = prev.shifts.findIndex((s) => s.employeeId === employeeId && s.date === date);
-
-      if (existingIndex >= 0) {
-        const shifts = [...prev.shifts];
-        shifts[existingIndex] = { ...shifts[existingIndex], status };
-        return { ...prev, shifts };
-      }
-
-      return {
-        ...prev,
-        shifts: [...prev.shifts, { employeeId, date, status, dailyRate: employee?.dailyRate ?? 0 }],
-      };
-    });
+    return okResult(user.id);
   };
 
-  const addPayment = (payment: Omit<Payment, 'id'>) => {
-    const newPayment: Payment = { ...payment, id: Date.now().toString() };
-    setState((prev) => ({ ...prev, payments: [newPayment, ...prev.payments] }));
-  };
+  const refreshData = async (): Promise<ActionResult<void>> => {
+    const userResult = requireUser();
+    if (!userResult.ok) return userResult;
 
-  const deletePayment = (id: string) => {
-    setState((prev) => ({ ...prev, payments: prev.payments.filter((p) => p.id !== id) }));
-  };
+    setStatus('loading');
+    const result = await fetchAppData(userResult.data);
+    if (!result.ok) {
+      setStatus('error');
+      setError(result.error);
+      return errorResult(result.error);
+    }
 
-  const addEmployee = (name: string, dailyRate: number) => {
-    setState((prev) => ({
-      ...prev,
-      employees: [...prev.employees, { id: crypto.randomUUID(), name, dailyRate, archived: false }],
-    }));
-  };
-
-  const removeEmployee = (id: string) => {
-    setState((prev) => ({
-      ...prev,
-      employees: prev.employees.map((e) => (e.id === id ? { ...e, archived: true } : e)),
-    }));
-  };
-
-  const updateEmployeeRate = (id: string, dailyRate: number) => {
-    setState((prev) => ({
-      ...prev,
-      employees: prev.employees.map((e) => (e.id === id ? { ...e, dailyRate } : e)),
-    }));
+    setEmployees(sortEmployees(result.data.employees));
+    setShifts(sortShifts(result.data.shifts));
+    setPayments(sortPayments(result.data.payments));
+    setStatus('ready');
+    setError(null);
+    return okResult(undefined);
   };
 
   const setSelectedMonth = (month: number) => {
-    setState((prev) => ({ ...prev, selectedMonth: month }));
+    if (month < 1 || month > 12) return;
+    setPreferences((prev) => ({ ...prev, selectedMonth: month }));
   };
 
   const setSelectedYear = (year: number) => {
-    setState((prev) => ({ ...prev, selectedYear: year }));
+    if (!Number.isInteger(year)) return;
+    setPreferences((prev) => ({ ...prev, selectedYear: year }));
   };
 
-  const calculateStats = (
+  const addEmployee = async (name: string, dailyRate: number): Promise<ActionResult<void>> => {
+    const userResult = requireUser();
+    if (!userResult.ok) return userResult;
+
+    const result = await createEmployee(userResult.data, name, dailyRate);
+    if (!result.ok) {
+      setError(result.error);
+      return errorResult(result.error);
+    }
+
+    setEmployees((prev) => sortEmployees([...prev, result.data]));
+    setError(null);
+    return okResult(undefined, result.message);
+  };
+
+  const removeEmployee = async (id: string): Promise<ActionResult<void>> => {
+    const userResult = requireUser();
+    if (!userResult.ok) return userResult;
+
+    const result = await archiveEmployeeRemote(userResult.data, id);
+    if (!result.ok) {
+      setError(result.error);
+      return errorResult(result.error);
+    }
+
+    setEmployees((prev) => sortEmployees(prev.map((employee) => (
+      employee.id === id ? result.data : employee
+    ))));
+    setError(null);
+    return okResult(undefined, result.message);
+  };
+
+  const updateEmployeeRate = async (id: string, dailyRate: number): Promise<ActionResult<void>> => {
+    const userResult = requireUser();
+    if (!userResult.ok) return userResult;
+
+    const result = await updateEmployeeRateRemote(userResult.data, id, dailyRate);
+    if (!result.ok) {
+      setError(result.error);
+      return errorResult(result.error);
+    }
+
+    setEmployees((prev) => sortEmployees(prev.map((employee) => (
+      employee.id === id ? result.data : employee
+    ))));
+    setError(null);
+    return okResult(undefined, result.message);
+  };
+
+  const updateShift = async (
     employeeId: string,
-    isShiftIncluded: (date: Date) => boolean,
-    isPaymentIncluded: (date: Date) => boolean,
-  ): EmployeeStats => {
-    const employee = state.employees.find((e) => e.id === employeeId);
-    if (!employee) return { shiftsWorked: 0, earned: 0, paid: 0, due: 0 };
+    date: string,
+    nextStatus: ShiftStatus,
+  ): Promise<ActionResult<void>> => {
+    const userResult = requireUser();
+    if (!userResult.ok) return userResult;
 
-    const eligibleShifts = state.shifts.filter((shift) => (
-      shift.employeeId === employeeId &&
-      shift.status === 'working' &&
-      isShiftIncluded(parseLocalDate(shift.date))
-    ));
+    if (nextStatus === 'none') {
+      const result = await deleteShiftRemote(userResult.data, employeeId, date);
+      if (!result.ok) {
+        setError(result.error);
+        return errorResult(result.error);
+      }
 
-    const shiftsWorked = eligibleShifts.length;
-    const earned = eligibleShifts.reduce((sum, shift) => sum + (shift.dailyRate ?? employee.dailyRate), 0);
+      setShifts((prev) => prev.filter((shift) => !(shift.employeeId === employeeId && shift.date === date)));
+      setError(null);
+      return okResult(undefined);
+    }
 
-    const paid = state.payments
-      .filter((payment) => payment.employeeId === employeeId && isPaymentIncluded(parseLocalDate(payment.date)))
-      .reduce((sum, p) => sum + p.amount, 0);
+    const employee = employees.find((item) => item.id === employeeId);
+    if (!employee) {
+      return errorResult('Сотрудник не найден.');
+    }
 
-    return { shiftsWorked, earned, paid, due: earned - paid };
-  };
-
-  const getEmployeeStats = (employeeId: string, month: number, year: number): EmployeeStats => (
-    calculateStats(
+    const result = await upsertShiftRemote(
+      userResult.data,
       employeeId,
-      (shiftDate) => shiftDate.getMonth() + 1 === month && shiftDate.getFullYear() === year && isWorkedByToday(shiftDate),
-      (paymentDate) => paymentDate.getMonth() + 1 === month && paymentDate.getFullYear() === year && isDateByToday(paymentDate),
-    )
-  );
-
-  const getEmployeeLifetimeStats = (employeeId: string): EmployeeStats => (
-    calculateStats(employeeId, (date) => isWorkedByToday(date), (date) => isDateByToday(date))
-  );
-
-  const getEmployeeMonthlyBreakdown = (employeeId: string, year: number): MonthlyBreakdownRow[] => {
-    const opening = calculateStats(
-      employeeId,
-      (shiftDate) => (
-        isWorkedByToday(shiftDate) &&
-        (shiftDate.getFullYear() < year)
-      ),
-      (paymentDate) => paymentDate.getFullYear() < year,
+      date,
+      nextStatus,
+      employee.dailyRate,
     );
 
-    let runningBalance = opening.due;
+    if (!result.ok) {
+      setError(result.error);
+      return errorResult(result.error);
+    }
 
-    return Array.from({ length: 12 }, (_, index) => {
-      const month = index + 1;
-      const monthStats = getEmployeeStats(employeeId, month, year);
-      const delta = monthStats.earned - monthStats.paid;
-      runningBalance += delta;
-
-      return {
-        month,
-        shiftsWorked: monthStats.shiftsWorked,
-        accrued: monthStats.earned,
-        paid: monthStats.paid,
-        delta,
-        balanceEnd: runningBalance,
-      };
+    setShifts((prev) => {
+      const otherShifts = prev.filter((shift) => !(shift.employeeId === employeeId && shift.date === date));
+      return sortShifts([...otherShifts, result.data]);
     });
+    setError(null);
+    return okResult(undefined);
   };
 
-  const getCompanyMonthlyBreakdown = (year: number): MonthlyBreakdownRow[] => {
-    const employeeIds = state.employees.map((employee) => employee.id);
+  const addPayment = async (payment: AddPaymentInput): Promise<ActionResult<void>> => {
+    const userResult = requireUser();
+    if (!userResult.ok) return userResult;
 
-    const openingBalance = employeeIds.reduce((sum, employeeId) => {
-      const previous = calculateStats(
-        employeeId,
-        (shiftDate) => isWorkedByToday(shiftDate) && shiftDate.getFullYear() < year,
-        (paymentDate) => paymentDate.getFullYear() < year,
-      );
-      return sum + previous.due;
-    }, 0);
+    const result = await createPaymentRemote(userResult.data, payment);
+    if (!result.ok) {
+      setError(result.error);
+      return errorResult(result.error);
+    }
 
-    let runningBalance = openingBalance;
-
-    return Array.from({ length: 12 }, (_, index) => {
-      const month = index + 1;
-      const total = employeeIds.reduce((acc, employeeId) => {
-        const stats = getEmployeeStats(employeeId, month, year);
-        acc.shiftsWorked += stats.shiftsWorked;
-        acc.accrued += stats.earned;
-        acc.paid += stats.paid;
-        return acc;
-      }, { shiftsWorked: 0, accrued: 0, paid: 0 });
-
-      const delta = total.accrued - total.paid;
-      runningBalance += delta;
-
-      return {
-        month,
-        shiftsWorked: total.shiftsWorked,
-        accrued: total.accrued,
-        paid: total.paid,
-        delta,
-        balanceEnd: runningBalance,
-      };
-    });
+    setPayments((prev) => sortPayments([result.data, ...prev]));
+    setError(null);
+    return okResult(undefined, result.message);
   };
 
-  const value = useMemo<AppContextType>(() => ({
-    ...state,
+  const deletePayment = async (id: string): Promise<ActionResult<void>> => {
+    const userResult = requireUser();
+    if (!userResult.ok) return userResult;
+
+    const result = await deletePaymentRemote(userResult.data, id);
+    if (!result.ok) {
+      setError(result.error);
+      return errorResult(result.error);
+    }
+
+    setPayments((prev) => prev.filter((payment) => payment.id !== id));
+    setError(null);
+    return okResult(undefined, result.message);
+  };
+
+  const exportBackup = (): object => createBackupPayload({
+    employees,
+    shifts,
+    payments,
+    preferences,
+  });
+
+  const importAppState = async (payload: unknown): Promise<ActionResult<void>> => {
+    const userResult = requireUser();
+    if (!userResult.ok) return userResult;
+
+    const importedData = parseBackupPayload(payload);
+    if (!importedData) {
+      return errorResult('Файл резервной копии поврежден или создан не в PVZ Schedule.');
+    }
+
+    setStatus('loading');
+    const result = await replaceUserDataRemote(userResult.data, importedData);
+    if (!result.ok) {
+      setStatus('ready');
+      setError(result.error);
+      return errorResult(result.error);
+    }
+
+    setEmployees(sortEmployees(result.data.employees));
+    setShifts(sortShifts(result.data.shifts));
+    setPayments(sortPayments(result.data.payments));
+    setPreferences({
+      selectedMonth: importedData.selectedMonth,
+      selectedYear: importedData.selectedYear,
+    });
+    setStatus('ready');
+    setError(null);
+    return okResult(undefined, 'Резервная копия успешно импортирована.');
+  };
+
+  const payrollSource = {
+    employees,
+    shifts,
+    payments,
+  };
+
+  const value: AppContextType = {
+    employees,
+    shifts,
+    payments,
+    selectedMonth: preferences.selectedMonth,
+    selectedYear: preferences.selectedYear,
+    status,
+    error,
     setSelectedMonth,
     setSelectedYear,
+    refreshData,
     updateShift,
     addPayment,
     deletePayment,
     addEmployee,
     removeEmployee,
     updateEmployeeRate,
-    getEmployeeStats,
-    getEmployeeLifetimeStats,
-    getEmployeeMonthlyBreakdown,
-    getCompanyMonthlyBreakdown,
-    syncStatus,
-    syncError,
-  }), [state, syncStatus, syncError]);
+    getEmployeeStats: (employeeId, month, year) => getEmployeeStats(payrollSource, employeeId, month, year),
+    getEmployeeLifetimeStats: (employeeId) => getEmployeeLifetimeStats(payrollSource, employeeId),
+    getEmployeeMonthlyBreakdown: (employeeId, year) => getEmployeeMonthlyBreakdown(payrollSource, employeeId, year),
+    getCompanyMonthlyBreakdown: (year) => getCompanyMonthlyBreakdown(payrollSource, year),
+    exportBackup,
+    importAppState,
+  };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
-export function useApp() {
+export const useApp = (): AppContextType => {
   const context = useContext(AppContext);
-  if (!context) throw new Error('useApp must be used within AppProvider');
+  if (!context) {
+    throw new Error('useApp must be used within AppProvider');
+  }
+
   return context;
-}
+};

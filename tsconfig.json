@@ -3,6 +3,7 @@
     "target": "ES2020",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
+    "types": ["vite/client", "node"],
     "skipLibCheck": true,
     "moduleResolution": "Bundler",
     "allowImportingTsExtensions": true,
@@ -10,8 +11,8 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "strict": false,
+    "strict": true,
     "baseUrl": "."
   },
-  "include": ["app", "main.tsx", "vite.config.ts"]
+  "include": ["app", "main.tsx", "vite.config.ts", "vite-env.d.ts", "vitest.config.ts"]
 }

@@ -1,0 +1,13 @@
+node_modules/
+build/
+.env.local
+.edge-profile/
+.vercel/
+supabase/.temp/
+preview.out.log
+preview.err.log
+*.png
+*.zip
+dist/
+.DS_Store
+Thumbs.db

@@ -1,54 +1,60 @@
-import { Home, Calendar, Wallet } from 'lucide-react';
-import { Link, useLocation } from 'react-router';
+import { Home, CalendarDays, CreditCard, LogOut } from 'lucide-react';
+import { NavLink, useNavigate } from 'react-router';
+import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
+import { cn } from './ui/utils';
+
+const NAV_ITEMS = [
+  { to: '/', label: 'Главная', icon: Home },
+  { to: '/calendar', label: 'Календарь', icon: CalendarDays },
+  { to: '/payments', label: 'Выплаты', icon: CreditCard },
+];
 
 export function BottomNav() {
-  const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
 
-  const isActive = (path: string) => {
-    if (path === '/' && location.pathname === '/') return true;
-    if (path !== '/' && location.pathname.startsWith(path)) return true;
-    return false;
+  const handleSignOut = async () => {
+    const result = await signOut();
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+
+    toast.success(result.message ?? 'Вы вышли из аккаунта.');
+    navigate('/auth', { replace: true });
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 z-50">
-      <div className="max-w-md mx-auto flex items-center justify-around h-16">
-        <Link
-          to="/"
-          className={`flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors ${
-            isActive('/')
-              ? 'text-orange-600'
-              : 'text-neutral-500'
-          }`}
+    <div className="sticky bottom-0 z-20 border-t bg-white/95 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3">
+        <div className="flex flex-1 gap-2">
+          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) => cn(
+                'flex flex-1 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm transition',
+                isActive
+                  ? 'border-orange-200 bg-orange-50 text-orange-700'
+                  : 'border-border bg-white text-muted-foreground hover:bg-stone-50',
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{label}</span>
+            </NavLink>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground transition hover:bg-stone-50"
         >
-          <Home className="w-5 h-5" />
-          <span className="text-xs">Главная</span>
-        </Link>
-        
-        <Link
-          to="/calendar"
-          className={`flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors ${
-            isActive('/calendar')
-              ? 'text-orange-600'
-              : 'text-neutral-500'
-          }`}
-        >
-          <Calendar className="w-5 h-5" />
-          <span className="text-xs">Календарь</span>
-        </Link>
-        
-        <Link
-          to="/payments"
-          className={`flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors ${
-            isActive('/payments')
-              ? 'text-orange-600'
-              : 'text-neutral-500'
-          }`}
-        >
-          <Wallet className="w-5 h-5" />
-          <span className="text-xs">Выплаты</span>
-        </Link>
+          <LogOut className="h-4 w-4" />
+          <span className="hidden sm:inline">Выйти</span>
+        </button>
       </div>
-    </nav>
+    </div>
   );
 }

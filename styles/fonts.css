@@ -1,0 +1,23 @@
+/* Cyrillic-safe UI typography for RU locale */
+:root {
+  --font-sans-ru: "Segoe UI", "Inter", "PT Sans", "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono-ru: "JetBrains Mono", "Cascadia Mono", "Consolas", "Courier New", monospace;
+}
+
+body {
+  font-family: var(--font-sans-ru);
+}
+
+input,
+button,
+select,
+textarea {
+  font-family: inherit;
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-mono-ru);
+}

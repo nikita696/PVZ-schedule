@@ -1,154 +1,147 @@
-import { useEffect, useMemo, useState } from 'react';
-import { X } from 'lucide-react';
-import { useApp } from '../context/AppContext';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './ui/select';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import type { AddPaymentInput, Employee } from '../domain/types';
+import { getLocalISODate } from '../lib/date';
+import { Button } from './ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog';
+import { Input } from './ui/input';
 
 interface AddPaymentModalProps {
-  isOpen: boolean;
+  open: boolean;
+  employees: Employee[];
   onClose: () => void;
-  preselectedEmployeeId?: string;
+  onSubmit: (input: AddPaymentInput) => Promise<void>;
 }
 
-const getLocalISODate = () => {
-  const now = new Date();
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 10);
-};
-
-export function AddPaymentModal({ isOpen, onClose, preselectedEmployeeId }: AddPaymentModalProps) {
-  const { employees, addPayment } = useApp();
-  const activeEmployees = useMemo(
-    () => employees.filter((employee) => !employee.archived),
-    [employees],
-  );
-  const [employeeId, setEmployeeId] = useState(preselectedEmployeeId || activeEmployees[0]?.id || '');
+export function AddPaymentModal({
+  open,
+  employees,
+  onClose,
+  onSubmit,
+}: AddPaymentModalProps) {
+  const [employeeId, setEmployeeId] = useState('');
   const [amount, setAmount] = useState('');
-  const [comment, setComment] = useState('');
   const [date, setDate] = useState(getLocalISODate());
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (isOpen && preselectedEmployeeId) {
-      setEmployeeId(preselectedEmployeeId);
-      return;
-    }
+    if (!open) return;
 
-    if (isOpen && activeEmployees.length > 0 && !activeEmployees.some((employee) => employee.id === employeeId)) {
-      setEmployeeId(activeEmployees[0].id);
-    }
-  }, [isOpen, preselectedEmployeeId, activeEmployees, employeeId]);
-
-  if (!isOpen) return null;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!employeeId || !amount || parseFloat(amount) <= 0) {
-      toast.error('Заполните обязательные поля');
-      return;
-    }
-
-    addPayment({
-      employeeId,
-      amount: parseFloat(amount),
-      date,
-      comment: comment || 'выплата',
-    });
-
-    toast.success('Выплата добавлена');
-
+    const firstEmployee = employees.find((employee) => !employee.archived) ?? employees[0];
+    setEmployeeId(firstEmployee?.id ?? '');
     setAmount('');
-    setComment('');
     setDate(getLocalISODate());
-    onClose();
+    setComment('');
+    setSubmitting(false);
+  }, [employees, open]);
+
+  const handleSubmit = async () => {
+    const nextAmount = Number(amount);
+    if (!employeeId) {
+      toast.error('Выберите сотрудника.');
+      return;
+    }
+
+    if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
+      toast.error('Введите корректную сумму.');
+      return;
+    }
+
+    setSubmitting(true);
+    await onSubmit({
+      employeeId,
+      amount: nextAmount,
+      date,
+      comment,
+    });
+    setSubmitting(false);
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center">
-      <div className="bg-white w-full md:max-w-md md:rounded-lg rounded-t-2xl max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-neutral-200 px-4 py-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-neutral-900">Добавить выплату</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-neutral-100 rounded-full transition-colors"
-          >
-            <X className="w-5 h-5 text-neutral-600" />
-          </button>
-        </div>
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Добавить выплату</DialogTitle>
+          <DialogDescription>
+            Зафиксируйте выплату сотруднику.
+          </DialogDescription>
+        </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          <div>
-            <Label htmlFor="employee">Сотрудник</Label>
-            <Select value={employeeId} onValueChange={setEmployeeId}>
-              <SelectTrigger className="w-full mt-1.5">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {activeEmployees.map((emp) => (
-                  <SelectItem key={emp.id} value={emp.id}>
-                    {emp.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="grid gap-4">
+          <div className="grid gap-2">
+            <label htmlFor="payment-employee" className="text-sm font-medium">
+              Сотрудник
+            </label>
+            <select
+              id="payment-employee"
+              className="h-10 rounded-md border bg-input-background px-3 text-sm"
+              value={employeeId}
+              onChange={(event) => setEmployeeId(event.target.value)}
+            >
+              {employees.filter((employee) => !employee.archived).map((employee) => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.name}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div>
-            <Label htmlFor="amount">Сумма (₽)</Label>
+          <div className="grid gap-2">
+            <label htmlFor="payment-amount" className="text-sm font-medium">
+              Сумма
+            </label>
             <Input
-              id="amount"
+              id="payment-amount"
               type="number"
+              min="1"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="5000"
-              className="mt-1.5"
-              min="0"
-              step="100"
-              required
+              onChange={(event) => setAmount(event.target.value)}
+              placeholder="3000"
             />
           </div>
 
-          <div>
-            <Label htmlFor="date">Дата</Label>
+          <div className="grid gap-2">
+            <label htmlFor="payment-date" className="text-sm font-medium">
+              Дата
+            </label>
             <Input
-              id="date"
+              id="payment-date"
               type="date"
               value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="mt-1.5"
-              required
+              onChange={(event) => setDate(event.target.value)}
             />
           </div>
 
-          <div>
-            <Label htmlFor="comment">Комментарий</Label>
+          <div className="grid gap-2">
+            <label htmlFor="payment-comment" className="text-sm font-medium">
+              Комментарий
+            </label>
             <Input
-              id="comment"
-              type="text"
+              id="payment-comment"
               value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="зарплата, аванс и т.д."
-              className="mt-1.5"
+              onChange={(event) => setComment(event.target.value)}
+              placeholder="Аванс, премия, корректировка..."
             />
           </div>
+        </div>
 
-          <Button
-            type="submit"
-            className="w-full bg-orange-600 hover:bg-orange-700 text-white h-12"
-          >
-            Добавить выплату
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={submitting}>
+            Отмена
           </Button>
-        </form>
-      </div>
-    </div>
+          <Button onClick={() => void handleSubmit()} disabled={submitting}>
+            {submitting ? 'Сохранение...' : 'Сохранить выплату'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

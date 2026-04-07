@@ -1,95 +1,112 @@
-import { Clock, CheckCircle, AlertCircle, Archive } from 'lucide-react';
+import { Archive, Wallet } from 'lucide-react';
+import { useState } from 'react';
+import { toast } from 'sonner';
+import type { Employee, EmployeeStats } from '../domain/types';
 import { Button } from './ui/button';
-import { Card } from './ui/card';
-import { Employee } from '../context/AppContext';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Input } from './ui/input';
 
 interface EmployeeCardProps {
   employee: Employee;
-  stats: {
-    shiftsWorked: number;
-    earned: number;
-    paid: number;
-    due: number;
-  };
-  onAddPayment: () => void;
-  onViewHistory: () => void;
-  onRateChange: (newRate: number) => void;
-  onRemove: () => void;
+  monthlyStats: EmployeeStats;
+  lifetimeStats: EmployeeStats;
+  onArchive: (employeeId: string) => Promise<void>;
+  onRateSave: (employeeId: string, dailyRate: number) => Promise<void>;
 }
+
+const money = (value: number) => new Intl.NumberFormat('ru-RU', {
+  style: 'currency',
+  currency: 'RUB',
+  maximumFractionDigits: 0,
+}).format(value);
 
 export function EmployeeCard({
   employee,
-  stats,
-  onAddPayment,
-  onViewHistory,
-  onRateChange,
-  onRemove,
+  monthlyStats,
+  lifetimeStats,
+  onArchive,
+  onRateSave,
 }: EmployeeCardProps) {
+  const [rateDraft, setRateDraft] = useState(String(employee.dailyRate));
+
+  const handleBlur = async () => {
+    const nextRate = Number(rateDraft);
+    if (!Number.isFinite(nextRate) || nextRate <= 0) {
+      setRateDraft(String(employee.dailyRate));
+      toast.error('Введите корректную ставку за смену.');
+      return;
+    }
+
+    if (nextRate === employee.dailyRate) {
+      return;
+    }
+
+    await onRateSave(employee.id, nextRate);
+  };
+
   return (
-    <Card className="p-4 bg-white shadow-sm border border-neutral-200">
-      <div className="flex items-start justify-between mb-3">
+    <Card className={employee.archived ? 'border-stone-200 bg-stone-50/60' : ''}>
+      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
         <div>
-          <h3 className="text-lg font-semibold text-neutral-900">{employee.name}</h3>
-          <p className="text-sm text-neutral-500">{stats.shiftsWorked} смен</p>
-        </div>
-
-        <div className="text-right">
-          <p className="text-xs text-neutral-500">Ставка за смену</p>
-          <input
-            type="number"
-            min={0}
-            step={100}
-            value={employee.dailyRate}
-            onChange={(e) => onRateChange(Number(e.target.value) || 0)}
-            className="w-24 text-right text-sm font-semibold text-neutral-900 bg-transparent border-b border-dashed border-neutral-400 focus:outline-none"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-3 mb-4">
-        <div className="bg-neutral-50 rounded-lg p-3">
-          <div className="flex items-center gap-1 mb-1">
-            <Clock className="w-3.5 h-3.5 text-neutral-500" />
-            <p className="text-xs text-neutral-600">Начислено</p>
-          </div>
-          <p className="font-semibold text-neutral-900">{stats.earned.toLocaleString()} ₽</p>
-        </div>
-
-        <div className="bg-green-50 rounded-lg p-3">
-          <div className="flex items-center gap-1 mb-1">
-            <CheckCircle className="w-3.5 h-3.5 text-green-600" />
-            <p className="text-xs text-green-700">Выплачено</p>
-          </div>
-          <p className="font-semibold text-green-700">{stats.paid.toLocaleString()} ₽</p>
-        </div>
-
-        <div className={`${stats.due > 0 ? 'bg-orange-50' : 'bg-neutral-50'} rounded-lg p-3`}>
-          <div className="flex items-center gap-1 mb-1">
-            <AlertCircle className={`w-3.5 h-3.5 ${stats.due > 0 ? 'text-orange-600' : 'text-neutral-500'}`} />
-            <p className={`text-xs ${stats.due > 0 ? 'text-orange-700' : 'text-neutral-600'}`}>К выплате</p>
-          </div>
-          <p className={`font-semibold ${stats.due > 0 ? 'text-orange-700' : 'text-neutral-900'}`}>
-            {stats.due.toLocaleString()} ₽
+          <CardTitle className="text-lg">{employee.name}</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Общий баланс: {money(lifetimeStats.due)}
           </p>
         </div>
-      </div>
 
-      <div className="flex gap-2">
-        <Button onClick={onAddPayment} className="flex-1 bg-orange-600 hover:bg-orange-700 text-white">
-          Добавить выплату
-        </Button>
-        <Button onClick={onViewHistory} variant="outline" className="flex-1 border-neutral-300 text-neutral-700">
-          История
-        </Button>
-        <Button
-          onClick={onRemove}
-          variant="outline"
-          title="Архив (история сохраняется)"
-          className="px-3 border-amber-200 text-amber-700 hover:bg-amber-50"
-        >
-          <Archive className="w-4 h-4" />
-        </Button>
-      </div>
+        {!employee.archived ? (
+          <Button variant="outline" size="sm" onClick={() => void onArchive(employee.id)}>
+            <Archive className="h-4 w-4" />
+            В архив
+          </Button>
+        ) : (
+          <span className="rounded-full bg-stone-200 px-3 py-1 text-xs text-stone-700">
+            В архиве
+          </span>
+        )}
+      </CardHeader>
+
+      <CardContent className="grid gap-4">
+        <div className="grid gap-2">
+          <label htmlFor={`rate-${employee.id}`} className="text-sm font-medium">
+            Ставка за смену
+          </label>
+          <Input
+            id={`rate-${employee.id}`}
+            type="number"
+            min="1"
+            value={rateDraft}
+            onChange={(event) => setRateDraft(event.target.value)}
+            onBlur={() => void handleBlur()}
+            disabled={employee.archived}
+          />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+            <div className="text-xs uppercase tracking-wide text-emerald-700">Начислено</div>
+            <div className="mt-2 text-xl font-semibold">{money(monthlyStats.earned)}</div>
+            <div className="mt-1 text-xs text-emerald-700">
+              {monthlyStats.shiftsWorked} отработанных смен
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+            <div className="text-xs uppercase tracking-wide text-sky-700">Выплачено</div>
+            <div className="mt-2 text-xl font-semibold">{money(monthlyStats.paid)}</div>
+            <div className="mt-1 text-xs text-sky-700">Выплаты за выбранный месяц</div>
+          </div>
+
+          <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
+            <div className="text-xs uppercase tracking-wide text-orange-700">К выплате</div>
+            <div className="mt-2 flex items-center gap-2 text-xl font-semibold">
+              <Wallet className="h-5 w-5" />
+              {money(monthlyStats.due)}
+            </div>
+            <div className="mt-1 text-xs text-orange-700">Баланс месяца</div>
+          </div>
+        </div>
+      </CardContent>
     </Card>
   );
 }

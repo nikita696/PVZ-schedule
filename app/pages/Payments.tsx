@@ -1,142 +1,175 @@
-import { useState, useEffect } from 'react';
-import { useApp } from '../context/AppContext';
-import { Trash2, Plus } from 'lucide-react';
-import { Button } from '../components/ui/button';
-import { AddPaymentModal } from '../components/AddPaymentModal';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
+import { Trash2, Wallet } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { useSearchParams } from 'react-router';
+import { AddPaymentModal } from '../components/AddPaymentModal';
+import { BottomNav } from '../components/BottomNav';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table';
+import { useApp } from '../context/AppContext';
 
-const parseLocalDate = (dateStr: string) => {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  return new Date(y, (m || 1) - 1, d || 1, 12, 0, 0, 0);
-};
+const money = (value: number) => new Intl.NumberFormat('ru-RU', {
+  style: 'currency',
+  currency: 'RUB',
+  maximumFractionDigits: 0,
+}).format(value);
 
-export function Payments() {
-  const { employees, payments, deletePayment } = useApp();
+export default function PaymentsPage() {
+  const {
+    employees,
+    payments,
+    addPayment,
+    deletePayment,
+    getEmployeeLifetimeStats,
+  } = useApp();
+
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('all');
+  const [modalOpen, setModalOpen] = useState(false);
+
   const activeEmployees = employees.filter((employee) => !employee.archived);
-  const [searchParams] = useSearchParams();
-  const preselectedEmployee = searchParams.get('employee');
 
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('all');
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const visiblePayments = useMemo(() => (
+    selectedEmployeeId === 'all'
+      ? payments
+      : payments.filter((payment) => payment.employeeId === selectedEmployeeId)
+  ), [payments, selectedEmployeeId]);
 
-  useEffect(() => {
-    if (preselectedEmployee) {
-      setSelectedEmployeeId(preselectedEmployee);
+  const handleAddPayment = async (input: Parameters<typeof addPayment>[0]) => {
+    const result = await addPayment(input);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
     }
-  }, [preselectedEmployee]);
 
-  const filteredPayments = payments.filter((payment) => {
-    if (selectedEmployeeId === 'all') return true;
-    return payment.employeeId === selectedEmployeeId;
-  });
-
-  const sortedPayments = [...filteredPayments].sort((a, b) => {
-    return parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime();
-  });
-
-  const handleDelete = (id: string) => {
-    if (window.confirm('Удалить эту выплату?')) {
-      deletePayment(id);
-      toast.success('Выплата удалена');
-    }
+    setModalOpen(false);
+    toast.success(result.message ?? 'Выплата сохранена.');
   };
 
-  const getEmployeeName = (employeeId: string) => {
-    return employees.find((e) => e.id === employeeId)?.name || employeeId;
-  };
+  const handleDeletePayment = async (id: string) => {
+    const result = await deletePayment(id);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
 
-  const formatDate = (dateStr: string) => {
-    const date = parseLocalDate(dateStr);
-    return new Intl.DateTimeFormat('ru-RU', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    }).format(date);
+    toast.success(result.message ?? 'Выплата удалена.');
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 pb-20">
-      <div className="bg-white border-b border-neutral-200">
-        <div className="max-w-md mx-auto px-4 py-4">
-          <h1 className="text-xl font-semibold text-neutral-900 mb-3">
-            История выплат
-          </h1>
-
-          <div className="flex gap-2">
-            <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
-              <SelectTrigger className="flex-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Все сотрудники</SelectItem>
-                {activeEmployees.map((emp) => (
-                  <SelectItem key={emp.id} value={emp.id}>
-                    {emp.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Button
-              onClick={() => setIsPaymentModalOpen(true)}
-              className="bg-orange-600 hover:bg-orange-700 text-white"
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              Добавить
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-md mx-auto px-4 py-4">
-        {sortedPayments.length === 0 ? (
-          <div className="bg-white rounded-lg border border-neutral-200 p-8 text-center">
-            <p className="text-neutral-500">Выплат пока нет</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {sortedPayments.map((payment) => (
-              <div
-                key={payment.id}
-                className="bg-white rounded-lg border border-neutral-200 p-4 flex items-start gap-3"
-              >
-                <div className="flex-1">
-                  <div className="flex items-baseline gap-2 mb-1">
-                    <span className="text-lg font-semibold text-neutral-900">
-                      {payment.amount.toLocaleString()} ₽
-                    </span>
-                    <span className="text-sm text-neutral-500">
-                      {getEmployeeName(payment.employeeId)}
-                    </span>
-                  </div>
-                  <p className="text-sm text-neutral-600 mb-1">{payment.comment}</p>
-                  <p className="text-xs text-neutral-500">{formatDate(payment.date)}</p>
-                </div>
-
-                <button
-                  onClick={() => handleDelete(payment.id)}
-                  className="p-2 hover:bg-red-50 rounded-lg transition-colors group"
-                >
-                  <Trash2 className="w-4 h-4 text-neutral-400 group-hover:text-red-600" />
-                </button>
+    <div className="min-h-screen bg-stone-50">
+      <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6">
+        <Card className="border-orange-100 bg-[radial-gradient(circle_at_top_left,#fff7ed,white_55%)]">
+          <CardContent className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="w-fit rounded-full bg-orange-100 px-4 py-1.5 text-sm font-semibold text-orange-700">
+                Выплаты
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-stone-900">
+                История выплат и текущая задолженность
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+                Фиксируйте авансы, зарплату и корректировки. Баланс ниже считается по всем
+                отработанным сменам и всем сохраненным выплатам.
+              </p>
+            </div>
+
+            <Button onClick={() => setModalOpen(true)} className="bg-orange-600 hover:bg-orange-500">
+              <Wallet className="h-4 w-4" />
+              Добавить выплату
+            </Button>
+          </CardContent>
+        </Card>
+
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {activeEmployees.map((employee) => {
+            const stats = getEmployeeLifetimeStats(employee.id);
+            return (
+              <Card key={employee.id}>
+                <CardContent className="p-5">
+                  <div className="text-sm text-muted-foreground">{employee.name}</div>
+                  <div className="mt-3 text-2xl font-semibold">{money(stats.due)}</div>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Общий долг | Начислено {money(stats.earned)} | Выплачено {money(stats.paid)}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </section>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
+            <CardTitle>Журнал выплат</CardTitle>
+            <select
+              className="h-10 rounded-md border bg-input-background px-3 text-sm"
+              value={selectedEmployeeId}
+              onChange={(event) => setSelectedEmployeeId(event.target.value)}
+            >
+              <option value="all">Все сотрудники</option>
+              {employees.map((employee) => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.name}
+                </option>
+              ))}
+            </select>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Дата</TableHead>
+                  <TableHead>Сотрудник</TableHead>
+                  <TableHead>Сумма</TableHead>
+                  <TableHead>Комментарий</TableHead>
+                  <TableHead className="w-[80px]">Действие</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visiblePayments.map((payment) => {
+                  const employee = employees.find((item) => item.id === payment.employeeId);
+
+                  return (
+                    <TableRow key={payment.id}>
+                      <TableCell>{payment.date}</TableCell>
+                      <TableCell>{employee?.name ?? 'Неизвестный сотрудник'}</TableCell>
+                      <TableCell>{money(payment.amount)}</TableCell>
+                      <TableCell>{payment.comment || '-'}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => void handleDeletePayment(payment.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-rose-600" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+
+            {visiblePayments.length === 0 ? (
+              <p className="pt-4 text-sm text-muted-foreground">Пока нет ни одной выплаты.</p>
+            ) : null}
+          </CardContent>
+        </Card>
+      </main>
+
+      <BottomNav />
 
       <AddPaymentModal
-        isOpen={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
-        preselectedEmployeeId={selectedEmployeeId !== 'all' ? selectedEmployeeId : undefined}
+        open={modalOpen}
+        employees={activeEmployees}
+        onClose={() => setModalOpen(false)}
+        onSubmit={handleAddPayment}
       />
     </div>
   );
