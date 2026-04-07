@@ -1,13 +1,21 @@
-export type ShiftStatus = 'working' | 'day-off' | 'sick' | 'no-show' | 'none';
+export type ShiftStatusDb = 'planned-work' | 'worked' | 'day-off' | 'vacation' | 'sick' | 'no-show';
+export type ShiftStatus = ShiftStatusDb | 'none';
+export type PaymentStatus = 'entered' | 'confirmed';
+export type UserRole = 'owner' | 'employee';
 
 export type AppDataStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 export interface Employee {
   id: string;
   userId: string;
+  authUserId: string | null;
+  inviteCode: string | null;
+  isOwner: boolean;
+  hiredAt: string | null;
   name: string;
   dailyRate: number;
   archived: boolean;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -17,7 +25,7 @@ export interface Shift {
   userId: string;
   employeeId: string;
   date: string;
-  status: ShiftStatus;
+  status: ShiftStatusDb;
   rateSnapshot: number;
   createdAt: string;
   updatedAt: string;
@@ -30,22 +38,32 @@ export interface Payment {
   amount: number;
   date: string;
   comment: string;
+  status: PaymentStatus;
+  createdByAuthUserId: string | null;
+  confirmedByAuthUserId: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface EmployeeStats {
-  shiftsWorked: number;
-  earned: number;
-  paid: number;
-  due: number;
+  workedCount: number;
+  plannedCount: number;
+  sickCount: number;
+  vacationCount: number;
+  earnedActual: number;
+  paidConfirmed: number;
+  dueNow: number;
+  forecastTotal: number;
 }
 
 export interface MonthlyBreakdownRow {
   month: number;
-  shiftsWorked: number;
-  accrued: number;
-  paid: number;
+  workedCount: number;
+  sickCount: number;
+  vacationCount: number;
+  earnedActual: number;
+  paidConfirmed: number;
+  forecastTotal: number;
   delta: number;
   balanceEnd: number;
 }
@@ -67,6 +85,7 @@ export interface AddPaymentInput {
   amount: number;
   date: string;
   comment: string;
+  status?: PaymentStatus;
 }
 
 export interface ImportedEmployee {
@@ -79,7 +98,7 @@ export interface ImportedEmployee {
 export interface ImportedShift {
   employeeId: string;
   date: string;
-  status: ShiftStatus;
+  status: ShiftStatusDb;
   rateSnapshot: number;
 }
 
@@ -88,6 +107,7 @@ export interface ImportedPayment {
   amount: number;
   date: string;
   comment: string;
+  status?: PaymentStatus;
 }
 
 export interface ImportedAppData {
@@ -96,4 +116,10 @@ export interface ImportedAppData {
   payments: ImportedPayment[];
   selectedMonth: number;
   selectedYear: number;
+}
+
+export interface UserAccess {
+  role: UserRole;
+  ownerUserId: string;
+  employeeId: string | null;
 }

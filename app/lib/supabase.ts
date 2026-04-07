@@ -7,27 +7,42 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
+          auth_user_id: string | null;
+          invite_code: string | null;
+          is_owner: boolean;
+          hired_at: string | null;
           name: string;
           daily_rate: number;
           archived: boolean;
+          archived_at: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
           user_id: string;
+          auth_user_id?: string | null;
+          invite_code?: string | null;
+          is_owner?: boolean;
+          hired_at?: string | null;
           name: string;
           daily_rate: number;
           archived?: boolean;
+          archived_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
           user_id?: string;
+          auth_user_id?: string | null;
+          invite_code?: string | null;
+          is_owner?: boolean;
+          hired_at?: string | null;
           name?: string;
           daily_rate?: number;
           archived?: boolean;
+          archived_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -38,7 +53,7 @@ export interface Database {
           user_id: string;
           employee_id: string;
           work_date: string;
-          status: 'working' | 'day-off' | 'sick' | 'no-show';
+          status: 'planned-work' | 'worked' | 'day-off' | 'vacation' | 'sick' | 'no-show';
           rate_snapshot: number;
           created_at: string;
           updated_at: string;
@@ -48,7 +63,7 @@ export interface Database {
           user_id: string;
           employee_id: string;
           work_date: string;
-          status: 'working' | 'day-off' | 'sick' | 'no-show';
+          status: 'planned-work' | 'worked' | 'day-off' | 'vacation' | 'sick' | 'no-show';
           rate_snapshot: number;
           created_at?: string;
           updated_at?: string;
@@ -58,7 +73,7 @@ export interface Database {
           user_id?: string;
           employee_id?: string;
           work_date?: string;
-          status?: 'working' | 'day-off' | 'sick' | 'no-show';
+          status?: 'planned-work' | 'worked' | 'day-off' | 'vacation' | 'sick' | 'no-show';
           rate_snapshot?: number;
           created_at?: string;
           updated_at?: string;
@@ -72,6 +87,9 @@ export interface Database {
           amount: number;
           payment_date: string;
           comment: string;
+          status: 'entered' | 'confirmed';
+          created_by_auth_user_id: string | null;
+          confirmed_by_auth_user_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -82,6 +100,9 @@ export interface Database {
           amount: number;
           payment_date: string;
           comment?: string;
+          status?: 'entered' | 'confirmed';
+          created_by_auth_user_id?: string | null;
+          confirmed_by_auth_user_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -92,9 +113,39 @@ export interface Database {
           amount?: number;
           payment_date?: string;
           comment?: string;
+          status?: 'entered' | 'confirmed';
+          created_by_auth_user_id?: string | null;
+          confirmed_by_auth_user_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
+      };
+    };
+    Functions: {
+      claim_employee_invite: {
+        Args: {
+          invite_code_input: string;
+        };
+        Returns: {
+          id: string;
+          user_id: string;
+          auth_user_id: string | null;
+          invite_code: string | null;
+          is_owner: boolean;
+          hired_at: string | null;
+          name: string;
+          daily_rate: number;
+          archived: boolean;
+          archived_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+      };
+      regenerate_employee_invite: {
+        Args: {
+          employee_id_input: string;
+        };
+        Returns: string;
       };
     };
   };

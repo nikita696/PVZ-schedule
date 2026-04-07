@@ -1,4 +1,4 @@
-import { parseLocalDate, isDateOnOrBeforeToday } from '../lib/date';
+import { parseLocalDate } from '../lib/date';
 import type {
   Employee,
   EmployeeStats,
@@ -13,6 +13,12 @@ interface PayrollSource {
   payments: Payment[];
 }
 
+const isTodayOrFuture = (date: Date): boolean => {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  return date >= todayStart;
+};
+
 const calculateStats = (
   source: PayrollSource,
   employeeId: string,
@@ -21,27 +27,52 @@ const calculateStats = (
 ): EmployeeStats => {
   const employee = source.employees.find((item) => item.id === employeeId);
   if (!employee) {
-    return { shiftsWorked: 0, earned: 0, paid: 0, due: 0 };
+    return {
+      workedCount: 0,
+      plannedCount: 0,
+      sickCount: 0,
+      vacationCount: 0,
+      earnedActual: 0,
+      paidConfirmed: 0,
+      dueNow: 0,
+      forecastTotal: 0,
+    };
   }
 
   const eligibleShifts = source.shifts.filter((shift) => (
     shift.employeeId === employeeId &&
-    shift.status === 'working' &&
     isShiftIncluded(parseLocalDate(shift.date))
   ));
 
-  const shiftsWorked = eligibleShifts.length;
-  const earned = eligibleShifts.reduce((sum, shift) => sum + shift.rateSnapshot, 0);
+  const workedShifts = eligibleShifts.filter((shift) => shift.status === 'worked');
+  const plannedFutureShifts = eligibleShifts.filter((shift) => (
+    shift.status === 'planned-work' && isTodayOrFuture(parseLocalDate(shift.date))
+  ));
+  const sickCount = eligibleShifts.filter((shift) => shift.status === 'sick').length;
+  const vacationCount = eligibleShifts.filter((shift) => shift.status === 'vacation').length;
 
-  const paid = source.payments
-    .filter((payment) => payment.employeeId === employeeId && isPaymentIncluded(parseLocalDate(payment.date)))
+  const workedCount = workedShifts.length;
+  const plannedCount = plannedFutureShifts.length;
+  const earnedActual = workedShifts.reduce((sum, shift) => sum + shift.rateSnapshot, 0);
+
+  const paidConfirmed = source.payments
+    .filter((payment) => (
+      payment.employeeId === employeeId &&
+      payment.status === 'confirmed' &&
+      isPaymentIncluded(parseLocalDate(payment.date))
+    ))
     .reduce((sum, payment) => sum + payment.amount, 0);
+  const forecastTotal = earnedActual + plannedFutureShifts.reduce((sum, shift) => sum + shift.rateSnapshot, 0);
 
   return {
-    shiftsWorked,
-    earned,
-    paid,
-    due: earned - paid,
+    workedCount,
+    plannedCount,
+    sickCount,
+    vacationCount,
+    earnedActual,
+    paidConfirmed,
+    dueNow: earnedActual - paidConfirmed,
+    forecastTotal,
   };
 };
 
@@ -56,13 +87,11 @@ export const getEmployeeStats = (
     employeeId,
     (date) => (
       date.getMonth() + 1 === month &&
-      date.getFullYear() === year &&
-      isDateOnOrBeforeToday(date)
+      date.getFullYear() === year
     ),
     (date) => (
       date.getMonth() + 1 === month &&
-      date.getFullYear() === year &&
-      isDateOnOrBeforeToday(date)
+      date.getFullYear() === year
     ),
   )
 );
@@ -74,8 +103,8 @@ export const getEmployeeLifetimeStats = (
   calculateStats(
     source,
     employeeId,
-    (date) => isDateOnOrBeforeToday(date),
-    (date) => isDateOnOrBeforeToday(date),
+    () => true,
+    () => true,
   )
 );
 
@@ -87,23 +116,26 @@ export const getEmployeeMonthlyBreakdown = (
   const opening = calculateStats(
     source,
     employeeId,
-    (date) => isDateOnOrBeforeToday(date) && date.getFullYear() < year,
+    (date) => date.getFullYear() < year,
     (date) => date.getFullYear() < year,
   );
 
-  let runningBalance = opening.due;
+  let runningBalance = opening.dueNow;
 
   return Array.from({ length: 12 }, (_, index) => {
     const month = index + 1;
     const monthStats = getEmployeeStats(source, employeeId, month, year);
-    const delta = monthStats.earned - monthStats.paid;
+    const delta = monthStats.earnedActual - monthStats.paidConfirmed;
     runningBalance += delta;
 
     return {
       month,
-      shiftsWorked: monthStats.shiftsWorked,
-      accrued: monthStats.earned,
-      paid: monthStats.paid,
+      workedCount: monthStats.workedCount,
+      sickCount: monthStats.sickCount,
+      vacationCount: monthStats.vacationCount,
+      earnedActual: monthStats.earnedActual,
+      paidConfirmed: monthStats.paidConfirmed,
+      forecastTotal: monthStats.forecastTotal,
       delta,
       balanceEnd: runningBalance,
     };
@@ -120,10 +152,10 @@ export const getCompanyMonthlyBreakdown = (
     const previous = calculateStats(
       source,
       employeeId,
-      (date) => isDateOnOrBeforeToday(date) && date.getFullYear() < year,
+      (date) => date.getFullYear() < year,
       (date) => date.getFullYear() < year,
     );
-    return sum + previous.due;
+    return sum + previous.dueNow;
   }, 0);
 
   let runningBalance = openingBalance;
@@ -132,20 +164,33 @@ export const getCompanyMonthlyBreakdown = (
     const month = index + 1;
     const total = employeeIds.reduce((acc, employeeId) => {
       const stats = getEmployeeStats(source, employeeId, month, year);
-      acc.shiftsWorked += stats.shiftsWorked;
-      acc.accrued += stats.earned;
-      acc.paid += stats.paid;
+      acc.workedCount += stats.workedCount;
+      acc.sickCount += stats.sickCount;
+      acc.vacationCount += stats.vacationCount;
+      acc.earnedActual += stats.earnedActual;
+      acc.paidConfirmed += stats.paidConfirmed;
+      acc.forecastTotal += stats.forecastTotal;
       return acc;
-    }, { shiftsWorked: 0, accrued: 0, paid: 0 });
+    }, {
+      workedCount: 0,
+      sickCount: 0,
+      vacationCount: 0,
+      earnedActual: 0,
+      paidConfirmed: 0,
+      forecastTotal: 0,
+    });
 
-    const delta = total.accrued - total.paid;
+    const delta = total.earnedActual - total.paidConfirmed;
     runningBalance += delta;
 
     return {
       month,
-      shiftsWorked: total.shiftsWorked,
-      accrued: total.accrued,
-      paid: total.paid,
+      workedCount: total.workedCount,
+      sickCount: total.sickCount,
+      vacationCount: total.vacationCount,
+      earnedActual: total.earnedActual,
+      paidConfirmed: total.paidConfirmed,
+      forecastTotal: total.forecastTotal,
       delta,
       balanceEnd: runningBalance,
     };

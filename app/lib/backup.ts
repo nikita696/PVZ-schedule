@@ -4,8 +4,10 @@ import type {
   ImportedEmployee,
   ImportedPayment,
   ImportedShift,
-  ShiftStatus,
+  PaymentStatus,
+  ShiftStatusDb,
 } from '../domain/types';
+import { normalizeShiftStatus, type LegacyShiftStatus } from '../domain/shiftStatus';
 import { getDefaultUiPreferences, isValidDateString } from './date';
 
 interface BackupPayload {
@@ -22,7 +24,7 @@ interface BackupPayload {
     shifts: Array<{
       employeeId: string;
       date: string;
-      status: ShiftStatus;
+      status: ShiftStatusDb;
       rateSnapshot: number;
     }>;
     payments: Array<{
@@ -30,6 +32,7 @@ interface BackupPayload {
       amount: number;
       date: string;
       comment: string;
+      status?: PaymentStatus;
     }>;
     selectedMonth: number;
     selectedYear: number;
@@ -40,12 +43,19 @@ const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value !== null
 );
 
-const isShiftStatus = (value: unknown): value is ShiftStatus => (
+const isLegacyShiftStatus = (value: unknown): value is LegacyShiftStatus => (
   value === 'working' ||
+  value === 'planned-work' ||
+  value === 'worked' ||
   value === 'day-off' ||
+  value === 'vacation' ||
   value === 'sick' ||
   value === 'no-show' ||
   value === 'none'
+);
+
+const isPaymentStatus = (value: unknown): value is PaymentStatus => (
+  value === 'entered' || value === 'confirmed'
 );
 
 export const createBackupPayload = (snapshot: AppDataSnapshot): BackupPayload => ({
@@ -115,9 +125,14 @@ const parseShifts = (
       !isRecord(item) ||
       typeof item.employeeId !== 'string' ||
       !isValidDateString(item.date) ||
-      !isShiftStatus(item.status)
+      !isLegacyShiftStatus(item.status)
     ) {
       return null;
+    }
+
+    const normalizedStatus = normalizeShiftStatus(item.status, item.date);
+    if (!normalizedStatus) {
+      continue;
     }
 
     const rateSnapshot = typeof item.rateSnapshot === 'number'
@@ -133,7 +148,7 @@ const parseShifts = (
     shifts.push({
       employeeId: item.employeeId,
       date: item.date,
-      status: item.status,
+      status: normalizedStatus,
       rateSnapshot,
     });
   }
@@ -161,6 +176,7 @@ const parsePayments = (paymentsRaw: unknown): ImportedPayment[] | null => {
       amount: item.amount,
       date: item.date,
       comment: typeof item.comment === 'string' ? item.comment : '',
+      status: isPaymentStatus(item.status) ? item.status : 'confirmed',
     });
   }
 

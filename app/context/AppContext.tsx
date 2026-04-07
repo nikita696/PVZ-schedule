@@ -1,13 +1,17 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   archiveEmployeeRemote,
+  claimEmployeeInvite,
+  confirmPaymentRemote,
   createEmployee,
   createPaymentRemote,
   deletePaymentRemote,
   deleteShiftRemote,
   fetchAppData,
+  regenerateEmployeeInvite as regenerateEmployeeInviteRemote,
   replaceUserDataRemote,
   updateEmployeeRateRemote,
+  updatePaymentRemote,
   upsertShiftRemote,
 } from '../data/appRepository';
 import {
@@ -25,29 +29,42 @@ import type {
   Payment,
   Shift,
   ShiftStatus,
+  UserAccess,
 } from '../domain/types';
 import { createBackupPayload, parseBackupPayload } from '../lib/backup';
 import { loadUiPreferences, saveUiPreferences } from '../lib/preferences';
 import { errorResult, okResult, type ActionResult } from '../lib/result';
+import { exportEmployeePayslipXlsx as exportEmployeePayslipXlsxFile } from '../lib/xlsx';
 import { useAuth } from './AuthContext';
 
 interface AppContextType {
   employees: Employee[];
   shifts: Shift[];
   payments: Payment[];
+  access: UserAccess | null;
   selectedMonth: number;
   selectedYear: number;
   status: AppDataStatus;
   error: string | null;
+  isOwner: boolean;
+  myEmployeeId: string | null;
   setSelectedMonth: (month: number) => void;
   setSelectedYear: (year: number) => void;
   refreshData: () => Promise<ActionResult<void>>;
   updateShift: (employeeId: string, date: string, status: ShiftStatus) => Promise<ActionResult<void>>;
   addPayment: (payment: AddPaymentInput) => Promise<ActionResult<void>>;
+  updatePayment: (
+    paymentId: string,
+    patch: Partial<{ amount: number; date: string; comment: string }>,
+  ) => Promise<ActionResult<void>>;
+  confirmPayment: (paymentId: string) => Promise<ActionResult<void>>;
   deletePayment: (id: string) => Promise<ActionResult<void>>;
   addEmployee: (name: string, dailyRate: number) => Promise<ActionResult<void>>;
   removeEmployee: (id: string) => Promise<ActionResult<void>>;
   updateEmployeeRate: (id: string, dailyRate: number) => Promise<ActionResult<void>>;
+  claimEmployeeInvite: (inviteCode: string) => Promise<ActionResult<void>>;
+  regenerateEmployeeInvite: (employeeId: string) => Promise<ActionResult<string>>;
+  exportEmployeePayslipXlsx: (employeeId: string, month: number, year: number) => Promise<ActionResult<void>>;
   getEmployeeStats: (employeeId: string, month: number, year: number) => EmployeeStats;
   getEmployeeLifetimeStats: (employeeId: string) => EmployeeStats;
   getEmployeeMonthlyBreakdown: (employeeId: string, year: number) => MonthlyBreakdownRow[];
@@ -87,6 +104,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [access, setAccess] = useState<UserAccess | null>(null);
   const [preferences, setPreferences] = useState(() => loadUiPreferences());
   const [status, setStatus] = useState<AppDataStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +124,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setEmployees([]);
       setShifts([]);
       setPayments([]);
+      setAccess(null);
       setStatus('error');
       setError('Supabase не настроен. Добавьте VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY.');
       return;
@@ -115,6 +134,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setEmployees([]);
       setShifts([]);
       setPayments([]);
+      setAccess(null);
       setStatus('idle');
       setError(null);
       return;
@@ -137,6 +157,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setEmployees(sortEmployees(result.data.employees));
       setShifts(sortShifts(result.data.shifts));
       setPayments(sortPayments(result.data.payments));
+      setAccess(result.data.access);
       setStatus('ready');
       setError(null);
     })();
@@ -154,6 +175,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return okResult(user.id);
   };
 
+  const requireAccess = (): ActionResult<UserAccess> => {
+    if (!access) {
+      return errorResult('Не удалось определить права доступа. Обновите страницу.');
+    }
+
+    return okResult(access);
+  };
+
+  const requireOwner = (): ActionResult<UserAccess> => {
+    const accessResult = requireAccess();
+    if (!accessResult.ok) return accessResult;
+    if (accessResult.data.role !== 'owner') {
+      return errorResult('Недостаточно прав для этого действия.');
+    }
+
+    return okResult(accessResult.data);
+  };
+
   const refreshData = async (): Promise<ActionResult<void>> => {
     const userResult = requireUser();
     if (!userResult.ok) return userResult;
@@ -169,6 +208,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setEmployees(sortEmployees(result.data.employees));
     setShifts(sortShifts(result.data.shifts));
     setPayments(sortPayments(result.data.payments));
+    setAccess(result.data.access);
     setStatus('ready');
     setError(null);
     return okResult(undefined);
@@ -185,10 +225,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addEmployee = async (name: string, dailyRate: number): Promise<ActionResult<void>> => {
-    const userResult = requireUser();
-    if (!userResult.ok) return userResult;
+    const ownerResult = requireOwner();
+    if (!ownerResult.ok) return ownerResult;
 
-    const result = await createEmployee(userResult.data, name, dailyRate);
+    const result = await createEmployee(ownerResult.data.ownerUserId, name, dailyRate);
     if (!result.ok) {
       setError(result.error);
       return errorResult(result.error);
@@ -200,10 +240,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const removeEmployee = async (id: string): Promise<ActionResult<void>> => {
-    const userResult = requireUser();
-    if (!userResult.ok) return userResult;
+    const ownerResult = requireOwner();
+    if (!ownerResult.ok) return ownerResult;
 
-    const result = await archiveEmployeeRemote(userResult.data, id);
+    const result = await archiveEmployeeRemote(ownerResult.data.ownerUserId, id);
     if (!result.ok) {
       setError(result.error);
       return errorResult(result.error);
@@ -217,10 +257,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateEmployeeRate = async (id: string, dailyRate: number): Promise<ActionResult<void>> => {
-    const userResult = requireUser();
-    if (!userResult.ok) return userResult;
+    const ownerResult = requireOwner();
+    if (!ownerResult.ok) return ownerResult;
 
-    const result = await updateEmployeeRateRemote(userResult.data, id, dailyRate);
+    const result = await updateEmployeeRateRemote(ownerResult.data.ownerUserId, id, dailyRate);
     if (!result.ok) {
       setError(result.error);
       return errorResult(result.error);
@@ -238,11 +278,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     date: string,
     nextStatus: ShiftStatus,
   ): Promise<ActionResult<void>> => {
-    const userResult = requireUser();
-    if (!userResult.ok) return userResult;
+    const ownerResult = requireOwner();
+    if (!ownerResult.ok) return ownerResult;
 
     if (nextStatus === 'none') {
-      const result = await deleteShiftRemote(userResult.data, employeeId, date);
+      const result = await deleteShiftRemote(ownerResult.data.ownerUserId, employeeId, date);
       if (!result.ok) {
         setError(result.error);
         return errorResult(result.error);
@@ -259,7 +299,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     const result = await upsertShiftRemote(
-      userResult.data,
+      ownerResult.data.ownerUserId,
       employeeId,
       date,
       nextStatus,
@@ -279,11 +319,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return okResult(undefined);
   };
 
-  const addPayment = async (payment: AddPaymentInput): Promise<ActionResult<void>> => {
+  const addPayment = async (input: AddPaymentInput): Promise<ActionResult<void>> => {
     const userResult = requireUser();
     if (!userResult.ok) return userResult;
+    const accessResult = requireAccess();
+    if (!accessResult.ok) return accessResult;
 
-    const result = await createPaymentRemote(userResult.data, payment);
+    const isOwner = accessResult.data.role === 'owner';
+    const employeeId = isOwner ? input.employeeId : accessResult.data.employeeId;
+    if (!employeeId) {
+      return errorResult('Не удалось определить сотрудника для выплаты.');
+    }
+
+    const result = await createPaymentRemote({
+      authUserId: userResult.data,
+      access: accessResult.data,
+      input: {
+        ...input,
+        employeeId,
+      },
+    });
+
     if (!result.ok) {
       setError(result.error);
       return errorResult(result.error);
@@ -294,11 +350,44 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return okResult(undefined, result.message);
   };
 
-  const deletePayment = async (id: string): Promise<ActionResult<void>> => {
+  const updatePayment = async (
+    paymentId: string,
+    patch: Partial<{ amount: number; date: string; comment: string }>,
+  ): Promise<ActionResult<void>> => {
+    const result = await updatePaymentRemote(paymentId, patch);
+    if (!result.ok) {
+      setError(result.error);
+      return errorResult(result.error);
+    }
+
+    setPayments((prev) => sortPayments(prev.map((payment) => (
+      payment.id === paymentId ? result.data : payment
+    ))));
+    setError(null);
+    return okResult(undefined, result.message);
+  };
+
+  const confirmPayment = async (paymentId: string): Promise<ActionResult<void>> => {
+    const ownerResult = requireOwner();
+    if (!ownerResult.ok) return ownerResult;
     const userResult = requireUser();
     if (!userResult.ok) return userResult;
 
-    const result = await deletePaymentRemote(userResult.data, id);
+    const result = await confirmPaymentRemote(paymentId, userResult.data);
+    if (!result.ok) {
+      setError(result.error);
+      return errorResult(result.error);
+    }
+
+    setPayments((prev) => sortPayments(prev.map((payment) => (
+      payment.id === paymentId ? result.data : payment
+    ))));
+    setError(null);
+    return okResult(undefined, result.message);
+  };
+
+  const deletePayment = async (id: string): Promise<ActionResult<void>> => {
+    const result = await deletePaymentRemote(id);
     if (!result.ok) {
       setError(result.error);
       return errorResult(result.error);
@@ -309,6 +398,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return okResult(undefined, result.message);
   };
 
+  const claimInvite = async (inviteCode: string): Promise<ActionResult<void>> => {
+    const result = await claimEmployeeInvite(inviteCode.trim());
+    if (!result.ok) {
+      setError(result.error);
+      return errorResult(result.error);
+    }
+
+    return refreshData();
+  };
+
+  const regenerateInvite = async (employeeId: string): Promise<ActionResult<string>> => {
+    const ownerResult = requireOwner();
+    if (!ownerResult.ok) return ownerResult as ActionResult<string>;
+
+    const result = await regenerateEmployeeInviteRemote(employeeId);
+    if (!result.ok) {
+      setError(result.error);
+      return errorResult(result.error);
+    }
+
+    setEmployees((prev) => sortEmployees(prev.map((employee) => (
+      employee.id === employeeId ? { ...employee, inviteCode: result.data } : employee
+    ))));
+    setError(null);
+    return okResult(result.data, result.message);
+  };
+
   const exportBackup = (): object => createBackupPayload({
     employees,
     shifts,
@@ -316,7 +432,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     preferences,
   });
 
+  const exportEmployeePayslipXlsx = async (
+    employeeId: string,
+    month: number,
+    year: number,
+  ): Promise<ActionResult<void>> => {
+    const employee = employees.find((item) => item.id === employeeId);
+    if (!employee) {
+      return errorResult('Сотрудник не найден.');
+    }
+
+    if (access?.role === 'employee' && access.employeeId !== employeeId) {
+      return errorResult('Недостаточно прав для выгрузки этого расчетного листа.');
+    }
+
+    await exportEmployeePayslipXlsxFile({
+      employee,
+      month,
+      year,
+      shifts: shifts.filter((shift) => shift.employeeId === employeeId),
+      payments: payments.filter((payment) => payment.employeeId === employeeId),
+      stats: getEmployeeStats(payrollSource, employeeId, month, year),
+    });
+
+    return okResult(undefined, 'Файл расчетного листа выгружен.');
+  };
+
   const importAppState = async (payload: unknown): Promise<ActionResult<void>> => {
+    const ownerResult = requireOwner();
+    if (!ownerResult.ok) return ownerResult;
     const userResult = requireUser();
     if (!userResult.ok) return userResult;
 
@@ -326,7 +470,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     setStatus('loading');
-    const result = await replaceUserDataRemote(userResult.data, importedData);
+    const result = await replaceUserDataRemote(
+      ownerResult.data.ownerUserId,
+      userResult.data,
+      importedData,
+    );
     if (!result.ok) {
       setStatus('ready');
       setError(result.error);
@@ -336,6 +484,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setEmployees(sortEmployees(result.data.employees));
     setShifts(sortShifts(result.data.shifts));
     setPayments(sortPayments(result.data.payments));
+    setAccess(result.data.access);
     setPreferences({
       selectedMonth: importedData.selectedMonth,
       selectedYear: importedData.selectedYear,
@@ -345,29 +494,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return okResult(undefined, 'Резервная копия успешно импортирована.');
   };
 
-  const payrollSource = {
+  const payrollSource = useMemo(() => ({
     employees,
     shifts,
     payments,
-  };
+  }), [employees, shifts, payments]);
 
   const value: AppContextType = {
     employees,
     shifts,
     payments,
+    access,
     selectedMonth: preferences.selectedMonth,
     selectedYear: preferences.selectedYear,
     status,
     error,
+    isOwner: access?.role === 'owner',
+    myEmployeeId: access?.employeeId ?? null,
     setSelectedMonth,
     setSelectedYear,
     refreshData,
     updateShift,
     addPayment,
+    updatePayment,
+    confirmPayment,
     deletePayment,
     addEmployee,
     removeEmployee,
     updateEmployeeRate,
+    claimEmployeeInvite: claimInvite,
+    regenerateEmployeeInvite: regenerateInvite,
+    exportEmployeePayslipXlsx,
     getEmployeeStats: (employeeId, month, year) => getEmployeeStats(payrollSource, employeeId, month, year),
     getEmployeeLifetimeStats: (employeeId) => getEmployeeLifetimeStats(payrollSource, employeeId),
     getEmployeeMonthlyBreakdown: (employeeId, year) => getEmployeeMonthlyBreakdown(payrollSource, employeeId, year),

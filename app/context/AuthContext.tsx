@@ -11,10 +11,24 @@ interface AuthContextType {
   user: User | null;
   signIn: (email: string, password: string) => Promise<ActionResult<void>>;
   signUp: (email: string, password: string) => Promise<ActionResult<void>>;
+  signUpEmployee: (email: string, password: string, inviteCode: string) => Promise<ActionResult<void>>;
   signOut: () => Promise<ActionResult<void>>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const claimInvite = async (inviteCode: string): Promise<ActionResult<void>> => {
+  if (!supabase) {
+    return errorResult('Supabase не настроен. Добавьте необходимые переменные окружения.');
+  }
+
+  const { error } = await supabase.rpc('claim_employee_invite', {
+    invite_code_input: inviteCode,
+  });
+
+  if (error) return errorResult(error.message);
+  return okResult(undefined);
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -76,6 +90,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  const signUpEmployee = async (
+    email: string,
+    password: string,
+    inviteCode: string,
+  ): Promise<ActionResult<void>> => {
+    if (!supabase) {
+      return errorResult('Supabase не настроен. Добавьте необходимые переменные окружения.');
+    }
+
+    const normalizedInviteCode = inviteCode.trim().toUpperCase();
+    if (!normalizedInviteCode) {
+      return errorResult('Введите invite code.');
+    }
+
+    const signup = await supabase.auth.signUp({ email, password });
+    if (signup.error) return errorResult(signup.error.message);
+
+    let hasSession = Boolean(signup.data.session);
+    if (!hasSession) {
+      const signin = await supabase.auth.signInWithPassword({ email, password });
+      if (signin.error) {
+        return okResult(
+          undefined,
+          'Аккаунт создан. Подтвердите email, затем войдите и привяжите invite code.',
+        );
+      }
+
+      hasSession = Boolean(signin.data.session);
+    }
+
+    if (!hasSession) {
+      return okResult(
+        undefined,
+        'Аккаунт создан. Подтвердите email, затем войдите и привяжите invite code.',
+      );
+    }
+
+    const claimResult = await claimInvite(normalizedInviteCode);
+    if (!claimResult.ok) return claimResult;
+
+    return okResult(undefined, 'Аккаунт сотрудника создан и привязан к профилю.');
+  };
+
   const signOut = async (): Promise<ActionResult<void>> => {
     if (!supabase) {
       return errorResult('Supabase не настроен. Добавьте необходимые переменные окружения.');
@@ -93,6 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: session?.user ?? null,
     signIn,
     signUp,
+    signUpEmployee,
     signOut,
   }), [session, status]);
 
@@ -107,3 +165,4 @@ export const useAuth = (): AuthContextType => {
 
   return context;
 };
+

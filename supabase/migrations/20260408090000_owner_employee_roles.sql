@@ -1,112 +1,5 @@
 create extension if not exists pgcrypto;
 
-do $$
-begin
-  if exists (
-    select 1
-    from information_schema.tables
-    where table_schema = 'public' and table_name = 'employees'
-  ) and not exists (
-    select 1
-    from information_schema.columns
-    where table_schema = 'public' and table_name = 'employees' and column_name = 'user_id'
-  ) and not exists (
-    select 1
-    from information_schema.tables
-    where table_schema = 'public' and table_name = 'legacy_employees'
-  ) then
-    alter table public.employees rename to legacy_employees;
-  end if;
-end $$;
-
-do $$
-begin
-  if exists (
-    select 1
-    from information_schema.tables
-    where table_schema = 'public' and table_name = 'shifts'
-  ) and not exists (
-    select 1
-    from information_schema.columns
-    where table_schema = 'public' and table_name = 'shifts' and column_name = 'user_id'
-  ) and not exists (
-    select 1
-    from information_schema.tables
-    where table_schema = 'public' and table_name = 'legacy_shifts'
-  ) then
-    alter table public.shifts rename to legacy_shifts;
-  end if;
-end $$;
-
-do $$
-begin
-  if exists (
-    select 1
-    from information_schema.tables
-    where table_schema = 'public' and table_name = 'payments'
-  ) and not exists (
-    select 1
-    from information_schema.columns
-    where table_schema = 'public' and table_name = 'payments' and column_name = 'user_id'
-  ) and not exists (
-    select 1
-    from information_schema.tables
-    where table_schema = 'public' and table_name = 'legacy_payments'
-  ) then
-    alter table public.payments rename to legacy_payments;
-  end if;
-end $$;
-
-create or replace function public.set_updated_at()
-returns trigger
-language plpgsql
-as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$;
-
-create table if not exists public.employees (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  name text not null,
-  daily_rate integer not null default 0 check (daily_rate >= 0),
-  auth_user_id uuid null references auth.users(id) on delete set null,
-  invite_code text null,
-  is_owner boolean not null default false,
-  hired_at date null,
-  archived boolean not null default false,
-  archived_at timestamptz null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists public.shifts (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  employee_id uuid not null references public.employees(id) on delete cascade,
-  work_date date not null,
-  status text not null check (status in ('planned-work', 'worked', 'day-off', 'vacation', 'sick', 'no-show')),
-  rate_snapshot integer not null check (rate_snapshot >= 0),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists public.payments (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  employee_id uuid not null references public.employees(id) on delete cascade,
-  amount integer not null check (amount >= 0),
-  payment_date date not null,
-  comment text not null default '',
-  status text not null default 'confirmed' check (status in ('entered', 'confirmed')),
-  created_by_auth_user_id uuid null references auth.users(id) on delete set null,
-  confirmed_by_auth_user_id uuid null references auth.users(id) on delete set null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
 alter table public.employees
   add column if not exists auth_user_id uuid null references auth.users(id) on delete set null,
   add column if not exists invite_code text null,
@@ -150,32 +43,10 @@ alter table public.payments
   add constraint payments_status_check
   check (status in ('entered', 'confirmed'));
 
-create index if not exists employees_user_id_idx on public.employees (user_id);
 create index if not exists employees_auth_user_id_idx on public.employees (auth_user_id);
 create unique index if not exists employees_auth_user_id_uidx on public.employees (auth_user_id) where auth_user_id is not null;
 create unique index if not exists employees_invite_code_uidx on public.employees (invite_code) where invite_code is not null;
-create index if not exists shifts_user_id_date_idx on public.shifts (user_id, work_date);
-create index if not exists payments_user_id_date_idx on public.payments (user_id, payment_date);
 create index if not exists payments_status_idx on public.payments (status);
-create unique index if not exists shifts_user_employee_date_uidx on public.shifts (user_id, employee_id, work_date);
-
-drop trigger if exists employees_set_updated_at on public.employees;
-create trigger employees_set_updated_at
-before update on public.employees
-for each row
-execute procedure public.set_updated_at();
-
-drop trigger if exists shifts_set_updated_at on public.shifts;
-create trigger shifts_set_updated_at
-before update on public.shifts
-for each row
-execute procedure public.set_updated_at();
-
-drop trigger if exists payments_set_updated_at on public.payments;
-create trigger payments_set_updated_at
-before update on public.payments
-for each row
-execute procedure public.set_updated_at();
 
 alter table public.employees enable row level security;
 alter table public.shifts enable row level security;
