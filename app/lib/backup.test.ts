@@ -7,9 +7,14 @@ const snapshot: AppDataSnapshot = {
     {
       id: 'employee-1',
       userId: 'user-1',
-      name: 'Никита',
+      authUserId: 'auth-1',
+      inviteCode: null,
+      isOwner: false,
+      hiredAt: '2025-01-01',
+      name: 'Nikita',
       dailyRate: 2500,
       archived: false,
+      archivedAt: null,
       createdAt: '2025-01-01T00:00:00.000Z',
       updatedAt: '2025-01-01T00:00:00.000Z',
     },
@@ -20,7 +25,7 @@ const snapshot: AppDataSnapshot = {
       userId: 'user-1',
       employeeId: 'employee-1',
       date: '2025-01-10',
-      status: 'working',
+      status: 'worked',
       rateSnapshot: 2500,
       createdAt: '2025-01-10T00:00:00.000Z',
       updatedAt: '2025-01-10T00:00:00.000Z',
@@ -33,7 +38,10 @@ const snapshot: AppDataSnapshot = {
       employeeId: 'employee-1',
       amount: 2000,
       date: '2025-01-11',
-      comment: 'Аванс',
+      comment: 'Advance',
+      status: 'confirmed',
+      createdByAuthUserId: 'auth-owner',
+      confirmedByAuthUserId: 'auth-owner',
       createdAt: '2025-01-11T00:00:00.000Z',
       updatedAt: '2025-01-11T00:00:00.000Z',
     },
@@ -53,7 +61,7 @@ describe('backup helpers', () => {
       employees: [
         {
           id: 'employee-1',
-          name: 'Никита',
+          name: 'Nikita',
           dailyRate: 2500,
           archived: false,
         },
@@ -62,7 +70,7 @@ describe('backup helpers', () => {
         {
           employeeId: 'employee-1',
           date: '2025-01-10',
-          status: 'working',
+          status: 'worked',
           rateSnapshot: 2500,
         },
       ],
@@ -71,7 +79,8 @@ describe('backup helpers', () => {
           employeeId: 'employee-1',
           amount: 2000,
           date: '2025-01-11',
-          comment: 'Аванс',
+          comment: 'Advance',
+          status: 'confirmed',
         },
       ],
       selectedMonth: 1,
@@ -79,27 +88,27 @@ describe('backup helpers', () => {
     });
   });
 
-  it('parses a legacy payload with dailyRate in shifts', () => {
+  it('parses a legacy payload with dailyRate and working status', () => {
     const parsed = parseBackupPayload({
       state: {
         employees: [
           {
             id: 'employee-1',
-            name: 'Павел',
+            name: 'Pavel',
             dailyRate: 3000,
           },
         ],
         shifts: [
           {
             employeeId: 'employee-1',
-            date: '2025-02-02',
+            date: '2099-02-02',
             status: 'working',
             dailyRate: 3000,
           },
         ],
         payments: [],
         selectedMonth: 2,
-        selectedYear: 2025,
+        selectedYear: 2099,
       },
     });
 
@@ -107,7 +116,7 @@ describe('backup helpers', () => {
       employees: [
         {
           id: 'employee-1',
-          name: 'Павел',
+          name: 'Pavel',
           dailyRate: 3000,
           archived: false,
         },
@@ -115,14 +124,14 @@ describe('backup helpers', () => {
       shifts: [
         {
           employeeId: 'employee-1',
-          date: '2025-02-02',
-          status: 'working',
+          date: '2099-02-02',
+          status: 'planned-work',
           rateSnapshot: 3000,
         },
       ],
       payments: [],
       selectedMonth: 2,
-      selectedYear: 2025,
+      selectedYear: 2099,
     });
   });
 });

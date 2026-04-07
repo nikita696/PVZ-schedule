@@ -26,6 +26,7 @@ export default defineConfig({
           if (id.includes('@mui') || id.includes('@emotion')) return 'mui';
           if (id.includes('react-router')) return 'router';
           if (id.includes('lucide-react')) return 'icons';
+          if (id.includes('xlsx') || id.includes('cfb') || id.includes('codepage')) return 'xlsx';
 
           return 'vendor';
         },
