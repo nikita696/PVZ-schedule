@@ -10,6 +10,7 @@ import type {
 } from '../domain/types';
 import { errorResult, okResult, type ActionResult } from '../lib/result';
 import { supabase, type Database } from '../lib/supabase';
+import { translateSupabaseError } from '../lib/supabaseErrors';
 
 type EmployeeRow = Database['public']['Tables']['employees']['Row'];
 type ShiftRow = Database['public']['Tables']['shifts']['Row'];
@@ -70,9 +71,7 @@ const mapPayment = (row: PaymentRow): Payment => ({
   updatedAt: row.updated_at,
 });
 
-const normalizeError = (message: string) => (
-  message || 'Непредвиденная ошибка сервера. Попробуйте еще раз.'
-);
+const normalizeError = (message: string) => translateSupabaseError(message);
 
 const fetchOwnerData = async (ownerUserId: string): Promise<ActionResult<{
   employees: Employee[];
@@ -557,4 +556,3 @@ export const replaceUserDataRemote = async (
 
   return fetchAppData(ownerUserId);
 };
-

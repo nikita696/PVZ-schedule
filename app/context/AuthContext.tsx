@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type { Session, User } from '@supabase/supabase-js';
 import { errorResult, okResult, type ActionResult } from '../lib/result';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { translateSupabaseError } from '../lib/supabaseErrors';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'missing-config';
 
@@ -26,7 +27,7 @@ const claimInvite = async (inviteCode: string): Promise<ActionResult<void>> => {
     invite_code_input: inviteCode,
   });
 
-  if (error) return errorResult(error.message);
+  if (error) return errorResult(translateSupabaseError(error.message));
   return okResult(undefined);
 };
 
@@ -71,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return errorResult(error.message);
+    if (error) return errorResult(translateSupabaseError(error.message));
 
     return okResult(undefined, 'Вход выполнен успешно.');
   };
@@ -82,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const { error } = await supabase.auth.signUp({ email, password });
-    if (error) return errorResult(error.message);
+    if (error) return errorResult(translateSupabaseError(error.message));
 
     return okResult(
       undefined,
@@ -101,11 +102,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const normalizedInviteCode = inviteCode.trim().toUpperCase();
     if (!normalizedInviteCode) {
-      return errorResult('Введите invite code.');
+      return errorResult('Введите инвайт-код.');
     }
 
     const signup = await supabase.auth.signUp({ email, password });
-    if (signup.error) return errorResult(signup.error.message);
+    if (signup.error) return errorResult(translateSupabaseError(signup.error.message));
 
     let hasSession = Boolean(signup.data.session);
     if (!hasSession) {
@@ -113,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (signin.error) {
         return okResult(
           undefined,
-          'Аккаунт создан. Подтвердите email, затем войдите и привяжите invite code.',
+          'Аккаунт создан. Подтвердите email, затем войдите и привяжите инвайт-код.',
         );
       }
 
@@ -123,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!hasSession) {
       return okResult(
         undefined,
-        'Аккаунт создан. Подтвердите email, затем войдите и привяжите invite code.',
+        'Аккаунт создан. Подтвердите email, затем войдите и привяжите инвайт-код.',
       );
     }
 
@@ -139,7 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const { error } = await supabase.auth.signOut();
-    if (error) return errorResult(error.message);
+    if (error) return errorResult(translateSupabaseError(error.message));
 
     return okResult(undefined, 'Вы успешно вышли из аккаунта.');
   };
@@ -165,4 +166,3 @@ export const useAuth = (): AuthContextType => {
 
   return context;
 };
-

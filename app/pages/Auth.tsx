@@ -21,7 +21,7 @@ const FEATURE_CARDS = [
   },
   {
     icon: UserRound,
-    title: 'Регистрация по invite code',
+    title: 'Регистрация по инвайт-коду',
     body: 'Сотрудник создает аккаунт по коду, который выдал владелец.',
   },
 ];
@@ -165,7 +165,7 @@ export default function AuthPage() {
               <TabsContent value="employee-signup" className="space-y-5">
                 <SectionTitle
                   title="Регистрация сотрудника"
-                  subtitle="Нужен invite code от владельца ПВЗ."
+                  subtitle="Нужен инвайт-код от владельца ПВЗ."
                 />
 
                 {status === 'missing-config' ? (
@@ -197,7 +197,7 @@ export default function AuthPage() {
                 </div>
 
                 <div className="grid gap-2">
-                  <label htmlFor="employee-invite">Invite code</label>
+                  <label htmlFor="employee-invite">Инвайт-код</label>
                   <Input
                     id="employee-invite"
                     value={inviteCode}
@@ -290,4 +290,3 @@ function AuthForm({
     </div>
   );
 }
-

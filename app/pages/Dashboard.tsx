@@ -305,7 +305,7 @@ export default function DashboardPage() {
                       <TableHead>Прогноз</TableHead>
                       <TableHead>Больничных</TableHead>
                       <TableHead>Отпуск</TableHead>
-                      <TableHead>Invite code</TableHead>
+                      <TableHead>Инвайт-код</TableHead>
                       <TableHead>Действия</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -357,7 +357,7 @@ export default function DashboardPage() {
                                       toast.error(result.error);
                                       return;
                                     }
-                                    toast.success(result.message ?? 'Invite code обновлен.');
+                                    toast.success(result.message ?? 'Инвайт-код обновлен.');
                                   }}
                                 >
                                   Обновить
@@ -452,7 +452,7 @@ function EmployeeDashboard({
     return (
       <Card>
         <CardContent className="p-5 text-sm text-muted-foreground">
-          Профиль сотрудника пока не привязан. Обратитесь к владельцу за invite code.
+          Профиль сотрудника пока не привязан. Обратитесь к владельцу за инвайт-кодом.
         </CardContent>
       </Card>
     );

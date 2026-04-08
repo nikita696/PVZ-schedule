@@ -335,7 +335,7 @@ declare
   generated_code text;
 begin
   loop
-    generated_code := upper(encode(gen_random_bytes(4), 'hex'));
+    generated_code := upper(substr(md5(random()::text || clock_timestamp()::text || coalesce(auth.uid()::text, '')), 1, 8));
     exit when not exists (
       select 1
       from public.employees

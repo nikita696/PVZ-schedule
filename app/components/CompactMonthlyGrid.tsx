@@ -103,7 +103,7 @@ export function CompactMonthlyGrid({
                 <th
                   key={day.date}
                   className={cn(
-                    'min-w-[48px] border-b border-r px-1 py-2 text-center font-semibold',
+                    'min-w-[56px] border-b border-r px-1 py-2 text-center font-semibold',
                     day.weekend ? 'bg-stone-100' : 'bg-stone-50',
                     day.issue ? 'text-rose-700' : 'text-stone-700',
                     day.isToday ? 'ring-1 ring-orange-400 ring-inset' : '',
@@ -128,7 +128,7 @@ export function CompactMonthlyGrid({
                     <td
                       key={`${employee.id}-${day.date}`}
                       className={cn(
-                        'border-b border-r px-1 py-1 text-center',
+                        'border-b border-r px-1 py-1.5 text-center',
                         day.weekend ? 'bg-stone-50/70' : 'bg-white',
                         day.isToday ? 'ring-1 ring-orange-300 ring-inset' : '',
                       )}
@@ -136,7 +136,7 @@ export function CompactMonthlyGrid({
                       {editable ? (
                         <select
                           className={cn(
-                            'h-7 w-full rounded border px-1 text-[11px] focus:outline-none',
+                            'h-9 w-full rounded border px-1.5 text-xs focus:outline-none',
                             status === 'none'
                               ? 'border-stone-200 bg-white text-stone-500'
                               : STATUS_CLASS[status as ShiftStatusDb],
@@ -151,11 +151,11 @@ export function CompactMonthlyGrid({
                           ))}
                         </select>
                       ) : status === 'none' ? (
-                        <span className="inline-block h-6 w-full rounded border border-dashed border-stone-200 bg-stone-50" />
+                        <span className="inline-block h-8 w-full rounded border border-dashed border-stone-200 bg-stone-50" />
                       ) : (
                         <span
                           className={cn(
-                            'inline-flex h-6 w-full items-center justify-center rounded border text-[11px] font-medium',
+                            'inline-flex h-8 w-full items-center justify-center rounded border text-xs font-medium',
                             STATUS_CLASS[status],
                           )}
                           title={status}
@@ -174,4 +174,3 @@ export function CompactMonthlyGrid({
     </div>
   );
 }
-
