@@ -1,5 +1,5 @@
 import { Database, Shield, UserRound } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
@@ -26,6 +26,10 @@ const FEATURE_CARDS = [
   },
 ];
 
+const isValidAuthInput = (email: string, password: string) => (
+  email.trim().length > 0 && password.trim().length >= 6
+);
+
 export default function AuthPage() {
   const navigate = useNavigate();
   const { signIn, signUp, status } = useAuth();
@@ -36,11 +40,18 @@ export default function AuthPage() {
   const [ownerPassword, setOwnerPassword] = useState('');
   const [submitting, setSubmitting] = useState<'none' | 'login' | 'owner'>('none');
 
-  const isDisabled = status === 'loading' || status === 'missing-config' || submitting !== 'none';
+  const isBaseDisabled = status === 'loading' || status === 'missing-config' || submitting !== 'none';
+  const canSubmitLogin = !isBaseDisabled && isValidAuthInput(loginEmail, loginPassword);
+  const canSubmitOwnerSignup = !isBaseDisabled && isValidAuthInput(ownerEmail, ownerPassword);
 
   const handleLogin = async () => {
+    if (!isValidAuthInput(loginEmail, loginPassword)) {
+      toast.error('Введите email и пароль не короче 6 символов.');
+      return;
+    }
+
     setSubmitting('login');
-    const result = await signIn(loginEmail.trim(), loginPassword);
+    const result = await signIn(loginEmail.trim(), loginPassword.trim());
     setSubmitting('none');
 
     if (!result.ok) {
@@ -53,8 +64,13 @@ export default function AuthPage() {
   };
 
   const handleOwnerSignup = async () => {
+    if (!isValidAuthInput(ownerEmail, ownerPassword)) {
+      toast.error('Введите email и пароль не короче 6 символов.');
+      return;
+    }
+
     setSubmitting('owner');
-    const result = await signUp(ownerEmail.trim(), ownerPassword);
+    const result = await signUp(ownerEmail.trim(), ownerPassword.trim());
     setSubmitting('none');
 
     if (!result.ok) {
@@ -64,6 +80,12 @@ export default function AuthPage() {
 
     toast.success(result.message ?? 'Аккаунт владельца создан.');
   };
+
+  const hintText = useMemo(() => (
+    status === 'missing-config'
+      ? 'Не настроены переменные Supabase. Добавьте VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY.'
+      : 'Введите email и пароль (минимум 6 символов).'
+  ), [status]);
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#fff7ed,white_38%,#f5f5f4)] px-4 py-6 sm:px-6 lg:px-10">
@@ -115,8 +137,9 @@ export default function AuthPage() {
                 <AuthForm
                   email={loginEmail}
                   password={loginPassword}
+                  hintText={hintText}
                   status={status}
-                  disabled={isDisabled}
+                  canSubmit={canSubmitLogin}
                   submitting={submitting === 'login'}
                   submitLabel="Войти"
                   onEmailChange={setLoginEmail}
@@ -134,8 +157,9 @@ export default function AuthPage() {
                 <AuthForm
                   email={ownerEmail}
                   password={ownerPassword}
+                  hintText={hintText}
                   status={status}
-                  disabled={isDisabled}
+                  canSubmit={canSubmitOwnerSignup}
                   submitting={submitting === 'owner'}
                   submitLabel="Создать аккаунт владельца"
                   onEmailChange={setOwnerEmail}
@@ -163,8 +187,9 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) 
 interface AuthFormProps {
   email: string;
   password: string;
+  hintText: string;
   status: string;
-  disabled: boolean;
+  canSubmit: boolean;
   submitting: boolean;
   submitLabel: string;
   onEmailChange: (value: string) => void;
@@ -175,8 +200,9 @@ interface AuthFormProps {
 function AuthForm({
   email,
   password,
+  hintText,
   status,
-  disabled,
+  canSubmit,
   submitting,
   submitLabel,
   onEmailChange,
@@ -185,6 +211,10 @@ function AuthForm({
 }: AuthFormProps) {
   return (
     <div className="space-y-4">
+      <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600">
+        {hintText}
+      </div>
+
       {status === 'missing-config' ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           Не настроены переменные Supabase. Добавьте `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`.
@@ -213,7 +243,7 @@ function AuthForm({
         />
       </div>
 
-      <Button className="w-full bg-orange-600 hover:bg-orange-500" onClick={onSubmit} disabled={disabled}>
+      <Button className="w-full bg-orange-600 hover:bg-orange-500" onClick={onSubmit} disabled={!canSubmit}>
         {submitting ? 'Подождите...' : submitLabel}
       </Button>
     </div>

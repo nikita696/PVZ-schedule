@@ -38,6 +38,12 @@ export function AddPaymentModal({
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const canSubmit = !submitting
+    && employeeId.length > 0
+    && Number.isFinite(Number(amount))
+    && Number(amount) > 0
+    && /^\d{4}-\d{2}-\d{2}$/.test(date);
+
   useEffect(() => {
     if (!open) return;
 
@@ -58,6 +64,11 @@ export function AddPaymentModal({
 
     if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
       toast.error('Введите корректную сумму.');
+      return;
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      toast.error('Введите дату в формате YYYY-MM-DD.');
       return;
     }
 
@@ -144,7 +155,7 @@ export function AddPaymentModal({
           <Button variant="outline" onClick={onClose} disabled={submitting}>
             Отмена
           </Button>
-          <Button onClick={() => void handleSubmit()} disabled={submitting}>
+          <Button onClick={() => void handleSubmit()} disabled={!canSubmit}>
             {submitting ? 'Сохранение...' : 'Сохранить выплату'}
           </Button>
         </DialogFooter>
@@ -152,4 +163,3 @@ export function AddPaymentModal({
     </Dialog>
   );
 }
-

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { AddPaymentModal } from '../components/AddPaymentModal';
 import { BottomNav } from '../components/BottomNav';
+import { EditPaymentModal } from '../components/EditPaymentModal';
 import { PaymentStatusBadge } from '../components/PaymentStatusBadge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -22,6 +23,13 @@ const money = (value: number) => new Intl.NumberFormat('ru-RU', {
   maximumFractionDigits: 0,
 }).format(value);
 
+interface EditPaymentState {
+  paymentId: string;
+  amount: number;
+  date: string;
+  comment: string;
+}
+
 export default function PaymentsPage() {
   const {
     employees,
@@ -36,6 +44,7 @@ export default function PaymentsPage() {
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('all');
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<EditPaymentState | null>(null);
 
   const visibleEmployees = useMemo(() => {
     const active = employees.filter((employee) => !employee.archived);
@@ -68,6 +77,9 @@ export default function PaymentsPage() {
   };
 
   const handleDeletePayment = async (id: string) => {
+    const confirmed = window.confirm('Удалить выплату? Это действие нельзя отменить.');
+    if (!confirmed) return;
+
     const result = await deletePayment(id);
     if (!result.ok) {
       toast.error(result.error);
@@ -87,29 +99,19 @@ export default function PaymentsPage() {
     toast.success(result.message ?? 'Выплата подтверждена.');
   };
 
-  const handleEditPayment = async (paymentId: string, current: { amount: number; date: string; comment: string }) => {
-    const amountRaw = window.prompt('Сумма выплаты', String(current.amount));
-    if (amountRaw === null) return;
-    const amount = Number(amountRaw);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error('Введите корректную сумму.');
-      return;
-    }
+  const handleEditPayment = async (payload: EditPaymentState) => {
+    const result = await updatePayment(payload.paymentId, {
+      amount: payload.amount,
+      date: payload.date,
+      comment: payload.comment,
+    });
 
-    const date = window.prompt('Дата выплаты (YYYY-MM-DD)', current.date);
-    if (date === null) return;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      toast.error('Введите дату в формате YYYY-MM-DD.');
-      return;
-    }
-
-    const comment = window.prompt('Комментарий', current.comment) ?? current.comment;
-    const result = await updatePayment(paymentId, { amount, date, comment });
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
 
+    setEditingPayment(null);
     toast.success(result.message ?? 'Выплата обновлена.');
   };
 
@@ -223,7 +225,8 @@ export default function PaymentsPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => void handleEditPayment(payment.id, {
+                            onClick={() => setEditingPayment({
+                              paymentId: payment.id,
                               amount: payment.amount,
                               date: payment.date,
                               comment: payment.comment,
@@ -266,7 +269,13 @@ export default function PaymentsPage() {
         onClose={() => setModalOpen(false)}
         onSubmit={handleAddPayment}
       />
+
+      <EditPaymentModal
+        open={Boolean(editingPayment)}
+        initial={editingPayment}
+        onClose={() => setEditingPayment(null)}
+        onSubmit={handleEditPayment}
+      />
     </div>
   );
 }
-

@@ -222,11 +222,33 @@ export const createEmployee = async (
   const clientResult = getClient();
   if (!clientResult.ok) return clientResult;
 
+  const normalizedName = name.trim();
+  if (!normalizedName) {
+    return errorResult('Введите имя сотрудника.');
+  }
+
+  const existingResult = await clientResult.data
+    .from('employees')
+    .select('id')
+    .eq('user_id', ownerUserId)
+    .eq('archived', false)
+    .ilike('name', normalizedName)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingResult.error) {
+    return errorResult(normalizeError(existingResult.error.message));
+  }
+
+  if (existingResult.data) {
+    return errorResult('Сотрудник с таким именем уже существует.');
+  }
+
   const { data, error } = await clientResult.data
     .from('employees')
     .insert({
       user_id: ownerUserId,
-      name,
+      name: normalizedName,
       daily_rate: dailyRate,
       archived: false,
       is_owner: false,
