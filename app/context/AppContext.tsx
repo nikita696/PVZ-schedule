@@ -1,14 +1,13 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   archiveEmployeeRemote,
-  claimEmployeeInvite,
   confirmPaymentRemote,
   createEmployee,
   createPaymentRemote,
+  deleteArchivedEmployeeRemote,
   deletePaymentRemote,
   deleteShiftRemote,
   fetchAppData,
-  regenerateEmployeeInvite as regenerateEmployeeInviteRemote,
   replaceUserDataRemote,
   updateEmployeeRateRemote,
   updatePaymentRemote,
@@ -61,9 +60,8 @@ interface AppContextType {
   deletePayment: (id: string) => Promise<ActionResult<void>>;
   addEmployee: (name: string, dailyRate: number) => Promise<ActionResult<void>>;
   removeEmployee: (id: string) => Promise<ActionResult<void>>;
+  deleteArchivedEmployee: (id: string) => Promise<ActionResult<void>>;
   updateEmployeeRate: (id: string, dailyRate: number) => Promise<ActionResult<void>>;
-  claimEmployeeInvite: (inviteCode: string) => Promise<ActionResult<void>>;
-  regenerateEmployeeInvite: (employeeId: string) => Promise<ActionResult<string>>;
   exportEmployeePayslipXlsx: (employeeId: string, month: number, year: number) => Promise<ActionResult<void>>;
   getEmployeeStats: (employeeId: string, month: number, year: number) => EmployeeStats;
   getEmployeeLifetimeStats: (employeeId: string) => EmployeeStats;
@@ -256,6 +254,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return okResult(undefined, result.message);
   };
 
+  const deleteArchivedEmployee = async (id: string): Promise<ActionResult<void>> => {
+    const ownerResult = requireOwner();
+    if (!ownerResult.ok) return ownerResult;
+
+    const result = await deleteArchivedEmployeeRemote(ownerResult.data.ownerUserId, id);
+    if (!result.ok) {
+      setError(result.error);
+      return errorResult(result.error);
+    }
+
+    setEmployees((prev) => prev.filter((employee) => employee.id !== id));
+    setShifts((prev) => prev.filter((shift) => shift.employeeId !== id));
+    setPayments((prev) => prev.filter((payment) => payment.employeeId !== id));
+    setError(null);
+    return okResult(undefined, result.message);
+  };
+
   const updateEmployeeRate = async (id: string, dailyRate: number): Promise<ActionResult<void>> => {
     const ownerResult = requireOwner();
     if (!ownerResult.ok) return ownerResult;
@@ -398,33 +413,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return okResult(undefined, result.message);
   };
 
-  const claimInvite = async (inviteCode: string): Promise<ActionResult<void>> => {
-    const result = await claimEmployeeInvite(inviteCode.trim());
-    if (!result.ok) {
-      setError(result.error);
-      return errorResult(result.error);
-    }
-
-    return refreshData();
-  };
-
-  const regenerateInvite = async (employeeId: string): Promise<ActionResult<string>> => {
-    const ownerResult = requireOwner();
-    if (!ownerResult.ok) return ownerResult as ActionResult<string>;
-
-    const result = await regenerateEmployeeInviteRemote(employeeId);
-    if (!result.ok) {
-      setError(result.error);
-      return errorResult(result.error);
-    }
-
-    setEmployees((prev) => sortEmployees(prev.map((employee) => (
-      employee.id === employeeId ? { ...employee, inviteCode: result.data } : employee
-    ))));
-    setError(null);
-    return okResult(result.data, result.message);
-  };
-
   const exportBackup = (): object => createBackupPayload({
     employees,
     shifts,
@@ -521,9 +509,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deletePayment,
     addEmployee,
     removeEmployee,
+    deleteArchivedEmployee,
     updateEmployeeRate,
-    claimEmployeeInvite: claimInvite,
-    regenerateEmployeeInvite: regenerateInvite,
     exportEmployeePayslipXlsx,
     getEmployeeStats: (employeeId, month, year) => getEmployeeStats(payrollSource, employeeId, month, year),
     getEmployeeLifetimeStats: (employeeId) => getEmployeeLifetimeStats(payrollSource, employeeId),

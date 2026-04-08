@@ -9,7 +9,6 @@ export interface Employee {
   id: string;
   userId: string;
   authUserId: string | null;
-  inviteCode: string | null;
   isOwner: boolean;
   hiredAt: string | null;
   name: string;

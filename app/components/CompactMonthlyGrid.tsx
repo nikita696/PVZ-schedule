@@ -155,6 +155,22 @@ export function CompactMonthlyGrid({
     return assignedCount === 0;
   }), [dayMeta, employees, shifts]);
 
+  const workedCountByEmployee = useMemo(() => {
+    const dateKeys = new Set(dayMeta.map((day) => day.date));
+    const counts = new Map<string, number>();
+
+    for (const employee of employees) {
+      counts.set(employee.id, 0);
+    }
+
+    for (const shift of shifts) {
+      if (!dateKeys.has(shift.date) || shift.status !== 'worked') continue;
+      counts.set(shift.employeeId, (counts.get(shift.employeeId) ?? 0) + 1);
+    }
+
+    return counts;
+  }, [dayMeta, employees, shifts]);
+
   const applyStatus = (dayDate: string, status: ShiftStatus) => {
     if (!activeEmployee || !editable || !onStatusChange) return;
     if (isBeforeHiredAt(activeEmployee, dayDate)) return;
@@ -213,6 +229,23 @@ export function CompactMonthlyGrid({
           </div>
         </div>
       ) : null}
+
+      <div className="rounded-xl border bg-white p-3">
+        <div className="mb-2 text-xs font-medium text-stone-700">Рабочих смен за месяц</div>
+        <div className="flex flex-wrap gap-2">
+          {employees.map((employee) => (
+            <div
+              key={`worked-count:${employee.id}`}
+              className="inline-flex items-center gap-2 rounded-full border bg-stone-50 px-3 py-1 text-xs text-stone-700"
+            >
+              <span className="font-medium">{employee.name}</span>
+              <span className="rounded-full bg-white px-2 py-0.5 text-stone-900">
+                {workedCountByEmployee.get(employee.id) ?? 0}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div className="rounded-xl border bg-stone-50/70 p-3 text-sm text-stone-700">
         <span className="font-medium">Незаполненные смены:</span>{' '}

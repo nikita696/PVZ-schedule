@@ -21,23 +21,20 @@ const FEATURE_CARDS = [
   },
   {
     icon: UserRound,
-    title: 'Регистрация по инвайт-коду',
-    body: 'Сотрудник создает аккаунт по коду, который выдал владелец.',
+    title: 'Простой вход',
+    body: 'Без лишних шагов: обычная регистрация и вход по email/паролю.',
   },
 ];
 
 export default function AuthPage() {
   const navigate = useNavigate();
-  const { signIn, signUp, signUpEmployee, status } = useAuth();
+  const { signIn, signUp, status } = useAuth();
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [ownerEmail, setOwnerEmail] = useState('');
   const [ownerPassword, setOwnerPassword] = useState('');
-  const [employeeEmail, setEmployeeEmail] = useState('');
-  const [employeePassword, setEmployeePassword] = useState('');
-  const [inviteCode, setInviteCode] = useState('');
-  const [submitting, setSubmitting] = useState<'none' | 'login' | 'owner' | 'employee'>('none');
+  const [submitting, setSubmitting] = useState<'none' | 'login' | 'owner'>('none');
 
   const isDisabled = status === 'loading' || status === 'missing-config' || submitting !== 'none';
 
@@ -66,20 +63,6 @@ export default function AuthPage() {
     }
 
     toast.success(result.message ?? 'Аккаунт владельца создан.');
-  };
-
-  const handleEmployeeSignup = async () => {
-    setSubmitting('employee');
-    const result = await signUpEmployee(employeeEmail.trim(), employeePassword, inviteCode);
-    setSubmitting('none');
-
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-
-    toast.success(result.message ?? 'Аккаунт сотрудника создан.');
-    navigate('/', { replace: true });
   };
 
   return (
@@ -118,10 +101,9 @@ export default function AuthPage() {
         <Card className="border-stone-200 bg-white/95 shadow-xl shadow-stone-200/40">
           <CardContent className="p-6 sm:p-8">
             <Tabs defaultValue="signin" className="gap-6">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="signin">Вход</TabsTrigger>
-                <TabsTrigger value="owner-signup">Владелец</TabsTrigger>
-                <TabsTrigger value="employee-signup">Сотрудник</TabsTrigger>
+                <TabsTrigger value="owner-signup">Регистрация</TabsTrigger>
               </TabsList>
 
               <TabsContent value="signin" className="space-y-5">
@@ -160,59 +142,6 @@ export default function AuthPage() {
                   onPasswordChange={setOwnerPassword}
                   onSubmit={() => void handleOwnerSignup()}
                 />
-              </TabsContent>
-
-              <TabsContent value="employee-signup" className="space-y-5">
-                <SectionTitle
-                  title="Регистрация сотрудника"
-                  subtitle="Нужен инвайт-код от владельца ПВЗ."
-                />
-
-                {status === 'missing-config' ? (
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                    Не настроены переменные Supabase. Добавьте `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`.
-                  </div>
-                ) : null}
-
-                <div className="grid gap-2">
-                  <label htmlFor="employee-email">Email</label>
-                  <Input
-                    id="employee-email"
-                    type="email"
-                    value={employeeEmail}
-                    onChange={(event) => setEmployeeEmail(event.target.value)}
-                    placeholder="you@example.com"
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <label htmlFor="employee-password">Пароль</label>
-                  <Input
-                    id="employee-password"
-                    type="password"
-                    value={employeePassword}
-                    onChange={(event) => setEmployeePassword(event.target.value)}
-                    placeholder="Минимум 6 символов"
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <label htmlFor="employee-invite">Инвайт-код</label>
-                  <Input
-                    id="employee-invite"
-                    value={inviteCode}
-                    onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
-                    placeholder="Например: A1B2C3D4"
-                  />
-                </div>
-
-                <Button
-                  className="w-full bg-orange-600 hover:bg-orange-500"
-                  onClick={() => void handleEmployeeSignup()}
-                  disabled={isDisabled}
-                >
-                  {submitting === 'employee' ? 'Подождите...' : 'Создать аккаунт сотрудника'}
-                </Button>
               </TabsContent>
             </Tabs>
           </CardContent>

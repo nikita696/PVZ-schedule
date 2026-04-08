@@ -35,7 +35,6 @@ const mapEmployee = (row: EmployeeRow): Employee => ({
   id: row.id,
   userId: row.user_id,
   authUserId: row.auth_user_id,
-  inviteCode: row.invite_code,
   isOwner: row.is_owner,
   hiredAt: row.hired_at,
   name: row.name,
@@ -151,7 +150,6 @@ export const fetchAppData = async (authUserId: string): Promise<ActionResult<App
   if (!clientResult.ok) return clientResult;
 
   const client = clientResult.data;
-
   const ownerEmployeesResult = await client
     .from('employees')
     .select('*')
@@ -224,8 +222,7 @@ export const createEmployee = async (
   const clientResult = getClient();
   if (!clientResult.ok) return clientResult;
 
-  const client = clientResult.data;
-  const insertResult = await client
+  const { data, error } = await clientResult.data
     .from('employees')
     .insert({
       user_id: ownerUserId,
@@ -237,46 +234,8 @@ export const createEmployee = async (
     .select('*')
     .single();
 
-  if (insertResult.error) return errorResult(normalizeError(insertResult.error.message));
-
-  const inviteResult = await client.rpc('regenerate_employee_invite', {
-    employee_id_input: insertResult.data.id,
-  });
-
-  if (inviteResult.error) return errorResult(normalizeError(inviteResult.error.message));
-
-  const employeeResult = await client
-    .from('employees')
-    .select('*')
-    .eq('id', insertResult.data.id)
-    .single();
-
-  if (employeeResult.error) return errorResult(normalizeError(employeeResult.error.message));
-  return okResult(mapEmployee(employeeResult.data), 'Сотрудник создан.');
-};
-
-export const regenerateEmployeeInvite = async (employeeId: string): Promise<ActionResult<string>> => {
-  const clientResult = getClient();
-  if (!clientResult.ok) return clientResult;
-
-  const result = await clientResult.data.rpc('regenerate_employee_invite', {
-    employee_id_input: employeeId,
-  });
-
-  if (result.error) return errorResult(normalizeError(result.error.message));
-  return okResult(result.data, 'Инвайт-код обновлен.');
-};
-
-export const claimEmployeeInvite = async (inviteCode: string): Promise<ActionResult<Employee>> => {
-  const clientResult = getClient();
-  if (!clientResult.ok) return clientResult;
-
-  const result = await clientResult.data.rpc('claim_employee_invite', {
-    invite_code_input: inviteCode,
-  });
-
-  if (result.error) return errorResult(normalizeError(result.error.message));
-  return okResult(mapEmployee(result.data), 'Профиль сотрудника привязан к вашему аккаунту.');
+  if (error) return errorResult(normalizeError(error.message));
+  return okResult(mapEmployee(data), 'Сотрудник создан.');
 };
 
 export const updateEmployeeRateRemote = async (
@@ -324,6 +283,41 @@ export const archiveEmployeeRemote = async (
 
   if (error) return errorResult(normalizeError(error.message));
   return okResult(mapEmployee(data), 'Сотрудник отправлен в архив.');
+};
+
+export const deleteArchivedEmployeeRemote = async (
+  ownerUserId: string,
+  employeeId: string,
+): Promise<ActionResult<void>> => {
+  const clientResult = getClient();
+  if (!clientResult.ok) return clientResult;
+
+  const client = clientResult.data;
+  const employeeResult = await client
+    .from('employees')
+    .select('archived,is_owner')
+    .eq('user_id', ownerUserId)
+    .eq('id', employeeId)
+    .single();
+
+  if (employeeResult.error) return errorResult(normalizeError(employeeResult.error.message));
+  if (!employeeResult.data.archived) {
+    return errorResult('Удаление доступно только для архивных сотрудников.');
+  }
+
+  if (employeeResult.data.is_owner) {
+    return errorResult('Нельзя удалить профиль владельца.');
+  }
+
+  const { error } = await client
+    .from('employees')
+    .delete()
+    .eq('user_id', ownerUserId)
+    .eq('id', employeeId)
+    .eq('archived', true);
+
+  if (error) return errorResult(normalizeError(error.message));
+  return okResult(undefined, 'Архивный сотрудник и его данные удалены.');
 };
 
 export const upsertShiftRemote = async (

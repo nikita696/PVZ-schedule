@@ -8,7 +8,6 @@ const snapshot: AppDataSnapshot = {
       id: 'employee-1',
       userId: 'user-1',
       authUserId: 'auth-1',
-      inviteCode: null,
       isOwner: false,
       hiredAt: '2025-01-01',
       name: 'Nikita',

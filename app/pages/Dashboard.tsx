@@ -46,8 +46,8 @@ export default function DashboardPage() {
     setSelectedYear,
     addEmployee,
     removeEmployee,
+    deleteArchivedEmployee,
     updateEmployeeRate,
-    regenerateEmployeeInvite,
     getEmployeeStats,
     exportEmployeePayslipXlsx,
     isOwner,
@@ -136,7 +136,7 @@ export default function DashboardPage() {
     toast.success(result.message ?? 'Сотрудник добавлен.');
   };
 
-  const handleArchive = async (employeeId: string) => {
+const handleArchive = async (employeeId: string) => {
     const result = await removeEmployee(employeeId);
     if (!result.ok) {
       toast.error(result.error);
@@ -144,6 +144,19 @@ export default function DashboardPage() {
     }
 
     toast.success(result.message ?? 'Сотрудник отправлен в архив.');
+  };
+
+  const handleDeleteArchived = async (employeeId: string, employeeName: string) => {
+    const confirmed = window.confirm(`Удалить архивного сотрудника "${employeeName}" и все его данные? Это действие нельзя отменить.`);
+    if (!confirmed) return;
+
+    const result = await deleteArchivedEmployee(employeeId);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+
+    toast.success(result.message ?? 'Архивный сотрудник удален.');
   };
 
   const handleRateSave = async (employeeId: string, currentRate: number) => {
@@ -305,7 +318,6 @@ export default function DashboardPage() {
                       <TableHead>Прогноз</TableHead>
                       <TableHead>Больничных</TableHead>
                       <TableHead>Отпуск</TableHead>
-                      <TableHead>Инвайт-код</TableHead>
                       <TableHead>Действия</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -340,31 +352,6 @@ export default function DashboardPage() {
                           <TableCell>{money(stats.forecastTotal)}</TableCell>
                           <TableCell>{stats.sickCount}</TableCell>
                           <TableCell>{stats.vacationCount}</TableCell>
-                          <TableCell>
-                            {employee.authUserId ? (
-                              <span className="text-emerald-700">Привязан</span>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <code className="rounded bg-stone-100 px-2 py-1 text-[11px]">
-                                  {employee.inviteCode ?? '—'}
-                                </code>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={async () => {
-                                    const result = await regenerateEmployeeInvite(employee.id);
-                                    if (!result.ok) {
-                                      toast.error(result.error);
-                                      return;
-                                    }
-                                    toast.success(result.message ?? 'Инвайт-код обновлен.');
-                                  }}
-                                >
-                                  Обновить
-                                </Button>
-                              </div>
-                            )}
-                          </TableCell>
                           <TableCell className="space-x-2">
                             <Button size="sm" variant="outline" onClick={() => void handleExport(employee.id)}>
                               Excel
@@ -386,8 +373,37 @@ export default function DashboardPage() {
                 <CardHeader>
                   <CardTitle>Архив сотрудников</CardTitle>
                 </CardHeader>
-                <CardContent className="text-sm text-muted-foreground">
-                  {archivedEmployees.map((employee) => employee.name).join(', ')}
+                <CardContent className="overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Имя</TableHead>
+                        <TableHead>В архиве с</TableHead>
+                        <TableHead>Смен</TableHead>
+                        <TableHead>Выплат</TableHead>
+                        <TableHead>Действия</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {archivedEmployees.map((employee) => (
+                        <TableRow key={employee.id}>
+                          <TableCell className="font-medium">{employee.name}</TableCell>
+                          <TableCell>{employee.archivedAt ? employee.archivedAt.slice(0, 10) : '—'}</TableCell>
+                          <TableCell>{shifts.filter((shift) => shift.employeeId === employee.id).length}</TableCell>
+                          <TableCell>{payments.filter((payment) => payment.employeeId === employee.id).length}</TableCell>
+                          <TableCell>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => void handleDeleteArchived(employee.id, employee.name)}
+                            >
+                              Удалить навсегда
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </CardContent>
               </Card>
             ) : null}
@@ -452,7 +468,7 @@ function EmployeeDashboard({
     return (
       <Card>
         <CardContent className="p-5 text-sm text-muted-foreground">
-          Профиль сотрудника пока не привязан. Обратитесь к владельцу за инвайт-кодом.
+          Профиль сотрудника пока не привязан к вашему аккаунту. Попроси владельца проверить привязку в базе.
         </CardContent>
       </Card>
     );

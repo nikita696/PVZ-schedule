@@ -73,7 +73,6 @@ create table if not exists public.employees (
   name text not null,
   daily_rate integer not null default 0 check (daily_rate >= 0),
   auth_user_id uuid null references auth.users(id) on delete set null,
-  invite_code text null,
   is_owner boolean not null default false,
   hired_at date null,
   archived boolean not null default false,
@@ -109,7 +108,6 @@ create table if not exists public.payments (
 
 alter table public.employees
   add column if not exists auth_user_id uuid null references auth.users(id) on delete set null,
-  add column if not exists invite_code text null,
   add column if not exists is_owner boolean not null default false,
   add column if not exists hired_at date null,
   add column if not exists archived_at timestamptz null;
@@ -153,7 +151,6 @@ alter table public.payments
 create index if not exists employees_user_id_idx on public.employees (user_id);
 create index if not exists employees_auth_user_id_idx on public.employees (auth_user_id);
 create unique index if not exists employees_auth_user_id_uidx on public.employees (auth_user_id) where auth_user_id is not null;
-create unique index if not exists employees_invite_code_uidx on public.employees (invite_code) where invite_code is not null;
 create index if not exists shifts_user_id_date_idx on public.shifts (user_id, work_date);
 create index if not exists payments_user_id_date_idx on public.payments (user_id, payment_date);
 create index if not exists payments_status_idx on public.payments (status);
@@ -327,125 +324,6 @@ using (
   )
 );
 
-create or replace function public.generate_invite_code()
-returns text
-language plpgsql
-as $$
-declare
-  generated_code text;
-begin
-  loop
-    generated_code := upper(substr(md5(random()::text || clock_timestamp()::text || coalesce(auth.uid()::text, '')), 1, 8));
-    exit when not exists (
-      select 1
-      from public.employees
-      where invite_code = generated_code
-    );
-  end loop;
-
-  return generated_code;
-end;
-$$;
-
-create or replace function public.claim_employee_invite(invite_code_input text)
-returns public.employees
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  target_employee public.employees%rowtype;
-  normalized_code text;
-begin
-  if auth.uid() is null then
-    raise exception 'AUTH_REQUIRED';
-  end if;
-
-  normalized_code := upper(trim(coalesce(invite_code_input, '')));
-  if normalized_code = '' then
-    raise exception 'INVITE_CODE_REQUIRED';
-  end if;
-
-  if exists (
-    select 1
-    from public.employees existing_employee
-    where existing_employee.auth_user_id = auth.uid()
-  ) then
-    raise exception 'ACCOUNT_ALREADY_LINKED';
-  end if;
-
-  select *
-  into target_employee
-  from public.employees
-  where invite_code = normalized_code
-    and archived = false
-  for update;
-
-  if not found then
-    raise exception 'INVITE_NOT_FOUND';
-  end if;
-
-  if target_employee.auth_user_id is not null then
-    raise exception 'INVITE_ALREADY_USED';
-  end if;
-
-  update public.employees
-  set auth_user_id = auth.uid(),
-      invite_code = null,
-      updated_at = now()
-  where id = target_employee.id
-  returning * into target_employee;
-
-  return target_employee;
-end;
-$$;
-
-create or replace function public.regenerate_employee_invite(employee_id_input uuid)
-returns text
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  target_employee public.employees%rowtype;
-  next_code text;
-begin
-  if auth.uid() is null then
-    raise exception 'AUTH_REQUIRED';
-  end if;
-
-  select *
-  into target_employee
-  from public.employees
-  where id = employee_id_input
-  for update;
-
-  if not found then
-    raise exception 'EMPLOYEE_NOT_FOUND';
-  end if;
-
-  if target_employee.user_id <> auth.uid() then
-    raise exception 'FORBIDDEN';
-  end if;
-
-  if target_employee.archived then
-    raise exception 'EMPLOYEE_ARCHIVED';
-  end if;
-
-  if target_employee.auth_user_id is not null then
-    raise exception 'EMPLOYEE_ALREADY_LINKED';
-  end if;
-
-  next_code := public.generate_invite_code();
-
-  update public.employees
-  set invite_code = next_code,
-      updated_at = now()
-  where id = target_employee.id;
-
-  return next_code;
-end;
-$$;
-
-grant execute on function public.claim_employee_invite(text) to authenticated;
-grant execute on function public.regenerate_employee_invite(uuid) to authenticated;
+drop function if exists public.claim_employee_invite(text);
+drop function if exists public.regenerate_employee_invite(uuid);
+drop function if exists public.generate_invite_code();

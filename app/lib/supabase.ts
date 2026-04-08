@@ -8,7 +8,6 @@ export interface Database {
           id: string;
           user_id: string;
           auth_user_id: string | null;
-          invite_code: string | null;
           is_owner: boolean;
           hired_at: string | null;
           name: string;
@@ -22,7 +21,6 @@ export interface Database {
           id?: string;
           user_id: string;
           auth_user_id?: string | null;
-          invite_code?: string | null;
           is_owner?: boolean;
           hired_at?: string | null;
           name: string;
@@ -36,7 +34,6 @@ export interface Database {
           id?: string;
           user_id?: string;
           auth_user_id?: string | null;
-          invite_code?: string | null;
           is_owner?: boolean;
           hired_at?: string | null;
           name?: string;
@@ -121,33 +118,7 @@ export interface Database {
         };
       };
     };
-    Functions: {
-      claim_employee_invite: {
-        Args: {
-          invite_code_input: string;
-        };
-        Returns: {
-          id: string;
-          user_id: string;
-          auth_user_id: string | null;
-          invite_code: string | null;
-          is_owner: boolean;
-          hired_at: string | null;
-          name: string;
-          daily_rate: number;
-          archived: boolean;
-          archived_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-      };
-      regenerate_employee_invite: {
-        Args: {
-          employee_id_input: string;
-        };
-        Returns: string;
-      };
-    };
+    Functions: Record<string, never>;
   };
 }
 

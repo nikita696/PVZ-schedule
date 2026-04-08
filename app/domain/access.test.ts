@@ -14,7 +14,6 @@ const employees: Employee[] = [
     id: 'e1',
     userId: 'owner-1',
     authUserId: 'auth-e1',
-    inviteCode: null,
     isOwner: false,
     hiredAt: null,
     name: 'E1',
@@ -28,7 +27,6 @@ const employees: Employee[] = [
     id: 'e2',
     userId: 'owner-1',
     authUserId: 'auth-e2',
-    inviteCode: null,
     isOwner: false,
     hiredAt: null,
     name: 'E2',
@@ -122,4 +120,3 @@ describe('payment permission logic', () => {
     expect(canDeletePayment(payments[1], employeeAccess)).toBe(false);
   });
 });
-
