@@ -123,6 +123,9 @@ update public.payments
 set status = 'confirmed'
 where status is null;
 
+alter table public.shifts
+  drop constraint if exists shifts_status_check;
+
 update public.shifts
 set status = case
   when status = 'working' and work_date < current_date then 'worked'
@@ -135,9 +138,6 @@ set status = case
   when status = 'vacation' then 'vacation'
   else 'day-off'
 end;
-
-alter table public.shifts
-  drop constraint if exists shifts_status_check;
 
 alter table public.shifts
   add constraint shifts_status_check
