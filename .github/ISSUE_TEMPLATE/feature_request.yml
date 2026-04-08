@@ -1,0 +1,48 @@
+name: Feature request
+description: Предложить фичу или улучшение
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую проблему решаем
+      description: Какая боль, ограничение или неудобство сейчас есть
+      placeholder: Нельзя быстро понять, у кого долг по выплатам за прошлые месяцы
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Предлагаемое решение
+      placeholder: Добавить отдельный экран с накопленным остатком по сотрудникам
+    validations:
+      required: true
+
+  - type: dropdown
+    id: release
+    attributes:
+      label: Насколько это срочно
+      options:
+        - Блокер релиза
+        - Желательно в ближайший релиз
+        - Можно после релиза
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Критерии готовности
+      description: Как поймём, что задача сделана
+      placeholder: |
+        - видно остаток по каждому сотруднику
+        - учитываются подтвержденные выплаты
+        - сумма совпадает со сводкой
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Дополнительно
+      description: UX-идеи, референсы, риски, ограничения
