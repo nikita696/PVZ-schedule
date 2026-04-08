@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Release checklist
+    url: https://github.com/nikita696/PVZ-schedule/blob/main/docs/release-checklist.md
+    about: Что проверить перед выпуском версии
