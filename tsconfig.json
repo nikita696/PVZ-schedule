@@ -14,5 +14,5 @@
     "strict": true,
     "baseUrl": "."
   },
-  "include": ["app", "main.tsx", "vite.config.ts", "vite-env.d.ts", "vitest.config.ts"]
+  "include": ["app", "api", "main.tsx", "vite.config.ts", "vite-env.d.ts", "vitest.config.ts"]
 }
