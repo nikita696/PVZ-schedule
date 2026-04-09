@@ -1,4 +1,4 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
   - name: Release checklist
     url: https://github.com/nikita696/PVZ-schedule/blob/main/docs/release-checklist.md
