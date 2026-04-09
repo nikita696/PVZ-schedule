@@ -52,12 +52,12 @@ export function EditPaymentModal({
 
     const parsedAmount = Number(amount);
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      toast.error('Введите корректную сумму.');
+      toast.error('Укажи корректную сумму.');
       return;
     }
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      toast.error('Введите дату в формате YYYY-MM-DD.');
+      toast.error('Укажи дату в формате YYYY-MM-DD.');
       return;
     }
 
@@ -77,7 +77,7 @@ export function EditPaymentModal({
         <DialogHeader>
           <DialogTitle>Изменить выплату</DialogTitle>
           <DialogDescription>
-            Обновите сумму, дату и комментарий для выбранной выплаты.
+            Можно поправить сумму, дату и комментарий до финального подтверждения.
           </DialogDescription>
         </DialogHeader>
 
@@ -115,7 +115,7 @@ export function EditPaymentModal({
               id="edit-payment-comment"
               value={comment}
               onChange={(event) => setComment(event.target.value)}
-              placeholder="Аванс, корректировка..."
+              placeholder="Причина, формат выплаты..."
             />
           </div>
         </div>
@@ -125,7 +125,7 @@ export function EditPaymentModal({
             Отмена
           </Button>
           <Button onClick={() => void handleSubmit()} disabled={submitting}>
-            {submitting ? 'Сохранение...' : 'Сохранить'}
+            {submitting ? 'Сохраняю...' : 'Сохранить'}
           </Button>
         </DialogFooter>
       </DialogContent>

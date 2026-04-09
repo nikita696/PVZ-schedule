@@ -58,17 +58,17 @@ export function AddPaymentModal({
   const handleSubmit = async () => {
     const nextAmount = Number(amount);
     if (!employeeId) {
-      toast.error('Выберите сотрудника.');
+      toast.error('Выбери сотрудника.');
       return;
     }
 
     if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
-      toast.error('Введите корректную сумму.');
+      toast.error('Укажи корректную сумму.');
       return;
     }
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      toast.error('Введите дату в формате YYYY-MM-DD.');
+      toast.error('Укажи дату в формате YYYY-MM-DD.');
       return;
     }
 
@@ -88,7 +88,7 @@ export function AddPaymentModal({
         <DialogHeader>
           <DialogTitle>Добавить выплату</DialogTitle>
           <DialogDescription>
-            Сохраните выплату сотруднику. Сотрудник добавляет выплату как черновик, владелец затем подтверждает.
+            Сотрудник создает запрос на выплату, а администратор потом подтверждает его.
           </DialogDescription>
         </DialogHeader>
 
@@ -146,7 +146,7 @@ export function AddPaymentModal({
               id="payment-comment"
               value={comment}
               onChange={(event) => setComment(event.target.value)}
-              placeholder="Аванс, премия, корректировка..."
+              placeholder="Аванс, частичная выплата, наличные..."
             />
           </div>
         </div>
@@ -156,7 +156,7 @@ export function AddPaymentModal({
             Отмена
           </Button>
           <Button onClick={() => void handleSubmit()} disabled={!canSubmit}>
-            {submitting ? 'Сохранение...' : 'Сохранить выплату'}
+            {submitting ? 'Сохраняю...' : 'Сохранить выплату'}
           </Button>
         </DialogFooter>
       </DialogContent>

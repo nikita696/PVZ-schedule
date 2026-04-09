@@ -1,17 +1,9 @@
-import type { Employee, EmployeeStats, Payment, Shift } from '../domain/types';
-
-const STATUS_LABEL: Record<Shift['status'], string> = {
-  'planned-work': 'Запланирована',
-  worked: 'Отработана',
-  'day-off': 'Выходной',
-  vacation: 'Отпуск',
-  sick: 'Больничный',
-  'no-show': 'Невыход',
-};
+import type { Employee, EmployeeRateHistory, EmployeeStats, Payment, Shift } from '../domain/types';
+import { SHIFT_STATUS_LABEL, isShiftLikeStatus } from '../domain/shiftStatus';
 
 const PAYMENT_STATUS_LABEL: Record<Payment['status'], string> = {
-  pending_confirmation: 'Ожидает подтверждения',
-  confirmed: 'Подтверждена',
+  pending: 'На подтверждении',
+  approved: 'Подтверждена',
   rejected: 'Отклонена',
 };
 
@@ -30,6 +22,7 @@ export interface ExportEmployeePayslipInput {
   shifts: Shift[];
   payments: Payment[];
   stats: EmployeeStats;
+  rateHistory?: EmployeeRateHistory[];
 }
 
 export const exportEmployeePayslipXlsx = async (input: ExportEmployeePayslipInput): Promise<void> => {
@@ -42,46 +35,72 @@ export const exportEmployeePayslipXlsx = async (input: ExportEmployeePayslipInpu
     })
     .sort((left, right) => left.date.localeCompare(right.date));
 
-  const filteredPayments = input.payments
+  const approvedPayments = input.payments
     .filter((payment) => {
       const [year, month] = payment.date.split('-').map(Number);
-      return year === input.year && month === input.month;
+      return year === input.year && month === input.month && payment.status === 'approved';
     })
     .sort((left, right) => left.date.localeCompare(right.date));
+
+  const ratesForPeriod = (input.rateHistory ?? [])
+    .filter((item) => item.employeeId === input.employee.id)
+    .filter((item) => (
+      item.validFrom <= `${input.year}-${String(input.month).padStart(2, '0')}-31`
+      && (item.validTo === null || item.validTo >= `${input.year}-${String(input.month).padStart(2, '0')}-01`)
+    ))
+    .sort((left, right) => left.validFrom.localeCompare(right.validFrom));
+
+  const shiftRows = filteredShifts.map((shift) => {
+    const effectiveStatus = shift.actualStatus ?? shift.approvedStatus ?? shift.requestedStatus ?? shift.status;
+    return [
+      shift.date,
+      SHIFT_STATUS_LABEL[effectiveStatus],
+      shift.rateSnapshot,
+      isShiftLikeStatus(effectiveStatus) ? shift.rateSnapshot : 0,
+    ];
+  });
+
+  const paymentRows = approvedPayments.map((payment) => [
+    payment.date,
+    payment.amount,
+    payment.comment,
+    PAYMENT_STATUS_LABEL[payment.status],
+  ]);
+
+  const rateRows = ratesForPeriod.length > 0
+    ? ratesForPeriod.map((item) => [
+        `${item.validFrom} — ${item.validTo ?? 'по настоящее время'}`,
+        money(item.rate),
+      ])
+    : [[`Текущая ставка`, money(input.employee.dailyRate)]];
 
   const rows: Array<Array<string | number>> = [
     ['Расчетный лист'],
     [],
     ['Сотрудник', input.employee.name],
-    ['Месяц', `${String(input.month).padStart(2, '0')}.${input.year}`],
-    ['Ставка', input.employee.dailyRate],
+    ['Период', `${String(input.month).padStart(2, '0')}.${input.year}`],
+    [],
+    ['Ставки за период'],
+    ['Интервал', 'Ставка'],
+    ...rateRows,
     [],
     ['Смены'],
-    ['Дата', 'Статус', 'Ставка за смену', 'Сумма по смене'],
-    ...filteredShifts.map((shift) => [
-      shift.date,
-      STATUS_LABEL[shift.status],
-      shift.rateSnapshot,
-      shift.status === 'worked' || shift.status === 'planned-work' ? shift.rateSnapshot : 0,
-    ]),
+    ['Дата', 'Статус', 'Ставка на дату', 'Учитывается в заработке'],
+    ...shiftRows,
     [],
-    ['Сводка'],
-    ['Отработано смен', input.stats.workedCount],
+    ['Итоги'],
+    ['Утвержденных смен', input.stats.workedCount],
+    ['Плановых смен', input.stats.plannedCount],
     ['Больничных', input.stats.sickCount],
-    ['Отпускных дней', input.stats.vacationCount],
-    ['Заработано (факт)', money(input.stats.earnedActual)],
-    ['Выплачено (подтверждено)', money(input.stats.paidConfirmed)],
-    ['К выплате сейчас', money(input.stats.dueNow)],
-    ['Прогноз по текущему графику', money(input.stats.forecastTotal)],
+    ['Выходных / без смены', input.stats.dayOffCount],
+    ['Заработано по факту', money(input.stats.earnedActual)],
+    ['Выплачено', money(input.stats.paidApproved)],
+    ['Долг ПВЗ', money(input.stats.dueNow)],
+    ['Потенциал по графику', money(input.stats.forecastTotal)],
     [],
-    ['Выплаты'],
+    ['Подтвержденные выплаты'],
     ['Дата', 'Сумма', 'Комментарий', 'Статус'],
-    ...filteredPayments.map((payment) => [
-      payment.date,
-      payment.amount,
-      payment.comment,
-      PAYMENT_STATUS_LABEL[payment.status],
-    ]),
+    ...paymentRows,
   ];
 
   const worksheet = XLSX.utils.aoa_to_sheet(rows);

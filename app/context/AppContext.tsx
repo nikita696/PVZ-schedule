@@ -10,6 +10,7 @@ import {
   fetchAppData,
   rejectPaymentRemote,
   replaceUserDataRemote,
+  setScheduleMonthStatusRemote,
   updateEmployeeRateRemote,
   updatePaymentRemote,
   upsertShiftRemote,
@@ -24,11 +25,14 @@ import type {
   AddPaymentInput,
   AppDataStatus,
   Employee,
+  EmployeeRateHistory,
   EmployeeStats,
   MonthlyBreakdownRow,
+  MonthStatus,
   Payment,
+  ScheduleMonth,
   Shift,
-  ShiftStatus,
+  ShiftEditorStatus,
   UserAccess,
 } from '../domain/types';
 import { createBackupPayload, parseBackupPayload } from '../lib/backup';
@@ -46,20 +50,25 @@ interface AddEmployeeInput {
 
 interface AppContextType {
   employees: Employee[];
+  rateHistory: EmployeeRateHistory[];
+  scheduleMonths: ScheduleMonth[];
   shifts: Shift[];
   payments: Payment[];
   access: UserAccess | null;
   selectedMonth: number;
   selectedYear: number;
+  selectedMonthStatus: MonthStatus;
   status: AppDataStatus;
   error: string | null;
   isAdmin: boolean;
   isOwner: boolean;
   myEmployeeId: string | null;
+  canEditSelectedMonth: boolean;
   setSelectedMonth: (month: number) => void;
   setSelectedYear: (year: number) => void;
   refreshData: () => Promise<ActionResult<void>>;
-  updateShift: (employeeId: string, date: string, status: ShiftStatus) => Promise<ActionResult<void>>;
+  setSelectedMonthStatus: (status: MonthStatus) => Promise<ActionResult<void>>;
+  updateShift: (employeeId: string, date: string, status: ShiftEditorStatus) => Promise<ActionResult<void>>;
   addPayment: (payment: AddPaymentInput) => Promise<ActionResult<void>>;
   updatePayment: (
     paymentId: string,
@@ -93,6 +102,22 @@ const sortEmployees = (items: Employee[]): Employee[] => (
   })
 );
 
+const sortRateHistory = (items: EmployeeRateHistory[]): EmployeeRateHistory[] => (
+  [...items].sort((left, right) => {
+    if (left.employeeId !== right.employeeId) {
+      return left.employeeId.localeCompare(right.employeeId);
+    }
+
+    return left.validFrom.localeCompare(right.validFrom);
+  })
+);
+
+const sortScheduleMonths = (items: ScheduleMonth[]): ScheduleMonth[] => (
+  [...items].sort((left, right) => (
+    left.year === right.year ? left.month - right.month : left.year - right.year
+  ))
+);
+
 const sortShifts = (items: Shift[]): Shift[] => (
   [...items].sort((left, right) => left.date.localeCompare(right.date))
 );
@@ -110,6 +135,8 @@ const sortPayments = (items: Payment[]): Payment[] => (
 export function AppProvider({ children }: { children: ReactNode }) {
   const { status: authStatus, user } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [rateHistory, setRateHistory] = useState<EmployeeRateHistory[]>([]);
+  const [scheduleMonths, setScheduleMonths] = useState<ScheduleMonth[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [access, setAccess] = useState<UserAccess | null>(null);
@@ -130,16 +157,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     if (authStatus === 'missing-config') {
       setEmployees([]);
+      setRateHistory([]);
+      setScheduleMonths([]);
       setShifts([]);
       setPayments([]);
       setAccess(null);
       setStatus('error');
-      setError('Supabase не настроен. Добавьте VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY.');
+      setError('Supabase не настроен. Проверь `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`.');
       return;
     }
 
     if (authStatus !== 'authenticated' || !user) {
       setEmployees([]);
+      setRateHistory([]);
+      setScheduleMonths([]);
       setShifts([]);
       setPayments([]);
       setAccess(null);
@@ -163,6 +194,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       setEmployees(sortEmployees(result.data.employees));
+      setRateHistory(sortRateHistory(result.data.rateHistory));
+      setScheduleMonths(sortScheduleMonths(result.data.scheduleMonths));
       setShifts(sortShifts(result.data.shifts));
       setPayments(sortPayments(result.data.payments));
       setAccess(result.data.access);
@@ -175,9 +208,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, [authStatus, user]);
 
+  const selectedMonthStatus = useMemo<MonthStatus>(() => {
+    const found = scheduleMonths.find((item) => (
+      item.month === preferences.selectedMonth && item.year === preferences.selectedYear
+    ));
+
+    return found?.status ?? 'draft';
+  }, [preferences.selectedMonth, preferences.selectedYear, scheduleMonths]);
+
+  const canEditSelectedMonth = useMemo(() => {
+    if (!access) return false;
+    if (access.role === 'admin') return selectedMonthStatus !== 'closed';
+    return selectedMonthStatus === 'draft';
+  }, [access, selectedMonthStatus]);
+
   const requireUser = (): ActionResult<string> => {
     if (!user) {
-      return errorResult('Сначала нужно войти в аккаунт.');
+      return errorResult('Сначала войди в аккаунт.');
     }
 
     return okResult(user.id);
@@ -185,7 +232,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const requireAccess = (): ActionResult<UserAccess> => {
     if (!access) {
-      return errorResult('Профиль не активирован. Заверши регистрацию или активацию аккаунта.');
+      return errorResult('Профиль еще не создан. Заверши регистрацию через письмо.');
     }
 
     return okResult(access);
@@ -210,7 +257,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     if (!accessResult.data.employeeId || accessResult.data.employeeId !== employeeId) {
-      return errorResult('Можно редактировать только свои смены.');
+      return errorResult('Можно менять только свои пожелания по сменам.');
     }
 
     return accessResult;
@@ -229,6 +276,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     setEmployees(sortEmployees(result.data.employees));
+    setRateHistory(sortRateHistory(result.data.rateHistory));
+    setScheduleMonths(sortScheduleMonths(result.data.scheduleMonths));
     setShifts(sortShifts(result.data.shifts));
     setPayments(sortPayments(result.data.payments));
     setAccess(result.data.access);
@@ -247,6 +296,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPreferences((prev) => ({ ...prev, selectedYear: year }));
   };
 
+  const setSelectedMonthStatus = async (nextStatus: MonthStatus): Promise<ActionResult<void>> => {
+    const adminResult = requireAdmin();
+    if (!adminResult.ok) return adminResult;
+
+    const result = await setScheduleMonthStatusRemote(preferences.selectedYear, preferences.selectedMonth, nextStatus);
+    if (!result.ok) {
+      setError(result.error);
+      return errorResult(result.error);
+    }
+
+    setScheduleMonths((prev) => {
+      const withoutCurrent = prev.filter((item) => !(
+        item.year === result.data.year && item.month === result.data.month
+      ));
+
+      return sortScheduleMonths([...withoutCurrent, result.data]);
+    });
+    setError(null);
+    return okResult(undefined);
+  };
+
   const addEmployee = async (input: AddEmployeeInput): Promise<ActionResult<void>> => {
     const adminResult = requireAdmin();
     if (!adminResult.ok) return adminResult;
@@ -261,6 +331,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     setEmployees((prev) => sortEmployees([...prev, result.data]));
+    setRateHistory((prev) => sortRateHistory([
+      ...prev,
+      {
+        id: `local-rate:${result.data.id}:${result.data.hiredAt ?? result.data.createdAt.slice(0, 10)}`,
+        employeeId: result.data.id,
+        organizationId: result.data.organizationId,
+        rate: result.data.dailyRate,
+        validFrom: result.data.hiredAt ?? result.data.createdAt.slice(0, 10),
+        validTo: result.data.terminatedAt,
+        createdByProfileId: access?.profileId ?? null,
+        createdAt: result.data.createdAt,
+      },
+    ]));
     setError(null);
     return okResult(undefined, result.message);
   };
@@ -278,6 +361,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setEmployees((prev) => sortEmployees(prev.map((employee) => (
       employee.id === id ? result.data : employee
     ))));
+    setRateHistory((prev) => prev.map((item) => (
+      item.employeeId === id && item.validTo === null
+        ? { ...item, validTo: result.data.terminatedAt }
+        : item
+    )));
     setError(null);
     return okResult(undefined, result.message);
   };
@@ -293,6 +381,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     setEmployees((prev) => prev.filter((employee) => employee.id !== id));
+    setRateHistory((prev) => prev.filter((item) => item.employeeId !== id));
     setShifts((prev) => prev.filter((shift) => shift.employeeId !== id));
     setPayments((prev) => prev.filter((payment) => payment.employeeId !== id));
     setError(null);
@@ -309,9 +398,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return errorResult(result.error);
     }
 
+    const effectiveFrom = new Date().toISOString().slice(0, 10);
+
     setEmployees((prev) => sortEmployees(prev.map((employee) => (
       employee.id === id ? result.data : employee
     ))));
+    setRateHistory((prev) => {
+      const closedPrev = prev.map((item) => (
+        item.employeeId === id && item.validTo === null && item.validFrom < effectiveFrom
+          ? { ...item, validTo: effectiveFrom }
+          : item
+      ));
+
+      return sortRateHistory([
+        ...closedPrev.filter((item) => !(item.employeeId === id && item.validFrom === effectiveFrom)),
+        {
+          id: `local-rate:${id}:${effectiveFrom}`,
+          employeeId: id,
+          organizationId: result.data.organizationId,
+          rate: dailyRate,
+          validFrom: effectiveFrom,
+          validTo: null,
+          createdByProfileId: access?.profileId ?? null,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+    });
     setError(null);
     return okResult(undefined, result.message);
   };
@@ -319,10 +431,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateShift = async (
     employeeId: string,
     date: string,
-    nextStatus: ShiftStatus,
+    nextStatus: ShiftEditorStatus,
   ): Promise<ActionResult<void>> => {
     const editorResult = requireShiftEditor(employeeId);
     if (!editorResult.ok) return editorResult;
+
+    if (!canEditSelectedMonth) {
+      return errorResult('Этот месяц уже закрыт для редактирования.');
+    }
 
     if (nextStatus === 'none') {
       const result = await deleteShiftRemote(editorResult.data, employeeId, date);
@@ -336,18 +452,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return okResult(undefined);
     }
 
-    const employee = employees.find((item) => item.id === employeeId);
-    if (!employee) {
-      return errorResult('Сотрудник не найден.');
-    }
-
-    const result = await upsertShiftRemote(
-      editorResult.data,
-      employeeId,
-      date,
-      nextStatus,
-      employee.dailyRate,
-    );
+    const result = await upsertShiftRemote(editorResult.data, employeeId, date, nextStatus);
 
     if (!result.ok) {
       setError(result.error);
@@ -413,10 +518,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const confirmPayment = async (paymentId: string): Promise<ActionResult<void>> => {
     const adminResult = requireAdmin();
     if (!adminResult.ok) return adminResult;
-    const userResult = requireUser();
-    if (!userResult.ok) return userResult;
 
-    const result = await confirmPaymentRemote(paymentId, userResult.data, adminResult.data.profileId);
+    const result = await confirmPaymentRemote(paymentId);
     if (!result.ok) {
       setError(result.error);
       return errorResult(result.error);
@@ -433,7 +536,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const adminResult = requireAdmin();
     if (!adminResult.ok) return adminResult;
 
-    const result = await rejectPaymentRemote(paymentId, adminResult.data.profileId);
+    const result = await rejectPaymentRemote(paymentId);
     if (!result.ok) {
       setError(result.error);
       return errorResult(result.error);
@@ -443,7 +546,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       payment.id === paymentId ? result.data : payment
     ))));
     setError(null);
-    return okResult(undefined, 'Выплата отклонена.');
+    return okResult(undefined, result.message);
   };
 
   const deletePayment = async (id: string): Promise<ActionResult<void>> => {
@@ -460,10 +563,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const exportBackup = (): object => createBackupPayload({
     employees,
+    rateHistory,
+    scheduleMonths,
     shifts,
     payments,
     preferences,
   });
+
+  const payrollSource = useMemo(() => ({
+    employees,
+    rateHistory,
+    shifts,
+    payments,
+  }), [employees, payments, rateHistory, shifts]);
 
   const exportEmployeePayslipXlsx = async (
     employeeId: string,
@@ -476,7 +588,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     if (access?.role === 'employee' && access.employeeId !== employeeId) {
-      return errorResult('Недостаточно прав для выгрузки этого расчетного листа.');
+      return errorResult('Можно выгрузить только свой расчетный лист.');
     }
 
     await exportEmployeePayslipXlsxFile({
@@ -485,10 +597,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       year,
       shifts: shifts.filter((shift) => shift.employeeId === employeeId),
       payments: payments.filter((payment) => payment.employeeId === employeeId),
+      rateHistory: rateHistory.filter((item) => item.employeeId === employeeId),
       stats: getEmployeeStats(payrollSource, employeeId, month, year),
     });
 
-    return okResult(undefined, 'Файл расчетного листа выгружен.');
+    return okResult(undefined, 'Excel-файл выгружен.');
   };
 
   const importAppState = async (payload: unknown): Promise<ActionResult<void>> => {
@@ -499,7 +612,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const importedData = parseBackupPayload(payload);
     if (!importedData) {
-      return errorResult('Файл резервной копии поврежден или создан не в PVZ Schedule.');
+      return errorResult('Файл не похож на backup PVZ Schedule.');
     }
 
     setStatus('loading');
@@ -511,6 +624,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     setEmployees(sortEmployees(result.data.employees));
+    setRateHistory(sortRateHistory(result.data.rateHistory));
+    setScheduleMonths(sortScheduleMonths(result.data.scheduleMonths));
     setShifts(sortShifts(result.data.shifts));
     setPayments(sortPayments(result.data.payments));
     setAccess(result.data.access);
@@ -520,30 +635,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     setStatus('ready');
     setError(null);
-    return okResult(undefined, 'Резервная копия успешно импортирована.');
+    return okResult(undefined, 'Backup успешно импортирован.');
   };
-
-  const payrollSource = useMemo(() => ({
-    employees,
-    shifts,
-    payments,
-  }), [employees, shifts, payments]);
 
   const value: AppContextType = {
     employees,
+    rateHistory,
+    scheduleMonths,
     shifts,
     payments,
     access,
     selectedMonth: preferences.selectedMonth,
     selectedYear: preferences.selectedYear,
+    selectedMonthStatus,
     status,
     error,
     isAdmin: access?.role === 'admin',
     isOwner: access?.role === 'admin',
     myEmployeeId: access?.employeeId ?? null,
+    canEditSelectedMonth,
     setSelectedMonth,
     setSelectedYear,
     refreshData,
+    setSelectedMonthStatus,
     updateShift,
     addPayment,
     updatePayment,

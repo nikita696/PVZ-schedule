@@ -13,7 +13,7 @@ const ADMIN_NAV_ITEMS = [
 
 const EMPLOYEE_NAV_ITEMS = [
   { to: '/employee/dashboard', label: 'Главная', icon: Home },
-  { to: '/employee/calendar', label: 'График', icon: CalendarDays },
+  { to: '/employee/calendar', label: 'Календарь', icon: CalendarDays },
   { to: '/employee/payments', label: 'Выплаты', icon: CreditCard },
 ];
 
@@ -33,7 +33,7 @@ export function BottomNav() {
       return;
     }
 
-    toast.success(result.message ?? 'Вы вышли из аккаунта.');
+    toast.success(result.message ?? 'Ты вышел из аккаунта.');
     navigate('/auth/login', { replace: true });
   };
 

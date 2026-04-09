@@ -1,42 +1,45 @@
+import type { ShiftEditorStatus } from '../domain/types';
+import { SHIFT_STATUS_OPTIONS } from '../domain/shiftStatus';
 import { cn } from './ui/utils';
-import type { ShiftStatus } from '../domain/types';
 
 interface ShiftStatusButtonProps {
-  status: ShiftStatus;
+  status: ShiftEditorStatus;
   active: boolean;
   onClick: () => void;
 }
 
-const STATUS_META: Record<ShiftStatus, { label: string; activeClass: string }> = {
-  'planned-work': {
-    label: 'План',
-    activeClass: 'border-blue-300 bg-blue-50 text-blue-700',
-  },
-  worked: {
-    label: 'Отработал',
+const STATUS_META: Record<ShiftEditorStatus, { label: string; activeClass: string }> = {
+  shift: {
+    label: 'Смена',
     activeClass: 'border-emerald-300 bg-emerald-50 text-emerald-700',
   },
-  'day-off': {
+  day_off: {
     label: 'Выходной',
-    activeClass: 'border-slate-300 bg-slate-100 text-slate-700',
+    activeClass: 'border-blue-300 bg-blue-50 text-blue-700',
   },
-  vacation: {
-    label: 'Отпуск',
-    activeClass: 'border-indigo-300 bg-indigo-50 text-indigo-700',
-  },
-  sick: {
+  sick_leave: {
     label: 'Больничный',
+    activeClass: 'border-violet-300 bg-violet-50 text-violet-700',
+  },
+  no_show: {
+    label: 'Невыход',
+    activeClass: 'border-rose-300 bg-rose-50 text-rose-700',
+  },
+  replacement: {
+    label: 'Замена',
     activeClass: 'border-amber-300 bg-amber-50 text-amber-700',
   },
-  'no-show': {
-    label: 'Не вышел',
-    activeClass: 'border-rose-300 bg-rose-50 text-rose-700',
+  no_shift: {
+    label: 'Нет смены',
+    activeClass: 'border-stone-300 bg-stone-100 text-stone-700',
   },
   none: {
     label: 'Очистить',
     activeClass: 'border-stone-300 bg-stone-50 text-stone-700',
   },
 };
+
+void SHIFT_STATUS_OPTIONS;
 
 export function ShiftStatusButton({ status, active, onClick }: ShiftStatusButtonProps) {
   const meta = STATUS_META[status];
@@ -54,4 +57,3 @@ export function ShiftStatusButton({ status, active, onClick }: ShiftStatusButton
     </button>
   );
 }
-

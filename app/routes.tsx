@@ -20,7 +20,7 @@ function RouteLoader() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-stone-50 px-4">
       <div className="rounded-2xl border bg-white px-6 py-4 text-sm text-muted-foreground shadow-sm">
-        Загрузка...
+        Загружаю...
       </div>
     </div>
   );
@@ -33,7 +33,7 @@ function RouteErrorBoundary() {
     ? `${error.status} ${error.statusText}`
     : error instanceof Error
       ? error.message
-      : 'Неизвестная ошибка.';
+      : 'Произошла ошибка.';
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-stone-50 px-4">
@@ -122,7 +122,7 @@ function StubPage({ title }: { title: string }) {
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
       <div className="rounded-xl border bg-white p-5 text-sm text-muted-foreground">
-        Раздел {title} находится в доработке. Бизнес-логика уже разделена по ролям, UI этого экрана доделаем следующим шагом.
+        Раздел {title} еще в работе. Основной рабочий поток сейчас находится в календаре, сотрудниках и выплатах.
       </div>
     </div>
   );
@@ -157,8 +157,8 @@ export const router = createBrowserRouter([
       { path: 'payments', element: withSuspense(<PaymentsPage />) },
       { path: 'finance', element: <StubPage title="Финансы" /> },
       { path: 'settings', element: <StubPage title="Настройки" /> },
-      { path: 'import-export', element: <StubPage title="Импорт / Экспорт" /> },
-      { path: 'audit', element: <StubPage title="Аудит" /> },
+      { path: 'import-export', element: <StubPage title="Импорт / экспорт" /> },
+      { path: 'audit', element: <StubPage title="Журнал изменений" /> },
       { index: true, element: <Navigate to="/admin/dashboard" replace /> },
     ],
   },
@@ -171,7 +171,7 @@ export const router = createBrowserRouter([
       { path: 'calendar', element: withSuspense(<CalendarPage />) },
       { path: 'shifts', element: withSuspense(<CalendarPage />) },
       { path: 'payments', element: withSuspense(<PaymentsPage />) },
-      { path: 'profile', element: <StubPage title="Мой профиль" /> },
+      { path: 'profile', element: <StubPage title="Профиль" /> },
       { index: true, element: <Navigate to="/employee/dashboard" replace /> },
     ],
   },

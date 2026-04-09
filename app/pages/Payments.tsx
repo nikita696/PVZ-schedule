@@ -1,4 +1,4 @@
-﻿import { CheckCircle2, Pencil, Trash2, Wallet } from 'lucide-react';
+import { CheckCircle2, Pencil, Trash2, Wallet, XCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { AddPaymentModal } from '../components/AddPaymentModal';
@@ -38,6 +38,7 @@ export default function PaymentsPage() {
     updatePayment,
     deletePayment,
     confirmPayment,
+    rejectPayment,
     isOwner,
     myEmployeeId,
   } = useApp();
@@ -62,7 +63,17 @@ export default function PaymentsPage() {
   }, [isOwner, myEmployeeId, payments, selectedEmployeeId]);
 
   const pendingCount = useMemo(() => (
-    visiblePayments.filter((payment) => payment.status === 'pending_confirmation').length
+    visiblePayments.filter((payment) => payment.status === 'pending').length
+  ), [visiblePayments]);
+
+  const approvedCount = useMemo(() => (
+    visiblePayments.filter((payment) => payment.status === 'approved').length
+  ), [visiblePayments]);
+
+  const totalApproved = useMemo(() => (
+    visiblePayments
+      .filter((payment) => payment.status === 'approved')
+      .reduce((sum, payment) => sum + payment.amount, 0)
   ), [visiblePayments]);
 
   const handleAddPayment = async (input: Parameters<typeof addPayment>[0]) => {
@@ -99,6 +110,16 @@ export default function PaymentsPage() {
     toast.success(result.message ?? 'Выплата подтверждена.');
   };
 
+  const handleRejectPayment = async (id: string) => {
+    const result = await rejectPayment(id);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+
+    toast.success(result.message ?? 'Выплата отклонена.');
+  };
+
   const handleEditPayment = async (payload: EditPaymentState) => {
     const result = await updatePayment(payload.paymentId, {
       amount: payload.amount,
@@ -129,8 +150,8 @@ export default function PaymentsPage() {
               </h1>
               <p className="mt-1 text-sm text-stone-600">
                 {isOwner
-                  ? 'Владелец подтверждает выплаты сотрудников, внесенные вручную.'
-                  : 'Вы можете добавлять и редактировать свои выплаты до подтверждения владельцем.'}
+                  ? 'Подтверждай, редактируй или отклоняй запросы сотрудников. В расчет долга попадают только подтвержденные выплаты.'
+                  : 'Ты можешь создать запрос на выплату и редактировать его, пока администратор не принял решение.'}
               </p>
             </div>
 
@@ -144,21 +165,21 @@ export default function PaymentsPage() {
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Card>
             <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">Всего выплат</div>
+              <div className="text-xs text-muted-foreground">Всего записей</div>
               <div className="mt-2 text-2xl font-semibold">{visiblePayments.length}</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">Ожидают подтверждения</div>
+              <div className="text-xs text-muted-foreground">На подтверждении</div>
               <div className="mt-2 text-2xl font-semibold text-amber-700">{pendingCount}</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">Подтверждено</div>
+              <div className="text-xs text-muted-foreground">Подтверждено / сумма</div>
               <div className="mt-2 text-2xl font-semibold text-emerald-700">
-                {visiblePayments.filter((payment) => payment.status === 'confirmed').length}
+                {approvedCount} / {money(totalApproved)}
               </div>
             </CardContent>
           </Card>
@@ -191,15 +212,16 @@ export default function PaymentsPage() {
                   <TableHead>Сумма</TableHead>
                   <TableHead>Комментарий</TableHead>
                   <TableHead>Статус</TableHead>
-                  <TableHead className="w-[220px]">Действия</TableHead>
+                  <TableHead className="w-[320px]">Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {visiblePayments.map((payment) => {
                   const employee = employees.find((item) => item.id === payment.employeeId);
-                  const canEdit = isOwner || payment.status === 'pending_confirmation';
-                  const canDelete = isOwner || payment.status === 'pending_confirmation';
-                  const canConfirm = isOwner && payment.status === 'pending_confirmation';
+                  const canEdit = isOwner || payment.status === 'pending';
+                  const canDelete = isOwner ? payment.status !== 'approved' : payment.status === 'pending';
+                  const canConfirm = isOwner && payment.status === 'pending';
+                  const canReject = isOwner && payment.status === 'pending';
 
                   return (
                     <TableRow key={payment.id}>
@@ -219,6 +241,16 @@ export default function PaymentsPage() {
                           >
                             <CheckCircle2 className="h-4 w-4" />
                             Подтвердить
+                          </Button>
+                        ) : null}
+                        {canReject ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void handleRejectPayment(payment.id)}
+                          >
+                            <XCircle className="h-4 w-4" />
+                            Отклонить
                           </Button>
                         ) : null}
                         {canEdit ? (
@@ -279,5 +311,3 @@ export default function PaymentsPage() {
     </div>
   );
 }
-
-

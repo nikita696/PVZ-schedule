@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Employee, Shift, ShiftStatus } from '../domain/types';
+import type { Employee, Shift, ShiftEditorStatus, ShiftStatusDb } from '../domain/types';
+import {
+  SHIFT_STATUS_BADGE_CLASS,
+  SHIFT_STATUS_LABEL,
+  SHIFT_STATUS_OPTIONS,
+  isShiftLikeStatus,
+} from '../domain/shiftStatus';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cn } from './ui/utils';
 
@@ -9,7 +15,7 @@ interface CompactMonthlyGridProps {
   month: number;
   year: number;
   editable: boolean;
-  onStatusChange?: (employeeId: string, date: string, status: ShiftStatus) => void;
+  onStatusChange?: (employeeId: string, date: string, status: ShiftEditorStatus) => void;
 }
 
 interface DayMeta {
@@ -22,40 +28,14 @@ interface DayMeta {
 
 type ActiveEmployeeId = 'all' | string;
 
-interface StatusOption {
-  value: ShiftStatus;
-  label: string;
-  colorClass: string;
-}
-
-const STATUS_OPTIONS: StatusOption[] = [
-  { value: 'worked', label: 'Рабочий', colorClass: 'bg-emerald-500' },
-  { value: 'day-off', label: 'Выходной', colorClass: 'bg-blue-500' },
-  { value: 'sick', label: 'Больничный', colorClass: 'bg-violet-500' },
-  { value: 'no-show', label: 'Невыход', colorClass: 'bg-rose-500' },
-  { value: 'vacation', label: 'Отпуск', colorClass: 'bg-yellow-400' },
-  { value: 'planned-work', label: 'Подмена', colorClass: 'bg-orange-500' },
-  { value: 'none', label: 'Смена не назначена', colorClass: 'bg-white' },
-];
-
-const STATUS_SWATCH_CLASS: Record<ShiftStatus, string> = {
-  worked: 'bg-emerald-500 border-emerald-600',
-  'day-off': 'bg-blue-500 border-blue-600',
-  sick: 'bg-violet-500 border-violet-600',
-  'no-show': 'bg-rose-500 border-rose-600',
-  vacation: 'bg-yellow-400 border-yellow-500',
-  'planned-work': 'bg-orange-500 border-orange-600',
-  none: 'bg-white border-stone-300',
-};
-
 const HOLIDAY_BY_MONTH_DAY: Record<string, string> = {
-  '01-01': 'Новогодние каникулы',
+  '01-01': 'Новый год',
   '01-02': 'Новогодние каникулы',
   '01-03': 'Новогодние каникулы',
   '01-04': 'Новогодние каникулы',
   '01-05': 'Новогодние каникулы',
   '01-06': 'Новогодние каникулы',
-  '01-07': 'Рождество Христово',
+  '01-07': 'Рождество',
   '01-08': 'Новогодние каникулы',
   '02-23': 'День защитника Отечества',
   '03-08': 'Международный женский день',
@@ -75,14 +55,20 @@ const normalizeDateKey = (value: string | null): string | null => {
   return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : null;
 };
 
-const isBeforeHiredAt = (employee: Employee, dayDate: string): boolean => {
+const isOutsideEmployment = (employee: Employee, dayDate: string): boolean => {
   const hiredAt = normalizeDateKey(employee.hiredAt);
-  if (!hiredAt) return false;
-  return dayDate < hiredAt;
+  const terminatedAt = normalizeDateKey(employee.terminatedAt);
+  if (hiredAt && dayDate < hiredAt) return true;
+  if (terminatedAt && dayDate > terminatedAt) return true;
+  return false;
 };
 
-const getShiftStatus = (shifts: Shift[], employeeId: string, date: string): ShiftStatus => (
-  shifts.find((shift) => shift.employeeId === employeeId && shift.date === date)?.status ?? 'none'
+const getEffectiveShiftStatus = (shift: Shift | undefined): ShiftStatusDb => (
+  shift?.actualStatus ?? shift?.approvedStatus ?? shift?.requestedStatus ?? shift?.status ?? 'no_shift'
+);
+
+const getShiftStatus = (shifts: Shift[], employeeId: string, date: string): ShiftStatusDb => (
+  getEffectiveShiftStatus(shifts.find((shift) => shift.employeeId === employeeId && shift.date === date))
 );
 
 const splitIntoWeeks = <T,>(items: T[]): T[][] => {
@@ -143,15 +129,16 @@ export function CompactMonthlyGrid({
   const weeks = useMemo(() => splitIntoWeeks(dayMeta), [dayMeta]);
 
   const unfilledDays = useMemo(() => dayMeta.filter((day) => {
-    const eligibleEmployees = employees.filter((employee) => !isBeforeHiredAt(employee, day.date));
+    const eligibleEmployees = employees.filter((employee) => !isOutsideEmployment(employee, day.date));
     if (eligibleEmployees.length === 0) return false;
     const eligibleEmployeeIds = new Set(eligibleEmployees.map((employee) => employee.id));
 
     const assignedCount = shifts.filter((shift) => (
       shift.date === day.date
       && eligibleEmployeeIds.has(shift.employeeId)
-      && (shift.status === 'worked' || shift.status === 'planned-work')
+      && isShiftLikeStatus(getEffectiveShiftStatus(shift))
     )).length;
+
     return assignedCount === 0;
   }), [dayMeta, employees, shifts]);
 
@@ -164,16 +151,16 @@ export function CompactMonthlyGrid({
     }
 
     for (const shift of shifts) {
-      if (!dateKeys.has(shift.date) || shift.status !== 'worked') continue;
+      if (!dateKeys.has(shift.date) || !isShiftLikeStatus(getEffectiveShiftStatus(shift))) continue;
       counts.set(shift.employeeId, (counts.get(shift.employeeId) ?? 0) + 1);
     }
 
     return counts;
   }, [dayMeta, employees, shifts]);
 
-  const applyStatus = (dayDate: string, status: ShiftStatus) => {
+  const applyStatus = (dayDate: string, status: ShiftEditorStatus) => {
     if (!activeEmployee || !editable || !onStatusChange) return;
-    if (isBeforeHiredAt(activeEmployee, dayDate)) return;
+    if (isOutsideEmployment(activeEmployee, dayDate)) return;
     onStatusChange(activeEmployee.id, dayDate, status);
     setOpenDayKey(null);
   };
@@ -181,7 +168,7 @@ export function CompactMonthlyGrid({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        {STATUS_OPTIONS.map((status) => (
+        {SHIFT_STATUS_OPTIONS.map((status) => (
           <div key={status.value} className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs text-stone-700">
             <span className={cn('h-3 w-3 rounded-full border border-stone-300', status.colorClass)} />
             <span>{status.label}</span>
@@ -191,7 +178,7 @@ export function CompactMonthlyGrid({
 
       {editable ? (
         <div className="rounded-xl border bg-white p-2">
-          <div className="mb-2 text-xs font-medium text-stone-700">Активный сотрудник</div>
+          <div className="mb-2 text-xs font-medium text-stone-700">Выбери сотрудника</div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -231,7 +218,7 @@ export function CompactMonthlyGrid({
       ) : null}
 
       <div className="rounded-xl border bg-white p-3">
-        <div className="mb-2 text-xs font-medium text-stone-700">Рабочих смен за месяц</div>
+        <div className="mb-2 text-xs font-medium text-stone-700">Смен в месяце</div>
         <div className="flex flex-wrap gap-2">
           {employees.map((employee) => (
             <div
@@ -248,7 +235,7 @@ export function CompactMonthlyGrid({
       </div>
 
       <div className="rounded-xl border bg-stone-50/70 p-3 text-sm text-stone-700">
-        <span className="font-medium">Незаполненные смены:</span>{' '}
+        <span className="font-medium">Непокрытые дни:</span>{' '}
         {unfilledDays.length === 0 ? 'нет' : unfilledDays.map((day) => day.dayNumber).join(', ')}
       </div>
 
@@ -256,7 +243,7 @@ export function CompactMonthlyGrid({
         {weeks.map((week, weekIndex) => (
           <div key={`week-${weekIndex}`} className="grid grid-cols-7 gap-2">
             {week.map((day) => {
-              const canOpenDayEditor = editable && activeEmployeeId !== 'all' && !!activeEmployee && !isBeforeHiredAt(activeEmployee, day.date);
+              const canOpenDayEditor = editable && activeEmployeeId !== 'all' && !!activeEmployee && !isOutsideEmployment(activeEmployee, day.date);
 
               return (
                 <Popover
@@ -290,7 +277,7 @@ export function CompactMonthlyGrid({
                       <div className="space-y-1">
                         {employees.map((employee) => {
                           const status = getShiftStatus(shifts, employee.id, day.date);
-                          const preHire = isBeforeHiredAt(employee, day.date);
+                          const outsideEmployment = isOutsideEmployment(employee, day.date);
                           const isActive = activeEmployeeId === employee.id;
 
                           return (
@@ -298,15 +285,18 @@ export function CompactMonthlyGrid({
                               key={`${day.date}:${employee.id}`}
                               className={cn(
                                 'flex items-center justify-between rounded-md border px-2 py-1',
-                                preHire ? 'border-dashed border-stone-200 bg-stone-50 text-stone-400' : 'border-stone-200 bg-white text-stone-700',
-                                isActive ? 'ring-1 ring-orange-300 border-orange-200' : '',
+                                outsideEmployment ? 'border-dashed border-stone-200 bg-stone-50 text-stone-400' : 'border-stone-200 bg-white text-stone-700',
+                                isActive ? 'border-orange-200 ring-1 ring-orange-300' : '',
                               )}
                             >
                               <span className="truncate text-[11px]">{employee.name}</span>
-                              {preHire ? (
-                                <span className="text-[10px] text-stone-400">ещё не работает</span>
+                              {outsideEmployment ? (
+                                <span className="text-[10px] text-stone-400">вне периода</span>
                               ) : (
-                                <span className={cn('h-3.5 w-3.5 rounded border', STATUS_SWATCH_CLASS[status])} />
+                                <span
+                                  className={cn('h-3.5 w-3.5 rounded border', SHIFT_STATUS_BADGE_CLASS[status])}
+                                  title={SHIFT_STATUS_LABEL[status]}
+                                />
                               )}
                             </div>
                           );
@@ -327,7 +317,7 @@ export function CompactMonthlyGrid({
                         {activeEmployee?.name} • {day.dayNumber}.{String(month).padStart(2, '0')}.{year}
                       </div>
                       <div className="grid gap-1">
-                        {STATUS_OPTIONS.map((option) => (
+                        {SHIFT_STATUS_OPTIONS.map((option) => (
                           <button
                             key={`${day.date}:${option.value}`}
                             type="button"

@@ -1,12 +1,12 @@
-import type { ShiftStatus } from '../domain/types';
+import type { ShiftEditorStatus } from '../domain/types';
 import { ShiftStatusButton } from './ShiftStatusButton';
 
 interface ShiftStatusSelectorProps {
-  value: ShiftStatus;
-  onChange: (status: ShiftStatus) => void;
+  value: ShiftEditorStatus;
+  onChange: (status: ShiftEditorStatus) => void;
 }
 
-const ORDER: ShiftStatus[] = ['planned-work', 'worked', 'day-off', 'vacation', 'sick', 'no-show', 'none'];
+const ORDER: ShiftEditorStatus[] = ['shift', 'replacement', 'day_off', 'sick_leave', 'no_show', 'no_shift', 'none'];
 
 export function ShiftStatusSelector({ value, onChange }: ShiftStatusSelectorProps) {
   return (

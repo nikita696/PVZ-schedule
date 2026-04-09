@@ -6,11 +6,11 @@ interface PaymentStatusBadgeProps {
 }
 
 const STATUS_META: Record<PaymentStatus, { label: string; className: string }> = {
-  pending_confirmation: {
-    label: 'Ожидает подтверждения',
+  pending: {
+    label: 'На подтверждении',
     className: 'border-amber-200 bg-amber-50 text-amber-700',
   },
-  confirmed: {
+  approved: {
     label: 'Подтверждена',
     className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
   },

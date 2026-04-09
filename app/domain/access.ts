@@ -16,18 +16,19 @@ export const filterVisiblePayments = (payments: Payment[], access: UserAccess): 
 };
 
 export const canConfirmPayment = (payment: Payment, access: UserAccess): boolean => (
-  access.role === 'admin' && payment.status === 'pending_confirmation'
+  access.role === 'admin' && payment.status === 'pending'
 );
 
 export const canRejectPayment = (payment: Payment, access: UserAccess): boolean => (
-  access.role === 'admin' && payment.status === 'pending_confirmation'
+  access.role === 'admin' && payment.status === 'pending'
 );
 
 export const canEditPayment = (payment: Payment, access: UserAccess): boolean => {
   if (access.role === 'admin') return true;
-  return payment.status === 'pending_confirmation' && payment.employeeId === access.employeeId;
+  return payment.status === 'pending' && payment.employeeId === access.employeeId;
 };
 
-export const canDeletePayment = (payment: Payment, access: UserAccess): boolean => (
-  canEditPayment(payment, access)
-);
+export const canDeletePayment = (payment: Payment, access: UserAccess): boolean => {
+  if (access.role === 'admin') return payment.status !== 'approved';
+  return payment.status === 'pending' && payment.employeeId === access.employeeId;
+};

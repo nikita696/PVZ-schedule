@@ -1,9 +1,9 @@
-﻿import { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { BottomNav } from '../components/BottomNav';
 import { MonthYearSelector } from '../components/MonthYearSelector';
-import type { EmployeeStats, Payment } from '../domain/types';
+import type { EmployeeStats, Payment, Shift } from '../domain/types';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -16,6 +16,7 @@ import {
   TableRow,
 } from '../components/ui/table';
 import { useApp } from '../context/AppContext';
+import { isShiftLikeStatus } from '../domain/shiftStatus';
 import { getLocalISODate } from '../lib/date';
 
 const money = (value: number) => new Intl.NumberFormat('ru-RU', {
@@ -34,6 +35,10 @@ const isInMonth = (date: string, month: number, year: number) => {
   return parsed.month === month && parsed.year === year;
 };
 
+const resolveShiftStatus = (shift: Shift) => (
+  shift.actualStatus ?? shift.approvedStatus ?? shift.requestedStatus ?? shift.status
+);
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const {
@@ -42,6 +47,7 @@ export default function DashboardPage() {
     payments,
     selectedMonth,
     selectedYear,
+    selectedMonthStatus,
     setSelectedMonth,
     setSelectedYear,
     addEmployee,
@@ -68,7 +74,7 @@ export default function DashboardPage() {
   const monthStats = useMemo(() => {
     const byEmployee = new Map<string, ReturnType<typeof getEmployeeStats>>();
     let earnedActual = 0;
-    let paidConfirmed = 0;
+    let paidApproved = 0;
     let dueNow = 0;
     let forecastTotal = 0;
 
@@ -76,7 +82,7 @@ export default function DashboardPage() {
       const stats = getEmployeeStats(employee.id, selectedMonth, selectedYear);
       byEmployee.set(employee.id, stats);
       earnedActual += stats.earnedActual;
-      paidConfirmed += stats.paidConfirmed;
+      paidApproved += stats.paidApproved;
       dueNow += stats.dueNow;
       forecastTotal += stats.forecastTotal;
     }
@@ -84,7 +90,7 @@ export default function DashboardPage() {
     return {
       byEmployee,
       earnedActual,
-      paidConfirmed,
+      paidApproved,
       dueNow,
       forecastTotal,
     };
@@ -92,7 +98,7 @@ export default function DashboardPage() {
 
   const pendingPaymentsCount = useMemo(() => (
     payments.filter((payment) => (
-      payment.status === 'pending_confirmation' && isInMonth(payment.date, selectedMonth, selectedYear)
+      payment.status === 'pending' && isInMonth(payment.date, selectedMonth, selectedYear)
     )).length
   ), [payments, selectedMonth, selectedYear]);
 
@@ -100,17 +106,18 @@ export default function DashboardPage() {
     const today = getLocalISODate();
     const todayShifts = shifts.filter((shift) => shift.date === today);
 
-    const planned = todayShifts.filter((shift) => (
-      shift.status === 'planned-work' || shift.status === 'worked'
-    ));
-    const sick = todayShifts.filter((shift) => shift.status === 'sick');
-    const vacation = todayShifts.filter((shift) => shift.status === 'vacation');
+    const planned = todayShifts.filter((shift) => isShiftLikeStatus(resolveShiftStatus(shift)));
+    const sick = todayShifts.filter((shift) => resolveShiftStatus(shift) === 'sick_leave');
+    const dayOff = todayShifts.filter((shift) => {
+      const status = resolveShiftStatus(shift);
+      return status === 'day_off' || status === 'no_shift';
+    });
 
     return {
       planned: planned.map((shift) => employees.find((employee) => employee.id === shift.employeeId)?.name ?? 'Сотрудник'),
       sick: sick.map((shift) => employees.find((employee) => employee.id === shift.employeeId)?.name ?? 'Сотрудник'),
-      vacation: vacation.map((shift) => employees.find((employee) => employee.id === shift.employeeId)?.name ?? 'Сотрудник'),
-      issue: planned.length !== 1,
+      dayOff: dayOff.map((shift) => employees.find((employee) => employee.id === shift.employeeId)?.name ?? 'Сотрудник'),
+      issue: planned.length === 0,
     };
   }, [employees, shifts]);
 
@@ -120,17 +127,17 @@ export default function DashboardPage() {
   const handleAddEmployee = async () => {
     const parsedRate = Number(dailyRate);
     if (!name.trim()) {
-      toast.error('Введите имя сотрудника.');
+      toast.error('Укажи имя сотрудника.');
       return;
     }
 
     if (!workEmail.trim()) {
-      toast.error('Введите рабочий email сотрудника.');
+      toast.error('Укажи рабочий email.');
       return;
     }
 
     if (!Number.isFinite(parsedRate) || parsedRate <= 0) {
-      toast.error('Введите корректную ставку за смену.');
+      toast.error('Укажи корректную ставку.');
       return;
     }
 
@@ -166,7 +173,7 @@ export default function DashboardPage() {
   };
 
   const handleDeleteArchived = async (employeeId: string, employeeName: string) => {
-    const confirmed = window.confirm(`Удалить архивного сотрудника "${employeeName}" и все его данные? Это действие нельзя отменить.`);
+    const confirmed = window.confirm(`Удалить архивного сотрудника "${employeeName}"? История может быть потеряна.`);
     if (!confirmed) return;
 
     const result = await deleteArchivedEmployee(employeeId);
@@ -181,7 +188,7 @@ export default function DashboardPage() {
   const handleRateSave = async (employeeId: string, currentRate: number) => {
     const nextRate = Number(rateDrafts[employeeId] ?? currentRate);
     if (!Number.isFinite(nextRate) || nextRate <= 0) {
-      toast.error('Введите корректную ставку.');
+      toast.error('Укажи корректную ставку.');
       return;
     }
 
@@ -219,11 +226,16 @@ export default function DashboardPage() {
           <CardContent className="flex flex-col gap-4 p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="w-fit rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
-                  {isOwner ? 'Панель администратора' : 'Личный кабинет сотрудника'}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="w-fit rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
+                    {isOwner ? 'Панель администратора' : 'Личный кабинет'}
+                  </div>
+                  <div className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">
+                    Месяц: {selectedMonthStatus}
+                  </div>
                 </div>
                 <h1 className="mt-2 text-2xl font-semibold text-stone-900">
-                  {isOwner ? 'Управление ПВЗ: график, сотрудники и выплаты' : 'Мой график, расчет и выплаты'}
+                  {isOwner ? 'Сотрудники, график и выплаты' : 'Мой график, выплаты и расчет'}
                 </h1>
               </div>
 
@@ -236,7 +248,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={handleToday}>Сегодня</Button>
+              <Button variant="outline" onClick={handleToday}>Текущий месяц</Button>
               <Button variant="outline" onClick={() => navigate(calendarPath)}>Календарь</Button>
               <Button variant="outline" onClick={() => navigate(paymentsPath)}>Выплаты</Button>
               {isOwner ? (
@@ -251,7 +263,7 @@ export default function DashboardPage() {
                     value={exportEmployeeId}
                     onChange={(event) => setExportEmployeeId(event.target.value)}
                   >
-                    <option value="">Выбрать сотрудника</option>
+                    <option value="">Выбери сотрудника</option>
                     {activeEmployees.map((employee) => (
                       <option key={employee.id} value={employee.id}>{employee.name}</option>
                     ))}
@@ -264,11 +276,11 @@ export default function DashboardPage() {
                     }}
                     disabled={!exportEmployeeId}
                   >
-                    Выгрузить Excel
+                    Экспорт Excel
                   </Button>
                 </div>
               ) : myEmployee ? (
-                <Button onClick={() => void handleExport(myEmployee.id)}>Выгрузить мой расчетный лист</Button>
+                <Button onClick={() => void handleExport(myEmployee.id)}>Мой расчетный лист</Button>
               ) : null}
             </div>
           </CardContent>
@@ -277,10 +289,10 @@ export default function DashboardPage() {
         {isOwner ? (
           <>
             <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard label="Начислено за месяц" value={money(monthStats.earnedActual)} />
-              <StatCard label="Выплачено за месяц" value={money(monthStats.paidConfirmed)} />
-              <StatCard label="К выплате сейчас" value={money(monthStats.dueNow)} />
-              <StatCard label="Ожидают подтверждения" value={String(pendingPaymentsCount)} />
+              <StatCard label="Начислено" value={money(monthStats.earnedActual)} />
+              <StatCard label="Выплачено" value={money(monthStats.paidApproved)} />
+              <StatCard label="Текущий долг" value={money(monthStats.dueNow)} />
+              <StatCard label="Запросов на выплату" value={String(pendingPaymentsCount)} />
             </section>
 
             <section className="grid gap-4 lg:grid-cols-[1.1fr_1.9fr]">
@@ -289,10 +301,10 @@ export default function DashboardPage() {
                   <CardTitle>Сегодня</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm">
-                  <InfoLine label="Запланированы" value={todayInfo.planned.join(', ') || 'Никого'} />
-                  <InfoLine label="Больничный" value={todayInfo.sick.join(', ') || 'Нет'} />
-                  <InfoLine label="Отпуск" value={todayInfo.vacation.join(', ') || 'Нет'} />
-                  <InfoLine label="Статус дня" value={todayInfo.issue ? 'Проблема: не 1 сотрудник' : 'День закрыт'} />
+                  <InfoLine label="На смене" value={todayInfo.planned.join(', ') || 'никого'} />
+                  <InfoLine label="Больничный" value={todayInfo.sick.join(', ') || 'нет'} />
+                  <InfoLine label="Выходной" value={todayInfo.dayOff.join(', ') || 'нет'} />
+                  <InfoLine label="Покрытие дня" value={todayInfo.issue ? 'нет назначенной смены' : 'день закрыт'} />
                 </CardContent>
               </Card>
 
@@ -301,32 +313,12 @@ export default function DashboardPage() {
                   <CardTitle>Добавить сотрудника</CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-3 sm:grid-cols-[1.2fr_1.2fr_0.9fr_0.9fr_auto]">
-                  <Input
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    placeholder="Имя сотрудника"
-                  />
-                  <Input
-                    type="email"
-                    value={workEmail}
-                    onChange={(event) => setWorkEmail(event.target.value)}
-                    placeholder="Рабочий email"
-                  />
-                  <Input
-                    type="number"
-                    min="1"
-                    value={dailyRate}
-                    onChange={(event) => setDailyRate(event.target.value)}
-                    placeholder="Ставка"
-                  />
-                  <Input
-                    type="date"
-                    value={hiredAt}
-                    onChange={(event) => setHiredAt(event.target.value)}
-                    placeholder="Дата найма"
-                  />
+                  <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Имя сотрудника" />
+                  <Input type="email" value={workEmail} onChange={(event) => setWorkEmail(event.target.value)} placeholder="Рабочий email" />
+                  <Input type="number" min="1" value={dailyRate} onChange={(event) => setDailyRate(event.target.value)} placeholder="Ставка" />
+                  <Input type="date" value={hiredAt} onChange={(event) => setHiredAt(event.target.value)} placeholder="Дата выхода" />
                   <Button onClick={() => void handleAddEmployee()} disabled={savingEmployee}>
-                    {savingEmployee ? 'Сохранение...' : 'Добавить'}
+                    {savingEmployee ? 'Сохраняю...' : 'Добавить'}
                   </Button>
                 </CardContent>
               </Card>
@@ -344,13 +336,13 @@ export default function DashboardPage() {
                       <TableHead>Email</TableHead>
                       <TableHead>Статус</TableHead>
                       <TableHead>Ставка</TableHead>
-                      <TableHead>Отработано</TableHead>
-                      <TableHead>Заработано</TableHead>
+                      <TableHead>Смен</TableHead>
+                      <TableHead>Начислено</TableHead>
                       <TableHead>Выплачено</TableHead>
-                      <TableHead>К выплате</TableHead>
-                      <TableHead>Прогноз</TableHead>
-                      <TableHead>Больничных</TableHead>
-                      <TableHead>Отпуск</TableHead>
+                      <TableHead>Долг</TableHead>
+                      <TableHead>Потенциал</TableHead>
+                      <TableHead>Больничные</TableHead>
+                      <TableHead>Выходные</TableHead>
                       <TableHead>Действия</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -371,28 +363,24 @@ export default function DashboardPage() {
                                 onChange={(event) => setRateDrafts((prev) => ({ ...prev, [employee.id]: event.target.value }))}
                                 className="h-8"
                               />
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => void handleRateSave(employee.id, employee.dailyRate)}
-                              >
+                              <Button size="sm" variant="outline" onClick={() => void handleRateSave(employee.id, employee.dailyRate)}>
                                 Сохранить
                               </Button>
                             </div>
                           </TableCell>
                           <TableCell>{stats.workedCount}</TableCell>
                           <TableCell>{money(stats.earnedActual)}</TableCell>
-                          <TableCell>{money(stats.paidConfirmed)}</TableCell>
+                          <TableCell>{money(stats.paidApproved)}</TableCell>
                           <TableCell>{money(stats.dueNow)}</TableCell>
                           <TableCell>{money(stats.forecastTotal)}</TableCell>
                           <TableCell>{stats.sickCount}</TableCell>
-                          <TableCell>{stats.vacationCount}</TableCell>
+                          <TableCell>{stats.dayOffCount}</TableCell>
                           <TableCell className="space-x-2">
                             <Button size="sm" variant="outline" onClick={() => void handleExport(employee.id)}>
                               Excel
                             </Button>
                             <Button size="sm" variant="outline" onClick={() => void handleArchive(employee.id)}>
-                              Архив
+                              В архив
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -413,10 +401,10 @@ export default function DashboardPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Имя</TableHead>
-                        <TableHead>В архиве с</TableHead>
+                        <TableHead>Дата архивации</TableHead>
                         <TableHead>Смен</TableHead>
                         <TableHead>Выплат</TableHead>
-                        <TableHead>Действия</TableHead>
+                        <TableHead>Действие</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -427,12 +415,8 @@ export default function DashboardPage() {
                           <TableCell>{shifts.filter((shift) => shift.employeeId === employee.id).length}</TableCell>
                           <TableCell>{payments.filter((payment) => payment.employeeId === employee.id).length}</TableCell>
                           <TableCell>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => void handleDeleteArchived(employee.id, employee.name)}
-                            >
-                              Удалить навсегда
+                            <Button size="sm" variant="destructive" onClick={() => void handleDeleteArchived(employee.id, employee.name)}>
+                              Удалить
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -503,27 +487,27 @@ function EmployeeDashboard({
     return (
       <Card>
         <CardContent className="p-5 text-sm text-muted-foreground">
-          Профиль сотрудника пока не привязан к вашему аккаунту. Попроси администратора проверить привязку в базе.
+          Этот аккаунт пока не связан с сотрудником. Попроси администратора завершить настройку профиля.
         </CardContent>
       </Card>
     );
   }
 
-  const pendingCount = payments.filter((payment) => payment.status === 'pending_confirmation').length;
+  const pendingCount = payments.filter((payment) => payment.status === 'pending').length;
 
   return (
     <>
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Отработано смен" value={String(stats.workedCount)} />
-        <StatCard label="Заработано (факт)" value={money(stats.earnedActual)} />
-        <StatCard label="Выплачено" value={money(stats.paidConfirmed)} />
-        <StatCard label="К выплате" value={money(stats.dueNow)} />
+        <StatCard label="Утверждено смен" value={String(stats.workedCount)} />
+        <StatCard label="Заработано" value={money(stats.earnedActual)} />
+        <StatCard label="Выплачено" value={money(stats.paidApproved)} />
+        <StatCard label="Долг ПВЗ" value={money(stats.dueNow)} />
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard label="Прогноз по графику" value={money(stats.forecastTotal)} />
-        <StatCard label="Больничных в месяце" value={String(stats.sickCount)} />
-        <StatCard label="Отпускных дней" value={String(stats.vacationCount)} />
+        <StatCard label="Потенциал по графику" value={money(stats.forecastTotal)} />
+        <StatCard label="Больничные" value={String(stats.sickCount)} />
+        <StatCard label="Выходные" value={String(stats.dayOffCount)} />
       </section>
 
       <Card>
@@ -533,9 +517,9 @@ function EmployeeDashboard({
         <CardContent className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={onOpenCalendar}>Мой календарь</Button>
           <Button variant="outline" onClick={onOpenPayments}>Мои выплаты</Button>
-          <Button onClick={onExport}>Выгрузить мой расчетный лист</Button>
+          <Button onClick={onExport}>Скачать расчетный лист</Button>
           <div className="ml-auto text-sm text-muted-foreground">
-            Выплат ждут подтверждения: {pendingCount}
+            Выплат на подтверждении: {pendingCount}
           </div>
         </CardContent>
       </Card>

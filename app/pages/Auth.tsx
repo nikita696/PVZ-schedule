@@ -11,18 +11,18 @@ import { Input } from '../components/ui/input';
 const FEATURE_CARDS = [
   {
     icon: Database,
-    title: 'Единая база',
-    body: 'Данные сотрудников, смен и выплат хранятся в Supabase и синхронизируются между ролями.',
+    title: 'История хранится в базе',
+    body: 'Смены, ставки и выплаты лежат в Supabase и не зависят от одного браузера.',
   },
   {
     icon: Shield,
     title: 'Один администратор',
-    body: 'Первый зарегистрированный администратор получает права управления. Второй админ не создаётся.',
+    body: 'Только один активный администратор управляет ПВЗ. Второй админ системой не допускается.',
   },
   {
     icon: UserRoundPlus,
     title: 'Регистрация по email',
-    body: 'Пользователь получает ссылку на почту, подтверждает вход и автоматически попадает в базу.',
+    body: 'Новый пользователь получает magic link на почту, а профиль и роль создаются автоматически.',
   },
 ];
 
@@ -44,13 +44,13 @@ export default function AuthPage() {
 
   const hintText = useMemo(() => (
     status === 'missing-config'
-      ? 'Не настроены переменные Supabase. Добавьте VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY.'
-      : 'Вход и регистрация выполняются по одноразовой ссылке из письма.'
+      ? 'Supabase пока не настроен. Проверь переменные окружения.'
+      : 'После отправки письма просто открой ссылку из почты — пароль не нужен.'
   ), [status]);
 
   const handleRequestLoginLink = async () => {
     if (!isValidEmail(loginEmail)) {
-      toast.error('Введи корректный email.');
+      toast.error('Укажи корректный email.');
       return;
     }
 
@@ -68,7 +68,7 @@ export default function AuthPage() {
 
   const handleRegister = async () => {
     if (!isValidEmail(registerEmail)) {
-      toast.error('Введи корректный email для регистрации.');
+      toast.error('Укажи email для регистрации.');
       return;
     }
 
@@ -103,8 +103,8 @@ export default function AuthPage() {
                   Регистрация и вход по ссылке из email.
                 </h1>
                 <p className="max-w-xl text-base leading-7 text-stone-600">
-                  На этой странице можно зарегистрировать нового пользователя как сотрудника или первого
-                  администратора. После отправки формы письмо со ссылкой приходит на указанный email.
+                  Новый пользователь может зарегистрироваться как сотрудник или как администратор.
+                  После подтверждения письма профиль автоматически создается в базе.
                 </p>
               </div>
             </div>
@@ -130,10 +130,10 @@ export default function AuthPage() {
             {status === 'authenticated' ? (
               <div className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                 <p className="text-sm text-emerald-900">
-                  Ты уже авторизован. Можно перейти в рабочий кабинет.
+                  Ты уже вошел. Можно сразу перейти в приложение.
                 </p>
                 <Button onClick={() => navigate('/', { replace: true })} className="w-full bg-emerald-600 hover:bg-emerald-500">
-                  Перейти в кабинет
+                  Открыть приложение
                 </Button>
               </div>
             ) : null}
@@ -141,7 +141,7 @@ export default function AuthPage() {
             <section className="space-y-4">
               <SectionTitle
                 title="Регистрация нового пользователя"
-                subtitle="Выбери роль, укажи email и получи ссылку подтверждения."
+                subtitle="Укажи email, имя и роль. Ссылка придет на почту."
               />
 
               <Field label="Email">
@@ -155,12 +155,12 @@ export default function AuthPage() {
                 />
               </Field>
 
-              <Field label="Имя (опционально)">
+              <Field label="Имя (необязательно)">
                 <Input
-                  aria-label="Имя (опционально)"
+                  aria-label="Имя"
                   value={registerDisplayName}
                   onChange={(event) => setRegisterDisplayName(event.target.value)}
-                  placeholder="Как тебя отображать в системе"
+                  placeholder="Как тебя показывать в системе"
                   disabled={isBaseDisabled}
                 />
               </Field>
@@ -173,7 +173,7 @@ export default function AuthPage() {
                 />
                 <div className="text-sm">
                   <div className="font-medium text-stone-900">Зарегистрировать как администратора</div>
-                  <div className="text-stone-600">Только один пользователь в системе может иметь роль администратора.</div>
+                  <div className="text-stone-600">В системе может существовать только один активный администратор.</div>
                 </div>
               </label>
 
@@ -182,14 +182,14 @@ export default function AuthPage() {
                 onClick={() => void handleRegister()}
                 disabled={!canSubmitRegistration}
               >
-                {submitting === 'register' ? 'Отправляем ссылку...' : 'Зарегистрироваться по email'}
+                {submitting === 'register' ? 'Отправляю письмо...' : 'Зарегистрироваться по email'}
               </Button>
             </section>
 
             <section className="space-y-4 border-t pt-6">
               <SectionTitle
                 title="Уже зарегистрирован?"
-                subtitle="Отправь ссылку для входа на свою почту."
+                subtitle="Отправь себе новую ссылку для входа."
               />
 
               <Field label="Email для входа">
@@ -210,13 +210,13 @@ export default function AuthPage() {
                 disabled={!canSubmitLogin}
               >
                 <MailCheck className="h-4 w-4" />
-                {submitting === 'login' ? 'Отправляем...' : 'Получить ссылку для входа'}
+                {submitting === 'login' ? 'Отправляю...' : 'Получить ссылку для входа'}
               </Button>
             </section>
 
             {status === 'missing-config' ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                Supabase не настроен. Добавь `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`.
+                Supabase не настроен. Нужны `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`.
               </div>
             ) : null}
           </CardContent>

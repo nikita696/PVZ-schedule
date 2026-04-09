@@ -31,7 +31,7 @@ const getEmailRedirectTo = (): string | undefined => {
 
 const ensureSupabaseClient = (): ActionResult<NonNullable<typeof supabase>> => {
   if (!supabase) {
-    return errorResult('Supabase не настроен. Добавьте переменные окружения.');
+    return errorResult('Supabase не настроен. Проверь переменные окружения.');
   }
 
   return okResult(supabase);
@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) {
-      return errorResult('Введи email.');
+      return errorResult('Укажи email.');
     }
 
     const { error } = await clientResult.data.auth.signInWithOtp({
@@ -122,8 +122,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return okResult(
       undefined,
       input.isAdmin
-        ? 'Регистрация администратора начата. Перейди по ссылке в письме.'
-        : 'Регистрация сотрудника начата. Перейди по ссылке в письме.',
+        ? 'Регистрация администратора начата. Проверь почту.'
+        : 'Регистрация сотрудника начата. Проверь почту.',
     );
   }, [sendMagicLink]);
 
@@ -134,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await clientResult.data.auth.signOut();
     if (error) return errorResult(translateSupabaseError(error.message));
 
-    return okResult(undefined, 'Вы вышли из аккаунта.');
+    return okResult(undefined, 'Ты вышел из аккаунта.');
   }, []);
 
   const value = useMemo<AuthContextType>(() => ({
