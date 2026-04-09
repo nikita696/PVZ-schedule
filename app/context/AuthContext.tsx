@@ -25,10 +25,25 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const EXISTING_ACCOUNT_ERRORS = new Set(['ADMIN_ALREADY_EXISTS', 'ACCOUNT_ALREADY_EXISTS']);
+const DEFAULT_APP_URL = 'https://pvz-schedule.vercel.app';
 
 const getEmailRedirectTo = (): string | undefined => {
-  if (typeof window === 'undefined') return undefined;
-  return `${window.location.origin}/auth/login`;
+  const configuredAppUrl = import.meta.env.VITE_APP_URL?.trim();
+
+  if (configuredAppUrl) {
+    return `${configuredAppUrl.replace(/\/+$/, '')}/auth/login`;
+  }
+
+  if (typeof window === 'undefined') {
+    return `${DEFAULT_APP_URL}/auth/login`;
+  }
+
+  const hostname = window.location.hostname.toLowerCase();
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return `${window.location.origin}/auth/login`;
+  }
+
+  return `${DEFAULT_APP_URL}/auth/login`;
 };
 
 const ensureSupabaseClient = (): ActionResult<NonNullable<typeof supabase>> => {
