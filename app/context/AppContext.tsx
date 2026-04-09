@@ -133,7 +133,7 @@ const sortPayments = (items: Payment[]): Payment[] => (
 );
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const { status: authStatus, user } = useAuth();
+  const { status: authStatus, user, isCompletingOAuth } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [rateHistory, setRateHistory] = useState<EmployeeRateHistory[]>([]);
   const [scheduleMonths, setScheduleMonths] = useState<ScheduleMonth[]>([]);
@@ -149,7 +149,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [preferences]);
 
   useEffect(() => {
-    if (authStatus === 'loading') {
+    if (authStatus === 'loading' || isCompletingOAuth) {
       setStatus('loading');
       setError(null);
       return;
@@ -206,7 +206,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       isActive = false;
     };
-  }, [authStatus, user]);
+  }, [authStatus, isCompletingOAuth, user]);
 
   const selectedMonthStatus = useMemo<MonthStatus>(() => {
     const found = scheduleMonths.find((item) => (

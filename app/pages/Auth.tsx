@@ -1,91 +1,86 @@
-import { Database, MailCheck, Shield, UserRoundPlus } from 'lucide-react';
+﻿import { Database, LogIn, Shield, UserRoundPlus } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
-import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
-import { Checkbox } from '../components/ui/checkbox';
 import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
+import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 
 const FEATURE_CARDS = [
   {
     icon: Database,
     title: 'История хранится в базе',
-    body: 'Смены, ставки и выплаты лежат в Supabase и не зависят от одного браузера.',
+    body: 'Смены, ставки и выплаты живут в Supabase и не завязаны на одном браузере.',
   },
   {
     icon: Shield,
     title: 'Один администратор',
-    body: 'В системе может быть только один активный администратор. Для него повторная регистрация не нужна.',
+    body: 'Система не даст создать второго активного администратора и сохранит права владельца.',
   },
   {
     icon: UserRoundPlus,
-    title: 'Вход по email-ссылке',
-    body: 'Пользователь получает magic link на почту и входит без пароля.',
+    title: 'Вход через Яндекс ID',
+    body: 'Без magic link и почтовой возни: входишь через Яндекс, а роль подтягивается автоматически.',
   },
-];
+] as const;
 
-const isValidEmail = (value: string) => value.trim().length > 3 && value.includes('@');
+const getLandingPath = (role: 'admin' | 'employee') => (
+  role === 'admin' ? '/admin/dashboard' : '/employee/dashboard'
+);
 
 export default function AuthPage() {
   const navigate = useNavigate();
-  const { requestLoginLink, registerByEmail, status, user } = useAuth();
+  const { access, status: appStatus, error: appError } = useApp();
+  const {
+    startYandexAuth,
+    status,
+    user,
+    isCompletingOAuth,
+    oauthError,
+    clearOAuthError,
+  } = useAuth();
 
-  const [loginEmail, setLoginEmail] = useState('');
-  const [registerEmail, setRegisterEmail] = useState('');
-  const [registerDisplayName, setRegisterDisplayName] = useState('');
-  const [registerAsAdmin, setRegisterAsAdmin] = useState(false);
-  const [submitting, setSubmitting] = useState<'none' | 'login' | 'register'>('none');
+  const [displayName, setDisplayName] = useState('');
+  const [role, setRole] = useState<'admin' | 'employee'>('employee');
+  const [submitting, setSubmitting] = useState(false);
 
-  const isBaseDisabled = status === 'loading' || status === 'missing-config' || submitting !== 'none';
-  const canSubmitLogin = !isBaseDisabled && isValidEmail(loginEmail);
-  const canSubmitRegistration = !isBaseDisabled && isValidEmail(registerEmail);
+  const isBusy = status === 'loading' || status === 'missing-config' || isCompletingOAuth || submitting;
+  const currentError = oauthError ?? (status === 'authenticated' && !access ? appError : null);
+  const landingPath = access ? getLandingPath(access.role) : null;
 
-  const hintText = useMemo(() => (
-    status === 'missing-config'
-      ? 'Supabase пока не настроен. Проверь переменные окружения.'
-      : 'Если администратор уже зарегистрирован, используй нижнюю форму входа. Повторно создавать админа не нужно.'
-  ), [status]);
-
-  const handleRequestLoginLink = async () => {
-    if (!isValidEmail(loginEmail)) {
-      toast.error('Укажи корректный email.');
-      return;
+  const hintText = useMemo(() => {
+    if (status === 'missing-config') {
+      return 'Supabase пока не настроен. Проверь переменные окружения приложения.';
     }
 
-    setSubmitting('login');
-    const result = await requestLoginLink(loginEmail.trim());
-    setSubmitting('none');
-
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
+    if (status === 'authenticated' && access) {
+      return 'Аккаунт уже готов. Можно сразу открыть приложение.';
     }
 
-    toast.success(result.message ?? 'Ссылка для входа отправлена.');
-  };
+    return 'Используй тот же Яндекс-аккаунт, к которому привязан твой рабочий email. Если ты уже был зарегистрирован, роль восстановится сама.';
+  }, [access, status]);
 
-  const handleRegister = async () => {
-    if (!isValidEmail(registerEmail)) {
-      toast.error('Укажи email для регистрации.');
-      return;
-    }
+  const handleYandexAuth = async () => {
+    setSubmitting(true);
+    clearOAuthError();
 
-    setSubmitting('register');
-    const result = await registerByEmail({
-      email: registerEmail.trim(),
-      displayName: registerDisplayName.trim(),
-      isAdmin: registerAsAdmin,
+    const result = await startYandexAuth({
+      displayName: displayName.trim(),
+      role,
     });
-    setSubmitting('none');
+
+    setSubmitting(false);
 
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
 
-    toast.success(result.message ?? 'Письмо отправлено. Проверь почту.');
+    toast.success(result.message ?? 'Открываю вход через Яндекс ID...');
   };
 
   return (
@@ -100,11 +95,11 @@ export default function AuthPage() {
 
               <div className="max-w-2xl space-y-4">
                 <h1 className="text-4xl font-semibold tracking-tight text-stone-900 sm:text-5xl">
-                  Регистрация и вход по ссылке из email
+                  Вход и регистрация через Яндекс ID
                 </h1>
                 <p className="max-w-xl text-base leading-7 text-stone-600">
-                  Новый пользователь может зарегистрироваться как сотрудник или как администратор.
-                  После перехода по ссылке из письма профиль и роль создаются автоматически.
+                  Мы убрали нестабильный вход по письмам. Теперь новый пользователь выбирает роль,
+                  заходит через Яндекс, а система сама создаёт или восстанавливает профиль по email.
                 </p>
               </div>
             </div>
@@ -123,100 +118,99 @@ export default function AuthPage() {
 
         <Card className="border-stone-200 bg-white/95 shadow-xl shadow-stone-200/40">
           <CardContent className="space-y-6 p-6 sm:p-8">
-            <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600">
+            <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3 text-xs leading-5 text-stone-600">
               {hintText}
             </div>
 
-            {status === 'authenticated' ? (
+            {currentError ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                {currentError}
+              </div>
+            ) : null}
+
+            {status === 'authenticated' && access && landingPath ? (
               <div className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                 <p className="text-sm text-emerald-900">
-                  Ты уже вошёл{user?.email ? ` как ${user.email}` : ''}. Можно сразу перейти в приложение.
+                  Ты уже вошёл{user?.email ? ` как ${user.email}` : ''}. Доступ {access.role === 'admin' ? 'администратора' : 'сотрудника'} активен.
                 </p>
-                <Button onClick={() => navigate('/', { replace: true })} className="w-full bg-emerald-600 hover:bg-emerald-500">
+                <Button onClick={() => navigate(landingPath, { replace: true })} className="w-full bg-emerald-600 hover:bg-emerald-500">
                   Открыть приложение
                 </Button>
               </div>
             ) : null}
 
+            {status === 'authenticated' && !access ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                {isCompletingOAuth || appStatus === 'loading'
+                  ? 'Завершаю вход и привязываю профиль...'
+                  : 'Сессия есть, но профиль пока не собран. Нажми кнопку входа ещё раз с правильной ролью или дождись завершения привязки.'}
+              </div>
+            ) : null}
+
             <section className="space-y-4">
               <SectionTitle
-                title="Регистрация нового пользователя"
-                subtitle="Укажи email, имя и роль. Ссылка придёт на почту."
+                title="Продолжить через Яндекс"
+                subtitle="Для нового пользователя роль выбирается перед входом. Для уже зарегистрированного роль и имя ниже можно не менять."
               />
 
-              <Field label="Email">
+              <Field label="Как тебя показывать в системе (необязательно)">
                 <Input
-                  type="email"
-                  aria-label="Email"
-                  value={registerEmail}
-                  onChange={(event) => setRegisterEmail(event.target.value)}
-                  placeholder="you@example.com"
-                  disabled={isBaseDisabled}
+                  aria-label="Имя в системе"
+                  value={displayName}
+                  onChange={(event) => setDisplayName(event.target.value)}
+                  placeholder="Например, Ник"
+                  disabled={isBusy}
                 />
               </Field>
 
-              <Field label="Имя (необязательно)">
-                <Input
-                  aria-label="Имя"
-                  value={registerDisplayName}
-                  onChange={(event) => setRegisterDisplayName(event.target.value)}
-                  placeholder="Как тебя показывать в системе"
-                  disabled={isBaseDisabled}
-                />
-              </Field>
+              <div className="space-y-3">
+                <Label>Роль при первом входе</Label>
+                <RadioGroup
+                  value={role}
+                  onValueChange={(value) => setRole(value === 'admin' ? 'admin' : 'employee')}
+                  className="grid gap-3"
+                  disabled={isBusy}
+                >
+                  <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-stone-200 p-4 transition hover:border-orange-300">
+                    <RadioGroupItem value="employee" id="role-employee" className="mt-1" />
+                    <div className="space-y-1">
+                      <div className="font-medium text-stone-900">Сотрудник</div>
+                      <p className="text-sm leading-6 text-stone-600">
+                        Видит общий график, управляет только своими пожеланиями и своими выплатами.
+                      </p>
+                    </div>
+                  </label>
 
-              <label className="flex items-center gap-3 rounded-xl border p-3">
-                <Checkbox
-                  checked={registerAsAdmin}
-                  onCheckedChange={(checked) => setRegisterAsAdmin(checked === true)}
-                  disabled={isBaseDisabled}
-                />
-                <div className="text-sm">
-                  <div className="font-medium text-stone-900">Зарегистрировать как администратора</div>
-                  <div className="text-stone-600">Если админ уже существует, система отправит ссылку для входа вместо повторной регистрации.</div>
-                </div>
-              </label>
+                  <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-stone-200 p-4 transition hover:border-orange-300">
+                    <RadioGroupItem value="admin" id="role-admin" className="mt-1" />
+                    <div className="space-y-1">
+                      <div className="font-medium text-stone-900">Администратор</div>
+                      <p className="text-sm leading-6 text-stone-600">
+                        Полный доступ к сотрудникам, графику и выплатам. Активный администратор в системе может быть только один.
+                      </p>
+                    </div>
+                  </label>
+                </RadioGroup>
+              </div>
 
               <Button
                 className="w-full bg-orange-600 hover:bg-orange-500"
-                onClick={() => void handleRegister()}
-                disabled={!canSubmitRegistration}
+                onClick={() => void handleYandexAuth()}
+                disabled={isBusy}
               >
-                {submitting === 'register' ? 'Отправляю письмо...' : 'Зарегистрироваться по email'}
+                <LogIn className="h-4 w-4" />
+                {submitting ? 'Перенаправляю...' : 'Войти через Яндекс ID'}
               </Button>
             </section>
 
-            <section className="space-y-4 border-t pt-6">
-              <SectionTitle
-                title="Уже зарегистрирован?"
-                subtitle="Отправь себе новую ссылку для входа."
-              />
-
-              <Field label="Email для входа">
-                <Input
-                  type="email"
-                  aria-label="Email для входа"
-                  value={loginEmail}
-                  onChange={(event) => setLoginEmail(event.target.value)}
-                  placeholder="you@example.com"
-                  disabled={isBaseDisabled}
-                />
-              </Field>
-
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => void handleRequestLoginLink()}
-                disabled={!canSubmitLogin}
-              >
-                <MailCheck className="h-4 w-4" />
-                {submitting === 'login' ? 'Отправляю...' : 'Получить ссылку для входа'}
-              </Button>
-            </section>
+            <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4 text-sm leading-6 text-stone-600">
+              Если сотрудник уже создан администратором, входи через тот же Яндекс-аккаунт, где указан этот email.
+              Система сама привяжет профиль к сотруднику.
+            </div>
 
             {status === 'missing-config' ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                Supabase не настроен. Нужны `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`.
+                Нужны `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` и настройка провайдера `custom:yandex` в Supabase Auth.
               </div>
             ) : null}
           </CardContent>
@@ -238,7 +232,7 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid gap-2">
-      <label className="text-sm font-medium">{label}</label>
+      <Label className="text-sm font-medium">{label}</Label>
       {children}
     </div>
   );

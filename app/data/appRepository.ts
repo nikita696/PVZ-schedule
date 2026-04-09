@@ -1,4 +1,4 @@
-import { normalizeShiftStatus, type LegacyShiftStatus } from '../domain/shiftStatus';
+﻿import { normalizeShiftStatus, type LegacyShiftStatus } from '../domain/shiftStatus';
 import type {
   AddPaymentInput,
   Employee,
@@ -58,7 +58,7 @@ const LEGACY_SHIFT_STATUSES = new Set<LegacyShiftStatus>([
 
 const getClient = () => {
   if (!supabase) {
-    return errorResult('Supabase РЅРµ РЅР°СЃС‚СЂРѕРµРЅ. РџСЂРѕРІРµСЂСЊ `VITE_SUPABASE_URL` Рё `VITE_SUPABASE_ANON_KEY`.');
+    return errorResult('Supabase не настроен. Проверь VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY.');
   }
 
   return okResult(supabase);
@@ -243,9 +243,9 @@ const fetchAccessContext = async (authUserId: string): Promise<ActionResult<Acce
 
   let profile = profileResult.data;
   if (!profile || !profile.is_active) {
-    const ensureResult = await client.rpc('ensure_profile_from_registration');
+    const ensureResult = await client.rpc('ensure_profile_from_auth');
     if (ensureResult.error) {
-      if (/REGISTRATION_NOT_FOUND/i.test(ensureResult.error.message)) {
+      if (/REGISTRATION_NOT_FOUND|REGISTRATION_REQUIRED/i.test(ensureResult.error.message)) {
         return profile?.is_active === false
           ? errorResult(normalizeError('PROFILE_DISABLED'))
           : okResult(null);
@@ -420,45 +420,30 @@ export const fetchAppData = async (authUserId: string): Promise<ActionResult<App
   });
 };
 
-interface RequestRegistrationInput {
-  email: string;
-  role: 'admin' | 'employee';
-  displayName: string | null;
+interface EnsureProfileFromAuthInput {
+  desiredRole?: 'admin' | 'employee' | null;
+  displayName?: string | null;
 }
 
-export const requestRegistrationRemote = async (
-  input: RequestRegistrationInput,
-): Promise<ActionResult<void>> => {
+export const ensureProfileFromAuthRemote = async (
+  input: EnsureProfileFromAuthInput = {},
+): Promise<ActionResult<{ organizationId: string; role: 'admin' | 'employee' }>> => {
   const clientResult = getClient();
   if (!clientResult.ok) return clientResult;
 
-  const normalizedEmail = input.email.trim().toLowerCase();
-  if (!normalizedEmail) {
-    return errorResult('Укажи email.');
-  }
-
-  const { error } = await clientResult.data.rpc('request_registration', {
-    email_input: normalizedEmail,
-    desired_role_input: input.role,
+  const { data, error } = await clientResult.data.rpc('ensure_profile_from_auth', {
+    desired_role_input: input.desiredRole ?? null,
     display_name_input: input.displayName?.trim() || null,
   });
 
   if (error) {
-    if (/ADMIN_ALREADY_EXISTS/i.test(error.message)) {
-      return errorResult('ADMIN_ALREADY_EXISTS');
-    }
-
-    if (/user already registered|duplicate key value violates unique constraint/i.test(error.message)) {
-      return errorResult('ACCOUNT_ALREADY_EXISTS');
-    }
-
     return errorResult(normalizeError(error.message));
   }
 
-  return okResult(
-    undefined,
-    'Письмо для входа отправлено на почту. Перейди по ссылке из него, чтобы завершить регистрацию.',
-  );
+  return okResult({
+    organizationId: data.organization_id,
+    role: data.role,
+  });
 };
 
 interface CreateEmployeeInput {
@@ -483,7 +468,7 @@ export const createEmployee = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(mapEmployee(data), 'Сотрудник добавлен.');
+  return okResult(mapEmployee(data), 'РЎРѕС‚СЂСѓРґРЅРёРє РґРѕР±Р°РІР»РµРЅ.');
 };
 
 export const updateEmployeeRateRemote = async (
@@ -502,7 +487,7 @@ export const updateEmployeeRateRemote = async (
 
   if (error) return errorResult(normalizeError(error.message));
   void access;
-  return okResult(mapEmployee(data), 'Ставка обновлена.');
+  return okResult(mapEmployee(data), 'РЎС‚Р°РІРєР° РѕР±РЅРѕРІР»РµРЅР°.');
 };
 
 export const archiveEmployeeRemote = async (
@@ -518,7 +503,7 @@ export const archiveEmployeeRemote = async (
 
   if (error) return errorResult(normalizeError(error.message));
   void access;
-  return okResult(mapEmployee(data), 'Сотрудник отправлен в архив.');
+  return okResult(mapEmployee(data), 'РЎРѕС‚СЂСѓРґРЅРёРє РѕС‚РїСЂР°РІР»РµРЅ РІ Р°СЂС…РёРІ.');
 };
 
 export const deleteArchivedEmployeeRemote = async (
@@ -536,7 +521,7 @@ export const deleteArchivedEmployeeRemote = async (
     .eq('status', 'archived');
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(undefined, 'Архивный сотрудник удален.');
+  return okResult(undefined, 'РђСЂС…РёРІРЅС‹Р№ СЃРѕС‚СЂСѓРґРЅРёРє СѓРґР°Р»РµРЅ.');
 };
 
 export const upsertShiftRemote = async (
@@ -599,7 +584,7 @@ export const createPaymentRemote = async (
   if (error) return errorResult(normalizeError(error.message));
   void options.authUserId;
   void options.access;
-  return okResult(mapPayment(data), 'Выплата сохранена.');
+  return okResult(mapPayment(data), 'Р’С‹РїР»Р°С‚Р° СЃРѕС…СЂР°РЅРµРЅР°.');
 };
 
 export const updatePaymentRemote = async (
@@ -621,7 +606,7 @@ export const updatePaymentRemote = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(mapPayment(data), 'Выплата обновлена.');
+  return okResult(mapPayment(data), 'Р’С‹РїР»Р°С‚Р° РѕР±РЅРѕРІР»РµРЅР°.');
 };
 
 export const confirmPaymentRemote = async (
@@ -635,7 +620,7 @@ export const confirmPaymentRemote = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(mapPayment(data), 'Выплата подтверждена.');
+  return okResult(mapPayment(data), 'Р’С‹РїР»Р°С‚Р° РїРѕРґС‚РІРµСЂР¶РґРµРЅР°.');
 };
 
 export const rejectPaymentRemote = async (
@@ -649,7 +634,7 @@ export const rejectPaymentRemote = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(mapPayment(data), 'Выплата отклонена.');
+  return okResult(mapPayment(data), 'Р’С‹РїР»Р°С‚Р° РѕС‚РєР»РѕРЅРµРЅР°.');
 };
 
 export const deletePaymentRemote = async (
@@ -663,7 +648,7 @@ export const deletePaymentRemote = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(undefined, 'Выплата удалена.');
+  return okResult(undefined, 'Р’С‹РїР»Р°С‚Р° СѓРґР°Р»РµРЅР°.');
 };
 
 export const setScheduleMonthStatusRemote = async (
@@ -696,13 +681,13 @@ export const replaceUserDataRemote = async (
 
   for (const shift of importedData.shifts) {
     if (!employeeByLegacyId.has(shift.employeeId)) {
-      return errorResult('Р’ backup РµСЃС‚СЊ СЃРјРµРЅС‹ СЃ РЅРµРёР·РІРµСЃС‚РЅС‹РјРё СЃРѕС‚СЂСѓРґРЅРёРєР°РјРё.');
+      return errorResult('Р вЂ™ backup Р ВµРЎРѓРЎвЂљРЎРЉ РЎРѓР СР ВµР Р…РЎвЂ№ РЎРѓ Р Р…Р ВµР С‘Р В·Р Р†Р ВµРЎРѓРЎвЂљР Р…РЎвЂ№Р СР С‘ РЎРѓР С•РЎвЂљРЎР‚РЎС“Р Т‘Р Р…Р С‘Р С”Р В°Р СР С‘.');
     }
   }
 
   for (const payment of importedData.payments) {
     if (!employeeByLegacyId.has(payment.employeeId)) {
-      return errorResult('Р’ backup РµСЃС‚СЊ РІС‹РїР»Р°С‚С‹ СЃ РЅРµРёР·РІРµСЃС‚РЅС‹РјРё СЃРѕС‚СЂСѓРґРЅРёРєР°РјРё.');
+      return errorResult('Р вЂ™ backup Р ВµРЎРѓРЎвЂљРЎРЉ Р Р†РЎвЂ№Р С—Р В»Р В°РЎвЂљРЎвЂ№ РЎРѓ Р Р…Р ВµР С‘Р В·Р Р†Р ВµРЎРѓРЎвЂљР Р…РЎвЂ№Р СР С‘ РЎРѓР С•РЎвЂљРЎР‚РЎС“Р Т‘Р Р…Р С‘Р С”Р В°Р СР С‘.');
     }
   }
 
@@ -837,3 +822,7 @@ export const replaceUserDataRemote = async (
 
   return fetchAppData(authUserId);
 };
+
+
+
+

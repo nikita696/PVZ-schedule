@@ -1,4 +1,4 @@
-import { Suspense, type ReactNode } from 'react';
+﻿import { Suspense, type ReactNode } from 'react';
 import {
   Navigate,
   Outlet,
@@ -122,7 +122,7 @@ function StubPage({ title }: { title: string }) {
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
       <div className="rounded-xl border bg-white p-5 text-sm text-muted-foreground">
-        Раздел {title} еще в работе. Основной рабочий поток сейчас находится в календаре, сотрудниках и выплатах.
+        Раздел {title} ещё в работе. Основной поток сейчас находится в календаре, сотрудниках и выплатах.
       </div>
     </div>
   );

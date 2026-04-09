@@ -1,50 +1,70 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+﻿import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
-import { requestRegistrationRemote } from '../data/appRepository';
+import { ensureProfileFromAuthRemote } from '../data/appRepository';
 import { errorResult, okResult, type ActionResult } from '../lib/result';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { translateSupabaseError } from '../lib/supabaseErrors';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'missing-config';
+type AuthRole = 'admin' | 'employee';
 
-interface RegisterByEmailInput {
-  email: string;
+interface StartYandexAuthInput {
   displayName: string;
-  isAdmin: boolean;
+  role: AuthRole;
 }
 
 interface AuthContextType {
   status: AuthStatus;
   session: Session | null;
   user: User | null;
-  requestLoginLink: (email: string) => Promise<ActionResult<void>>;
-  registerByEmail: (input: RegisterByEmailInput) => Promise<ActionResult<void>>;
+  isCompletingOAuth: boolean;
+  oauthError: string | null;
+  startYandexAuth: (input: StartYandexAuthInput) => Promise<ActionResult<void>>;
+  clearOAuthError: () => void;
   signOut: () => Promise<ActionResult<void>>;
+}
+
+interface PendingYandexRegistration {
+  role: AuthRole;
+  displayName: string;
+  createdAt: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const EXISTING_ACCOUNT_ERRORS = new Set(['ADMIN_ALREADY_EXISTS', 'ACCOUNT_ALREADY_EXISTS']);
 const DEFAULT_APP_URL = 'https://pvz-schedule.vercel.app';
+const DEFAULT_YANDEX_PROVIDER = 'custom:yandex';
+const DEFAULT_YANDEX_SCOPES = 'login:email login:info';
+const PENDING_YANDEX_STORAGE_KEY = 'pvz-schedule.pending-yandex-registration';
 
-const getEmailRedirectTo = (): string | undefined => {
+const getAppUrl = (): string => {
   const configuredAppUrl = import.meta.env.VITE_APP_URL?.trim();
 
   if (configuredAppUrl) {
-    return `${configuredAppUrl.replace(/\/+$/, '')}/auth/login`;
+    return configuredAppUrl.replace(/\/+$/, '');
   }
 
   if (typeof window === 'undefined') {
-    return `${DEFAULT_APP_URL}/auth/login`;
+    return DEFAULT_APP_URL;
   }
 
   const hostname = window.location.hostname.toLowerCase();
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return `${window.location.origin}/auth/login`;
+    return window.location.origin;
   }
 
-  return `${DEFAULT_APP_URL}/auth/login`;
+  return DEFAULT_APP_URL;
 };
+
+const getAuthRedirectTo = (): string => `${getAppUrl()}/auth/login`;
+
+const getYandexProvider = (): string => (
+  import.meta.env.VITE_SUPABASE_YANDEX_PROVIDER?.trim() || DEFAULT_YANDEX_PROVIDER
+);
+
+const getYandexScopes = (): string => (
+  import.meta.env.VITE_SUPABASE_YANDEX_SCOPES?.trim() || DEFAULT_YANDEX_SCOPES
+);
 
 const ensureSupabaseClient = (): ActionResult<NonNullable<typeof supabase>> => {
   if (!supabase) {
@@ -54,14 +74,86 @@ const ensureSupabaseClient = (): ActionResult<NonNullable<typeof supabase>> => {
   return okResult(supabase);
 };
 
-const isAlreadyRegisteredError = (message: string) => /user already registered/i.test(message);
+const readPendingYandexRegistration = (): PendingYandexRegistration | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const raw = window.localStorage.getItem(PENDING_YANDEX_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<PendingYandexRegistration>;
+    if (parsed.role !== 'admin' && parsed.role !== 'employee') {
+      return null;
+    }
+
+    return {
+      role: parsed.role,
+      displayName: typeof parsed.displayName === 'string' ? parsed.displayName : '',
+      createdAt: typeof parsed.createdAt === 'string' ? parsed.createdAt : new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+};
+
+const savePendingYandexRegistration = (input: StartYandexAuthInput) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const payload: PendingYandexRegistration = {
+    role: input.role,
+    displayName: input.displayName.trim(),
+    createdAt: new Date().toISOString(),
+  };
+
+  window.localStorage.setItem(PENDING_YANDEX_STORAGE_KEY, JSON.stringify(payload));
+};
+
+const clearPendingYandexRegistration = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.removeItem(PENDING_YANDEX_STORAGE_KEY);
+};
+
+const readAuthErrorFromLocation = (): string | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const url = new URL(window.location.href);
+  const searchParams = url.searchParams;
+  const hashParams = new URLSearchParams(url.hash.startsWith('#') ? url.hash.slice(1) : url.hash);
+
+  const rawMessage = searchParams.get('error_description')
+    ?? hashParams.get('error_description')
+    ?? searchParams.get('error')
+    ?? hashParams.get('error');
+
+  if (!rawMessage) {
+    return null;
+  }
+
+  return translateSupabaseError(decodeURIComponent(rawMessage.replace(/\+/g, ' ')));
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<AuthStatus>(isSupabaseConfigured ? 'loading' : 'missing-config');
+  const [isCompletingOAuth, setIsCompletingOAuth] = useState(false);
+  const [oauthError, setOAuthError] = useState<string | null>(null);
+  const sessionUserId = session?.user?.id ?? null;
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase) {
+      return;
+    }
 
     let isActive = true;
 
@@ -73,6 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) {
         setSession(null);
         setStatus('unauthenticated');
+        setOAuthError(translateSupabaseError(error.message));
         return;
       }
 
@@ -91,78 +184,89 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const sendMagicLink = useCallback(async (
-    email: string,
-    shouldCreateUser: boolean,
-  ): Promise<ActionResult<void>> => {
+  useEffect(() => {
+    const locationError = readAuthErrorFromLocation();
+    if (locationError) {
+      setOAuthError(locationError);
+    }
+  }, [sessionUserId]);
+
+  useEffect(() => {
+    if (!sessionUserId) {
+      setIsCompletingOAuth(false);
+      return;
+    }
+
+    const pendingRegistration = readPendingYandexRegistration();
+    if (!pendingRegistration) {
+      setIsCompletingOAuth(false);
+      return;
+    }
+
+    let isActive = true;
+    setIsCompletingOAuth(true);
+    setOAuthError(null);
+
+    void (async () => {
+      const result = await ensureProfileFromAuthRemote({
+        desiredRole: pendingRegistration.role,
+        displayName: pendingRegistration.displayName,
+      });
+
+      if (!isActive) {
+        return;
+      }
+
+      clearPendingYandexRegistration();
+
+      if (!result.ok) {
+        setOAuthError(result.error);
+        setIsCompletingOAuth(false);
+        return;
+      }
+
+      setOAuthError(null);
+      setIsCompletingOAuth(false);
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, [sessionUserId]);
+
+  const startYandexAuth = useCallback(async (input: StartYandexAuthInput): Promise<ActionResult<void>> => {
     const clientResult = ensureSupabaseClient();
     if (!clientResult.ok) return clientResult;
 
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail) {
-      return errorResult('Укажи email.');
-    }
+    savePendingYandexRegistration(input);
+    setOAuthError(null);
 
-    const signIn = async (createUser: boolean) => clientResult.data.auth.signInWithOtp({
-      email: normalizedEmail,
+    const { error } = await clientResult.data.auth.signInWithOAuth({
+      provider: getYandexProvider() as never,
       options: {
-        shouldCreateUser: createUser,
-        emailRedirectTo: getEmailRedirectTo(),
+        redirectTo: getAuthRedirectTo(),
+        scopes: getYandexScopes(),
       },
     });
 
-    let { error } = await signIn(shouldCreateUser);
-
-    if (error && shouldCreateUser && isAlreadyRegisteredError(error.message)) {
-      ({ error } = await signIn(false));
-    }
-
     if (error) {
+      clearPendingYandexRegistration();
       return errorResult(translateSupabaseError(error.message));
     }
 
-    return okResult(undefined, 'Ссылка для входа отправлена на почту.');
+    return okResult(undefined, 'Открываю вход через Яндекс ID...');
   }, []);
 
-  const requestLoginLink = useCallback(async (email: string): Promise<ActionResult<void>> => (
-    sendMagicLink(email, false)
-  ), [sendMagicLink]);
-
-  const registerByEmail = useCallback(async (input: RegisterByEmailInput): Promise<ActionResult<void>> => {
-    const role = input.isAdmin ? 'admin' : 'employee';
-    const registrationResult = await requestRegistrationRemote({
-      email: input.email,
-      role,
-      displayName: input.displayName.trim() || null,
-    });
-
-    if (!registrationResult.ok) {
-      if (EXISTING_ACCOUNT_ERRORS.has(registrationResult.error)) {
-        const loginResult = await sendMagicLink(input.email, false);
-        if (loginResult.ok) {
-          return okResult(undefined, 'Аккаунт уже существует. Я отправил ссылку для входа на почту.');
-        }
-      }
-
-      return registrationResult;
-    }
-
-    const linkResult = await sendMagicLink(input.email, true);
-    if (!linkResult.ok) {
-      return linkResult;
-    }
-
-    return okResult(
-      undefined,
-      input.isAdmin
-        ? 'Регистрация администратора начата. Проверь почту.'
-        : 'Регистрация сотрудника начата. Проверь почту.',
-    );
-  }, [sendMagicLink]);
+  const clearOAuthError = useCallback(() => {
+    setOAuthError(null);
+  }, []);
 
   const signOut = useCallback(async (): Promise<ActionResult<void>> => {
     const clientResult = ensureSupabaseClient();
     if (!clientResult.ok) return clientResult;
+
+    clearPendingYandexRegistration();
+    setOAuthError(null);
 
     const { error } = await clientResult.data.auth.signOut();
     if (error) return errorResult(translateSupabaseError(error.message));
@@ -174,10 +278,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     status,
     session,
     user: session?.user ?? null,
-    requestLoginLink,
-    registerByEmail,
+    isCompletingOAuth,
+    oauthError,
+    startYandexAuth,
+    clearOAuthError,
     signOut,
-  }), [registerByEmail, requestLoginLink, session, signOut, status]);
+  }), [clearOAuthError, isCompletingOAuth, oauthError, session, signOut, startYandexAuth, status]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -397,6 +397,16 @@ export interface Database {
           role: 'admin' | 'employee';
         };
       };
+      ensure_profile_from_auth: {
+        Args: {
+          desired_role_input?: 'admin' | 'employee' | string | null;
+          display_name_input?: string | null;
+        };
+        Returns: {
+          organization_id: string;
+          role: 'admin' | 'employee';
+        };
+      };
       create_employee_record: {
         Args: {
           name_input: string;
@@ -505,6 +515,7 @@ export const supabase = isSupabaseConfigured
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
+        flowType: 'pkce',
       },
     })
   : null;
