@@ -12,6 +12,8 @@
   { pattern: /INVALID_ROLE/i, message: 'Указана неверная роль.' },
   { pattern: /EMAIL_NOT_CONFIRMED/i, message: 'Подтверди email через провайдера входа.' },
   { pattern: /REGISTRATION_NOT_FOUND|REGISTRATION_REQUIRED/i, message: 'Для этого аккаунта не найдена регистрация. Выбери роль и войди ещё раз.' },
+  { pattern: /ACCOUNT_ROLE_CONFLICT_ADMIN/i, message: 'Этот email уже привязан к администратору. Войди как администратор или используй другой аккаунт.' },
+  { pattern: /ACCOUNT_ROLE_CONFLICT_EMPLOYEE/i, message: 'Этот email уже привязан к сотруднику. Войди как сотрудник или используй другой аккаунт.' },
   { pattern: /ADMIN_ALREADY_EXISTS/i, message: 'Администратор уже зарегистрирован. Войди под его аккаунтом.' },
   { pattern: /ADMIN_REQUIRED/i, message: 'Сначала должен зарегистрироваться администратор.' },
   { pattern: /PROFILE_REQUIRED/i, message: 'Профиль ещё не готов. Попробуй войти ещё раз.' },
