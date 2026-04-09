@@ -468,7 +468,7 @@ export const createEmployee = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(mapEmployee(data), 'РЎРѕС‚СЂСѓРґРЅРёРє РґРѕР±Р°РІР»РµРЅ.');
+  return okResult(mapEmployee(data), 'Сотрудник добавлен.');
 };
 
 export const updateEmployeeRateRemote = async (
@@ -487,7 +487,7 @@ export const updateEmployeeRateRemote = async (
 
   if (error) return errorResult(normalizeError(error.message));
   void access;
-  return okResult(mapEmployee(data), 'РЎС‚Р°РІРєР° РѕР±РЅРѕРІР»РµРЅР°.');
+  return okResult(mapEmployee(data), 'Ставка обновлена.');
 };
 
 export const archiveEmployeeRemote = async (
@@ -503,7 +503,7 @@ export const archiveEmployeeRemote = async (
 
   if (error) return errorResult(normalizeError(error.message));
   void access;
-  return okResult(mapEmployee(data), 'РЎРѕС‚СЂСѓРґРЅРёРє РѕС‚РїСЂР°РІР»РµРЅ РІ Р°СЂС…РёРІ.');
+  return okResult(mapEmployee(data), 'Сотрудник отправлен в архив.');
 };
 
 export const deleteArchivedEmployeeRemote = async (
@@ -521,7 +521,7 @@ export const deleteArchivedEmployeeRemote = async (
     .eq('status', 'archived');
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(undefined, 'РђСЂС…РёРІРЅС‹Р№ СЃРѕС‚СЂСѓРґРЅРёРє СѓРґР°Р»РµРЅ.');
+  return okResult(undefined, 'Архивный сотрудник удален.');
 };
 
 export const upsertShiftRemote = async (
@@ -584,7 +584,7 @@ export const createPaymentRemote = async (
   if (error) return errorResult(normalizeError(error.message));
   void options.authUserId;
   void options.access;
-  return okResult(mapPayment(data), 'Р’С‹РїР»Р°С‚Р° СЃРѕС…СЂР°РЅРµРЅР°.');
+  return okResult(mapPayment(data), 'Выплата сохранена.');
 };
 
 export const updatePaymentRemote = async (
@@ -606,7 +606,7 @@ export const updatePaymentRemote = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(mapPayment(data), 'Р’С‹РїР»Р°С‚Р° РѕР±РЅРѕРІР»РµРЅР°.');
+  return okResult(mapPayment(data), 'Выплата обновлена.');
 };
 
 export const confirmPaymentRemote = async (
@@ -620,7 +620,7 @@ export const confirmPaymentRemote = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(mapPayment(data), 'Р’С‹РїР»Р°С‚Р° РїРѕРґС‚РІРµСЂР¶РґРµРЅР°.');
+  return okResult(mapPayment(data), 'Выплата подтверждена.');
 };
 
 export const rejectPaymentRemote = async (
@@ -634,7 +634,7 @@ export const rejectPaymentRemote = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(mapPayment(data), 'Р’С‹РїР»Р°С‚Р° РѕС‚РєР»РѕРЅРµРЅР°.');
+  return okResult(mapPayment(data), 'Выплата отклонена.');
 };
 
 export const deletePaymentRemote = async (
@@ -648,7 +648,7 @@ export const deletePaymentRemote = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(undefined, 'Р’С‹РїР»Р°С‚Р° СѓРґР°Р»РµРЅР°.');
+  return okResult(undefined, 'Выплата удалена.');
 };
 
 export const setScheduleMonthStatusRemote = async (
@@ -681,13 +681,13 @@ export const replaceUserDataRemote = async (
 
   for (const shift of importedData.shifts) {
     if (!employeeByLegacyId.has(shift.employeeId)) {
-      return errorResult('Р вЂ™ backup Р ВµРЎРѓРЎвЂљРЎРЉ РЎРѓР СР ВµР Р…РЎвЂ№ РЎРѓ Р Р…Р ВµР С‘Р В·Р Р†Р ВµРЎРѓРЎвЂљР Р…РЎвЂ№Р СР С‘ РЎРѓР С•РЎвЂљРЎР‚РЎС“Р Т‘Р Р…Р С‘Р С”Р В°Р СР С‘.');
+      return errorResult('В backup есть смены с неизвестными сотрудниками.');
     }
   }
 
   for (const payment of importedData.payments) {
     if (!employeeByLegacyId.has(payment.employeeId)) {
-      return errorResult('Р вЂ™ backup Р ВµРЎРѓРЎвЂљРЎРЉ Р Р†РЎвЂ№Р С—Р В»Р В°РЎвЂљРЎвЂ№ РЎРѓ Р Р…Р ВµР С‘Р В·Р Р†Р ВµРЎРѓРЎвЂљР Р…РЎвЂ№Р СР С‘ РЎРѓР С•РЎвЂљРЎР‚РЎС“Р Т‘Р Р…Р С‘Р С”Р В°Р СР С‘.');
+      return errorResult('В backup есть выплаты с неизвестными сотрудниками.');
     }
   }
 
