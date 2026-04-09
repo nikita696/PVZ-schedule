@@ -150,7 +150,7 @@ export default function PaymentsPage() {
               </h1>
               <p className="mt-1 text-sm text-stone-600">
                 {isOwner
-                  ? 'Подтверждай, редактируй или отклоняй запросы сотрудников. В расчет долга попадают только подтвержденные выплаты.'
+                  ? 'Подтверждай, редактируй или отклоняй запросы сотрудников. В долг попадают только подтвержденные выплаты.'
                   : 'Ты можешь создать запрос на выплату и редактировать его, пока администратор не принял решение.'}
               </p>
             </div>
@@ -286,7 +286,7 @@ export default function PaymentsPage() {
             </Table>
 
             {visiblePayments.length === 0 ? (
-              <p className="pt-4 text-sm text-muted-foreground">Пока нет ни одной выплаты.</p>
+              <p className="pt-4 text-sm text-muted-foreground">Пока здесь нет выплат.</p>
             ) : null}
           </CardContent>
         </Card>

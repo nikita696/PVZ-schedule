@@ -58,7 +58,7 @@ const LEGACY_SHIFT_STATUSES = new Set<LegacyShiftStatus>([
 
 const getClient = () => {
   if (!supabase) {
-    return errorResult('Supabase не настроен. Проверь `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`.');
+    return errorResult('Supabase РЅРµ РЅР°СЃС‚СЂРѕРµРЅ. РџСЂРѕРІРµСЂСЊ `VITE_SUPABASE_URL` Рё `VITE_SUPABASE_ANON_KEY`.');
   }
 
   return okResult(supabase);
@@ -84,6 +84,10 @@ const normalizePaymentStatus = (value: unknown): PaymentStatus => {
 
 const isMissingRelationError = (message: string): boolean => (
   /does not exist|relation .* does not exist/i.test(message)
+);
+
+const isMissingFunctionError = (message: string): boolean => (
+  /function .* does not exist|does not exist/i.test(message)
 );
 
 const mapEmployee = (row: EmployeeRow): Employee => ({
@@ -238,11 +242,13 @@ const fetchAccessContext = async (authUserId: string): Promise<ActionResult<Acce
   }
 
   let profile = profileResult.data;
-  if (!profile) {
+  if (!profile || !profile.is_active) {
     const ensureResult = await client.rpc('ensure_profile_from_registration');
     if (ensureResult.error) {
       if (/REGISTRATION_NOT_FOUND/i.test(ensureResult.error.message)) {
-        return okResult(null);
+        return profile?.is_active === false
+          ? errorResult(normalizeError('PROFILE_DISABLED'))
+          : okResult(null);
       }
 
       return errorResult(normalizeError(ensureResult.error.message));
@@ -265,7 +271,12 @@ const fetchAccessContext = async (authUserId: string): Promise<ActionResult<Acce
   }
 
   if (!profile.is_active) {
-    return errorResult('Твой профиль отключен. Обратись к администратору.');
+    return errorResult(normalizeError('PROFILE_DISABLED'));
+  }
+
+  const membershipResult = await client.rpc('ensure_profile_membership');
+  if (membershipResult.error && !isMissingFunctionError(membershipResult.error.message)) {
+    return errorResult(normalizeError(membershipResult.error.message));
   }
 
   const organizationResult = await client
@@ -282,7 +293,7 @@ const fetchAccessContext = async (authUserId: string): Promise<ActionResult<Acce
     .from('employees')
     .select('id')
     .eq('organization_id', profile.organization_id)
-    .eq('profile_id', authUserId)
+    .or(`profile_id.eq.${authUserId},auth_user_id.eq.${authUserId}`)
     .neq('status', 'archived')
     .limit(1)
     .maybeSingle();
@@ -432,11 +443,21 @@ export const requestRegistrationRemote = async (
     display_name_input: input.displayName?.trim() || null,
   });
 
-  if (error) return errorResult(normalizeError(error.message));
+  if (error) {
+    if (/ADMIN_ALREADY_EXISTS/i.test(error.message)) {
+      return errorResult('ADMIN_ALREADY_EXISTS');
+    }
+
+    if (/user already registered|duplicate key value violates unique constraint/i.test(error.message)) {
+      return errorResult('ACCOUNT_ALREADY_EXISTS');
+    }
+
+    return errorResult(normalizeError(error.message));
+  }
 
   return okResult(
     undefined,
-    'Ссылка для входа отправлена на почту. Перейди по ней, чтобы завершить регистрацию.',
+    'Письмо для входа отправлено на почту. Перейди по ссылке из него, чтобы завершить регистрацию.',
   );
 };
 
@@ -675,13 +696,13 @@ export const replaceUserDataRemote = async (
 
   for (const shift of importedData.shifts) {
     if (!employeeByLegacyId.has(shift.employeeId)) {
-      return errorResult('В backup есть смены с неизвестными сотрудниками.');
+      return errorResult('Р’ backup РµСЃС‚СЊ СЃРјРµРЅС‹ СЃ РЅРµРёР·РІРµСЃС‚РЅС‹РјРё СЃРѕС‚СЂСѓРґРЅРёРєР°РјРё.');
     }
   }
 
   for (const payment of importedData.payments) {
     if (!employeeByLegacyId.has(payment.employeeId)) {
-      return errorResult('В backup есть выплаты с неизвестными сотрудниками.');
+      return errorResult('Р’ backup РµСЃС‚СЊ РІС‹РїР»Р°С‚С‹ СЃ РЅРµРёР·РІРµСЃС‚РЅС‹РјРё СЃРѕС‚СЂСѓРґРЅРёРєР°РјРё.');
     }
   }
 

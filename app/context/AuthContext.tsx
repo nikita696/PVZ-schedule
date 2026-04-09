@@ -24,6 +24,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const EXISTING_ACCOUNT_ERRORS = new Set(['ADMIN_ALREADY_EXISTS', 'ACCOUNT_ALREADY_EXISTS']);
+
 const getEmailRedirectTo = (): string | undefined => {
   if (typeof window === 'undefined') return undefined;
   return `${window.location.origin}/auth/login`;
@@ -36,6 +38,8 @@ const ensureSupabaseClient = (): ActionResult<NonNullable<typeof supabase>> => {
 
   return okResult(supabase);
 };
+
+const isAlreadyRegisteredError = (message: string) => /user already registered/i.test(message);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -84,13 +88,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return errorResult('Укажи email.');
     }
 
-    const { error } = await clientResult.data.auth.signInWithOtp({
+    const signIn = async (createUser: boolean) => clientResult.data.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
-        shouldCreateUser,
+        shouldCreateUser: createUser,
         emailRedirectTo: getEmailRedirectTo(),
       },
     });
+
+    let { error } = await signIn(shouldCreateUser);
+
+    if (error && shouldCreateUser && isAlreadyRegisteredError(error.message)) {
+      ({ error } = await signIn(false));
+    }
 
     if (error) {
       return errorResult(translateSupabaseError(error.message));
@@ -110,7 +120,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role,
       displayName: input.displayName.trim() || null,
     });
+
     if (!registrationResult.ok) {
+      if (EXISTING_ACCOUNT_ERRORS.has(registrationResult.error)) {
+        const loginResult = await sendMagicLink(input.email, false);
+        if (loginResult.ok) {
+          return okResult(undefined, 'Аккаунт уже существует. Я отправил ссылку для входа на почту.');
+        }
+      }
+
       return registrationResult;
     }
 

@@ -17,12 +17,12 @@ const FEATURE_CARDS = [
   {
     icon: Shield,
     title: 'Один администратор',
-    body: 'Только один активный администратор управляет ПВЗ. Второй админ системой не допускается.',
+    body: 'В системе может быть только один активный администратор. Для него повторная регистрация не нужна.',
   },
   {
     icon: UserRoundPlus,
-    title: 'Регистрация по email',
-    body: 'Новый пользователь получает magic link на почту, а профиль и роль создаются автоматически.',
+    title: 'Вход по email-ссылке',
+    body: 'Пользователь получает magic link на почту и входит без пароля.',
   },
 ];
 
@@ -30,7 +30,7 @@ const isValidEmail = (value: string) => value.trim().length > 3 && value.include
 
 export default function AuthPage() {
   const navigate = useNavigate();
-  const { requestLoginLink, registerByEmail, status } = useAuth();
+  const { requestLoginLink, registerByEmail, status, user } = useAuth();
 
   const [loginEmail, setLoginEmail] = useState('');
   const [registerEmail, setRegisterEmail] = useState('');
@@ -45,7 +45,7 @@ export default function AuthPage() {
   const hintText = useMemo(() => (
     status === 'missing-config'
       ? 'Supabase пока не настроен. Проверь переменные окружения.'
-      : 'После отправки письма просто открой ссылку из почты — пароль не нужен.'
+      : 'Если администратор уже зарегистрирован, используй нижнюю форму входа. Повторно создавать админа не нужно.'
   ), [status]);
 
   const handleRequestLoginLink = async () => {
@@ -85,7 +85,7 @@ export default function AuthPage() {
       return;
     }
 
-    toast.success(result.message ?? 'Регистрация начата. Проверь почту.');
+    toast.success(result.message ?? 'Письмо отправлено. Проверь почту.');
   };
 
   return (
@@ -100,11 +100,11 @@ export default function AuthPage() {
 
               <div className="max-w-2xl space-y-4">
                 <h1 className="text-4xl font-semibold tracking-tight text-stone-900 sm:text-5xl">
-                  Регистрация и вход по ссылке из email.
+                  Регистрация и вход по ссылке из email
                 </h1>
                 <p className="max-w-xl text-base leading-7 text-stone-600">
                   Новый пользователь может зарегистрироваться как сотрудник или как администратор.
-                  После подтверждения письма профиль автоматически создается в базе.
+                  После перехода по ссылке из письма профиль и роль создаются автоматически.
                 </p>
               </div>
             </div>
@@ -130,7 +130,7 @@ export default function AuthPage() {
             {status === 'authenticated' ? (
               <div className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                 <p className="text-sm text-emerald-900">
-                  Ты уже вошел. Можно сразу перейти в приложение.
+                  Ты уже вошёл{user?.email ? ` как ${user.email}` : ''}. Можно сразу перейти в приложение.
                 </p>
                 <Button onClick={() => navigate('/', { replace: true })} className="w-full bg-emerald-600 hover:bg-emerald-500">
                   Открыть приложение
@@ -141,7 +141,7 @@ export default function AuthPage() {
             <section className="space-y-4">
               <SectionTitle
                 title="Регистрация нового пользователя"
-                subtitle="Укажи email, имя и роль. Ссылка придет на почту."
+                subtitle="Укажи email, имя и роль. Ссылка придёт на почту."
               />
 
               <Field label="Email">
@@ -173,7 +173,7 @@ export default function AuthPage() {
                 />
                 <div className="text-sm">
                   <div className="font-medium text-stone-900">Зарегистрировать как администратора</div>
-                  <div className="text-stone-600">В системе может существовать только один активный администратор.</div>
+                  <div className="text-stone-600">Если админ уже существует, система отправит ссылку для входа вместо повторной регистрации.</div>
                 </div>
               </label>
 
