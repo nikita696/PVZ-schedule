@@ -3,11 +3,68 @@ import { createClient } from '@supabase/supabase-js';
 export interface Database {
   public: {
     Tables: {
+      organizations: {
+        Row: {
+          id: string;
+          name: string;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      profiles: {
+        Row: {
+          id: string;
+          organization_id: string;
+          role: 'admin' | 'employee';
+          display_name: string;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          organization_id: string;
+          role: 'admin' | 'employee';
+          display_name?: string;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          role?: 'admin' | 'employee';
+          display_name?: string;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       employees: {
         Row: {
           id: string;
           user_id: string;
+          organization_id: string;
+          profile_id: string | null;
           auth_user_id: string | null;
+          work_email: string | null;
+          status: 'pending' | 'active' | 'archived';
+          created_by_profile_id: string | null;
           is_owner: boolean;
           hired_at: string | null;
           name: string;
@@ -20,7 +77,12 @@ export interface Database {
         Insert: {
           id?: string;
           user_id: string;
+          organization_id: string;
+          profile_id?: string | null;
           auth_user_id?: string | null;
+          work_email?: string | null;
+          status?: 'pending' | 'active' | 'archived';
+          created_by_profile_id?: string | null;
           is_owner?: boolean;
           hired_at?: string | null;
           name: string;
@@ -33,7 +95,12 @@ export interface Database {
         Update: {
           id?: string;
           user_id?: string;
+          organization_id?: string;
+          profile_id?: string | null;
           auth_user_id?: string | null;
+          work_email?: string | null;
+          status?: 'pending' | 'active' | 'archived';
+          created_by_profile_id?: string | null;
           is_owner?: boolean;
           hired_at?: string | null;
           name?: string;
@@ -48,30 +115,36 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
+          organization_id: string;
           employee_id: string;
           work_date: string;
           status: 'planned-work' | 'worked' | 'day-off' | 'vacation' | 'sick' | 'no-show';
           rate_snapshot: number;
+          created_by_profile_id: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
           user_id: string;
+          organization_id: string;
           employee_id: string;
           work_date: string;
           status: 'planned-work' | 'worked' | 'day-off' | 'vacation' | 'sick' | 'no-show';
           rate_snapshot: number;
+          created_by_profile_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
           user_id?: string;
+          organization_id?: string;
           employee_id?: string;
           work_date?: string;
           status?: 'planned-work' | 'worked' | 'day-off' | 'vacation' | 'sick' | 'no-show';
           rate_snapshot?: number;
+          created_by_profile_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -80,45 +153,73 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
+          organization_id: string;
           employee_id: string;
           amount: number;
           payment_date: string;
           comment: string;
-          status: 'entered' | 'confirmed';
+          status: 'pending_confirmation' | 'confirmed' | 'rejected';
           created_by_auth_user_id: string | null;
           confirmed_by_auth_user_id: string | null;
+          created_by_profile_id: string | null;
+          confirmed_by_profile_id: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
           user_id: string;
+          organization_id: string;
           employee_id: string;
           amount: number;
           payment_date: string;
           comment?: string;
-          status?: 'entered' | 'confirmed';
+          status?: 'pending_confirmation' | 'confirmed' | 'rejected';
           created_by_auth_user_id?: string | null;
           confirmed_by_auth_user_id?: string | null;
+          created_by_profile_id?: string | null;
+          confirmed_by_profile_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
           user_id?: string;
+          organization_id?: string;
           employee_id?: string;
           amount?: number;
           payment_date?: string;
           comment?: string;
-          status?: 'entered' | 'confirmed';
+          status?: 'pending_confirmation' | 'confirmed' | 'rejected';
           created_by_auth_user_id?: string | null;
           confirmed_by_auth_user_id?: string | null;
+          created_by_profile_id?: string | null;
+          confirmed_by_profile_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
       };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      activate_employee_account: {
+        Args: Record<string, never>;
+        Returns: {
+          organization_id: string;
+          employee_id: string;
+          role: 'employee';
+        };
+      };
+      bootstrap_admin_account: {
+        Args: {
+          organization_name_input?: string | null;
+          display_name_input?: string | null;
+        };
+        Returns: {
+          organization_id: string;
+          role: 'admin' | 'employee';
+        };
+      };
+    };
   };
 }
 

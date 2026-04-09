@@ -6,12 +6,13 @@ const STATUS_LABEL: Record<Shift['status'], string> = {
   'day-off': 'Выходной',
   vacation: 'Отпуск',
   sick: 'Больничный',
-  'no-show': 'Не вышел',
+  'no-show': 'Невыход',
 };
 
 const PAYMENT_STATUS_LABEL: Record<Payment['status'], string> = {
-  entered: 'Внесена сотрудником',
+  pending_confirmation: 'Ожидает подтверждения',
   confirmed: 'Подтверждена',
+  rejected: 'Отклонена',
 };
 
 const money = (value: number): string => (

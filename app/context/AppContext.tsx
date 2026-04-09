@@ -8,6 +8,7 @@ import {
   deletePaymentRemote,
   deleteShiftRemote,
   fetchAppData,
+  rejectPaymentRemote,
   replaceUserDataRemote,
   updateEmployeeRateRemote,
   updatePaymentRemote,
@@ -36,6 +37,13 @@ import { errorResult, okResult, type ActionResult } from '../lib/result';
 import { exportEmployeePayslipXlsx as exportEmployeePayslipXlsxFile } from '../lib/xlsx';
 import { useAuth } from './AuthContext';
 
+interface AddEmployeeInput {
+  name: string;
+  workEmail: string;
+  dailyRate: number;
+  hiredAt: string | null;
+}
+
 interface AppContextType {
   employees: Employee[];
   shifts: Shift[];
@@ -45,6 +53,7 @@ interface AppContextType {
   selectedYear: number;
   status: AppDataStatus;
   error: string | null;
+  isAdmin: boolean;
   isOwner: boolean;
   myEmployeeId: string | null;
   setSelectedMonth: (month: number) => void;
@@ -57,8 +66,9 @@ interface AppContextType {
     patch: Partial<{ amount: number; date: string; comment: string }>,
   ) => Promise<ActionResult<void>>;
   confirmPayment: (paymentId: string) => Promise<ActionResult<void>>;
+  rejectPayment: (paymentId: string) => Promise<ActionResult<void>>;
   deletePayment: (id: string) => Promise<ActionResult<void>>;
-  addEmployee: (name: string, dailyRate: number) => Promise<ActionResult<void>>;
+  addEmployee: (input: AddEmployeeInput) => Promise<ActionResult<void>>;
   removeEmployee: (id: string) => Promise<ActionResult<void>>;
   deleteArchivedEmployee: (id: string) => Promise<ActionResult<void>>;
   updateEmployeeRate: (id: string, dailyRate: number) => Promise<ActionResult<void>>;
@@ -175,20 +185,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const requireAccess = (): ActionResult<UserAccess> => {
     if (!access) {
-      return errorResult('Не удалось определить права доступа. Обновите страницу.');
+      return errorResult('Профиль не активирован. Заверши регистрацию или активацию аккаунта.');
     }
 
     return okResult(access);
   };
 
-  const requireOwner = (): ActionResult<UserAccess> => {
+  const requireAdmin = (): ActionResult<UserAccess> => {
     const accessResult = requireAccess();
     if (!accessResult.ok) return accessResult;
-    if (accessResult.data.role !== 'owner') {
+    if (accessResult.data.role !== 'admin') {
       return errorResult('Недостаточно прав для этого действия.');
     }
 
     return okResult(accessResult.data);
+  };
+
+  const requireShiftEditor = (employeeId: string): ActionResult<UserAccess> => {
+    const accessResult = requireAccess();
+    if (!accessResult.ok) return accessResult;
+
+    if (accessResult.data.role === 'admin') {
+      return accessResult;
+    }
+
+    if (!accessResult.data.employeeId || accessResult.data.employeeId !== employeeId) {
+      return errorResult('Можно редактировать только свои смены.');
+    }
+
+    return accessResult;
   };
 
   const refreshData = async (): Promise<ActionResult<void>> => {
@@ -222,11 +247,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPreferences((prev) => ({ ...prev, selectedYear: year }));
   };
 
-  const addEmployee = async (name: string, dailyRate: number): Promise<ActionResult<void>> => {
-    const ownerResult = requireOwner();
-    if (!ownerResult.ok) return ownerResult;
+  const addEmployee = async (input: AddEmployeeInput): Promise<ActionResult<void>> => {
+    const adminResult = requireAdmin();
+    if (!adminResult.ok) return adminResult;
 
-    const result = await createEmployee(ownerResult.data.ownerUserId, name, dailyRate);
+    const result = await createEmployee({
+      access: adminResult.data,
+      ...input,
+    });
     if (!result.ok) {
       setError(result.error);
       return errorResult(result.error);
@@ -238,10 +266,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const removeEmployee = async (id: string): Promise<ActionResult<void>> => {
-    const ownerResult = requireOwner();
-    if (!ownerResult.ok) return ownerResult;
+    const adminResult = requireAdmin();
+    if (!adminResult.ok) return adminResult;
 
-    const result = await archiveEmployeeRemote(ownerResult.data.ownerUserId, id);
+    const result = await archiveEmployeeRemote(adminResult.data, id);
     if (!result.ok) {
       setError(result.error);
       return errorResult(result.error);
@@ -255,10 +283,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteArchivedEmployee = async (id: string): Promise<ActionResult<void>> => {
-    const ownerResult = requireOwner();
-    if (!ownerResult.ok) return ownerResult;
+    const adminResult = requireAdmin();
+    if (!adminResult.ok) return adminResult;
 
-    const result = await deleteArchivedEmployeeRemote(ownerResult.data.ownerUserId, id);
+    const result = await deleteArchivedEmployeeRemote(adminResult.data, id);
     if (!result.ok) {
       setError(result.error);
       return errorResult(result.error);
@@ -272,10 +300,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateEmployeeRate = async (id: string, dailyRate: number): Promise<ActionResult<void>> => {
-    const ownerResult = requireOwner();
-    if (!ownerResult.ok) return ownerResult;
+    const adminResult = requireAdmin();
+    if (!adminResult.ok) return adminResult;
 
-    const result = await updateEmployeeRateRemote(ownerResult.data.ownerUserId, id, dailyRate);
+    const result = await updateEmployeeRateRemote(adminResult.data, id, dailyRate);
     if (!result.ok) {
       setError(result.error);
       return errorResult(result.error);
@@ -293,11 +321,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     date: string,
     nextStatus: ShiftStatus,
   ): Promise<ActionResult<void>> => {
-    const ownerResult = requireOwner();
-    if (!ownerResult.ok) return ownerResult;
+    const editorResult = requireShiftEditor(employeeId);
+    if (!editorResult.ok) return editorResult;
 
     if (nextStatus === 'none') {
-      const result = await deleteShiftRemote(ownerResult.data.ownerUserId, employeeId, date);
+      const result = await deleteShiftRemote(editorResult.data, employeeId, date);
       if (!result.ok) {
         setError(result.error);
         return errorResult(result.error);
@@ -314,7 +342,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     const result = await upsertShiftRemote(
-      ownerResult.data.ownerUserId,
+      editorResult.data,
       employeeId,
       date,
       nextStatus,
@@ -340,8 +368,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const accessResult = requireAccess();
     if (!accessResult.ok) return accessResult;
 
-    const isOwner = accessResult.data.role === 'owner';
-    const employeeId = isOwner ? input.employeeId : accessResult.data.employeeId;
+    const isAdmin = accessResult.data.role === 'admin';
+    const employeeId = isAdmin ? input.employeeId : accessResult.data.employeeId;
     if (!employeeId) {
       return errorResult('Не удалось определить сотрудника для выплаты.');
     }
@@ -383,12 +411,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const confirmPayment = async (paymentId: string): Promise<ActionResult<void>> => {
-    const ownerResult = requireOwner();
-    if (!ownerResult.ok) return ownerResult;
+    const adminResult = requireAdmin();
+    if (!adminResult.ok) return adminResult;
     const userResult = requireUser();
     if (!userResult.ok) return userResult;
 
-    const result = await confirmPaymentRemote(paymentId, userResult.data);
+    const result = await confirmPaymentRemote(paymentId, userResult.data, adminResult.data.profileId);
     if (!result.ok) {
       setError(result.error);
       return errorResult(result.error);
@@ -399,6 +427,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ))));
     setError(null);
     return okResult(undefined, result.message);
+  };
+
+  const rejectPayment = async (paymentId: string): Promise<ActionResult<void>> => {
+    const adminResult = requireAdmin();
+    if (!adminResult.ok) return adminResult;
+
+    const result = await rejectPaymentRemote(paymentId, adminResult.data.profileId);
+    if (!result.ok) {
+      setError(result.error);
+      return errorResult(result.error);
+    }
+
+    setPayments((prev) => sortPayments(prev.map((payment) => (
+      payment.id === paymentId ? result.data : payment
+    ))));
+    setError(null);
+    return okResult(undefined, 'Выплата отклонена.');
   };
 
   const deletePayment = async (id: string): Promise<ActionResult<void>> => {
@@ -447,8 +492,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const importAppState = async (payload: unknown): Promise<ActionResult<void>> => {
-    const ownerResult = requireOwner();
-    if (!ownerResult.ok) return ownerResult;
+    const adminResult = requireAdmin();
+    if (!adminResult.ok) return adminResult;
     const userResult = requireUser();
     if (!userResult.ok) return userResult;
 
@@ -458,11 +503,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     setStatus('loading');
-    const result = await replaceUserDataRemote(
-      ownerResult.data.ownerUserId,
-      userResult.data,
-      importedData,
-    );
+    const result = await replaceUserDataRemote(adminResult.data, userResult.data, importedData);
     if (!result.ok) {
       setStatus('ready');
       setError(result.error);
@@ -497,7 +538,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     selectedYear: preferences.selectedYear,
     status,
     error,
-    isOwner: access?.role === 'owner',
+    isAdmin: access?.role === 'admin',
+    isOwner: access?.role === 'admin',
     myEmployeeId: access?.employeeId ?? null,
     setSelectedMonth,
     setSelectedYear,
@@ -506,6 +548,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addPayment,
     updatePayment,
     confirmPayment,
+    rejectPayment,
     deletePayment,
     addEmployee,
     removeEmployee,

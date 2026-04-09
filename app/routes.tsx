@@ -7,6 +7,7 @@ import {
   useRouteError,
 } from 'react-router';
 import { Button } from './components/ui/button';
+import { useApp } from './context/AppContext';
 import { useAuth } from './context/AuthContext';
 import { lazyWithRetry } from './lib/lazyWithRetry';
 
@@ -52,61 +53,139 @@ function withSuspense(node: ReactNode) {
   return <Suspense fallback={<RouteLoader />}>{node}</Suspense>;
 }
 
-function ProtectedLayout() {
-  const { status } = useAuth();
+const getRoleLandingPath = (role: 'admin' | 'employee') => (
+  role === 'admin' ? '/admin/dashboard' : '/employee/dashboard'
+);
 
-  if (status === 'loading') {
+function AuthOnlyLayout() {
+  const { status: authStatus } = useAuth();
+  const { status: appStatus, access } = useApp();
+
+  if (authStatus === 'loading' || appStatus === 'loading') {
     return <RouteLoader />;
   }
 
-  if (status === 'missing-config') {
-    return <Navigate to="/auth" replace />;
-  }
-
-  if (status !== 'authenticated') {
-    return <Navigate to="/auth" replace />;
+  if (authStatus === 'authenticated' && access) {
+    return <Navigate to={getRoleLandingPath(access.role)} replace />;
   }
 
   return <Outlet />;
 }
 
-function AuthOnlyRoute() {
-  const { status } = useAuth();
+function RoleLayout({ role }: { role: 'admin' | 'employee' }) {
+  const { status: authStatus } = useAuth();
+  const { status: appStatus, access } = useApp();
 
-  if (status === 'loading') {
+  if (authStatus === 'loading' || appStatus === 'loading') {
     return <RouteLoader />;
   }
 
-  if (status === 'authenticated') {
-    return <Navigate to="/" replace />;
+  if (authStatus === 'missing-config') {
+    return <Navigate to="/auth/login" replace />;
   }
 
-  return withSuspense(<AuthPage />);
+  if (authStatus !== 'authenticated') {
+    return <Navigate to="/auth/login" replace />;
+  }
+
+  if (!access) {
+    return <Navigate to="/auth/activate-employee" replace />;
+  }
+
+  if (access.role !== role) {
+    return <Navigate to={getRoleLandingPath(access.role)} replace />;
+  }
+
+  return <Outlet />;
+}
+
+function RootRedirect() {
+  const { status: authStatus } = useAuth();
+  const { status: appStatus, access } = useApp();
+
+  if (authStatus === 'loading' || appStatus === 'loading') {
+    return <RouteLoader />;
+  }
+
+  if (authStatus !== 'authenticated') {
+    return <Navigate to="/auth/login" replace />;
+  }
+
+  if (!access) {
+    return <Navigate to="/auth/activate-employee" replace />;
+  }
+
+  return <Navigate to={getRoleLandingPath(access.role)} replace />;
+}
+
+function StubPage({ title }: { title: string }) {
+  return (
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+      <div className="rounded-xl border bg-white p-5 text-sm text-muted-foreground">
+        Раздел {title} находится в доработке. Бизнес-логика уже разделена по ролям, UI этого экрана доделаем следующим шагом.
+      </div>
+    </div>
+  );
 }
 
 export const router = createBrowserRouter([
   {
-    path: '/auth',
-    element: <AuthOnlyRoute />,
+    path: '/',
+    element: <RootRedirect />,
     errorElement: <RouteErrorBoundary />,
   },
   {
-    element: <ProtectedLayout />,
+    path: '/auth',
+    element: <AuthOnlyLayout />,
     errorElement: <RouteErrorBoundary />,
     children: [
-      {
-        path: '/',
-        element: withSuspense(<DashboardPage />),
-      },
-      {
-        path: '/calendar',
-        element: withSuspense(<CalendarPage />),
-      },
-      {
-        path: '/payments',
-        element: withSuspense(<PaymentsPage />),
-      },
+      { path: 'login', element: withSuspense(<AuthPage />) },
+      { path: 'register-admin', element: withSuspense(<AuthPage />) },
+      { path: 'activate-employee', element: withSuspense(<AuthPage />) },
+      { path: 'reset-password', element: withSuspense(<AuthPage />) },
+      { index: true, element: <Navigate to="/auth/login" replace /> },
     ],
+  },
+  {
+    path: '/admin',
+    element: <RoleLayout role="admin" />,
+    errorElement: <RouteErrorBoundary />,
+    children: [
+      { path: 'dashboard', element: withSuspense(<DashboardPage />) },
+      { path: 'employees', element: withSuspense(<DashboardPage />) },
+      { path: 'calendar', element: withSuspense(<CalendarPage />) },
+      { path: 'payments', element: withSuspense(<PaymentsPage />) },
+      { path: 'finance', element: <StubPage title="Финансы" /> },
+      { path: 'settings', element: <StubPage title="Настройки" /> },
+      { path: 'import-export', element: <StubPage title="Импорт / Экспорт" /> },
+      { path: 'audit', element: <StubPage title="Аудит" /> },
+      { index: true, element: <Navigate to="/admin/dashboard" replace /> },
+    ],
+  },
+  {
+    path: '/employee',
+    element: <RoleLayout role="employee" />,
+    errorElement: <RouteErrorBoundary />,
+    children: [
+      { path: 'dashboard', element: withSuspense(<DashboardPage />) },
+      { path: 'calendar', element: withSuspense(<CalendarPage />) },
+      { path: 'shifts', element: withSuspense(<CalendarPage />) },
+      { path: 'payments', element: withSuspense(<PaymentsPage />) },
+      { path: 'profile', element: <StubPage title="Мой профиль" /> },
+      { index: true, element: <Navigate to="/employee/dashboard" replace /> },
+    ],
+  },
+  {
+    path: '/dashboard',
+    element: <RootRedirect />,
+  },
+  {
+    path: '/calendar',
+    element: <RootRedirect />,
+  },
+  {
+    path: '/payments',
+    element: <RootRedirect />,
   },
   {
     path: '*',

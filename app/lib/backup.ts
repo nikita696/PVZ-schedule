@@ -55,7 +55,7 @@ const isLegacyShiftStatus = (value: unknown): value is LegacyShiftStatus => (
 );
 
 const isPaymentStatus = (value: unknown): value is PaymentStatus => (
-  value === 'entered' || value === 'confirmed'
+  value === 'pending_confirmation' || value === 'confirmed' || value === 'rejected'
 );
 
 export const createBackupPayload = (snapshot: AppDataSnapshot): BackupPayload => ({
@@ -80,6 +80,7 @@ export const createBackupPayload = (snapshot: AppDataSnapshot): BackupPayload =>
       amount: payment.amount,
       date: payment.date,
       comment: payment.comment,
+      status: payment.status,
     })),
     selectedMonth: snapshot.preferences.selectedMonth,
     selectedYear: snapshot.preferences.selectedYear,
@@ -176,7 +177,12 @@ const parsePayments = (paymentsRaw: unknown): ImportedPayment[] | null => {
       amount: item.amount,
       date: item.date,
       comment: typeof item.comment === 'string' ? item.comment : '',
-      status: isPaymentStatus(item.status) ? item.status : 'confirmed',
+      status:
+        item.status === 'entered'
+          ? 'pending_confirmation'
+          : isPaymentStatus(item.status)
+            ? item.status
+            : 'confirmed',
     });
   }
 

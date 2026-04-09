@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { BottomNav } from '../components/BottomNav';
@@ -55,6 +55,8 @@ export default function DashboardPage() {
   } = useApp();
 
   const [name, setName] = useState('');
+  const [workEmail, setWorkEmail] = useState('');
+  const [hiredAt, setHiredAt] = useState(getLocalISODate());
   const [dailyRate, setDailyRate] = useState('');
   const [savingEmployee, setSavingEmployee] = useState(false);
   const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({});
@@ -89,7 +91,9 @@ export default function DashboardPage() {
   }, [activeEmployees, getEmployeeStats, selectedMonth, selectedYear]);
 
   const pendingPaymentsCount = useMemo(() => (
-    payments.filter((payment) => payment.status === 'entered' && isInMonth(payment.date, selectedMonth, selectedYear)).length
+    payments.filter((payment) => (
+      payment.status === 'pending_confirmation' && isInMonth(payment.date, selectedMonth, selectedYear)
+    )).length
   ), [payments, selectedMonth, selectedYear]);
 
   const todayInfo = useMemo(() => {
@@ -110,10 +114,18 @@ export default function DashboardPage() {
     };
   }, [employees, shifts]);
 
+  const calendarPath = isOwner ? '/admin/calendar' : '/employee/calendar';
+  const paymentsPath = isOwner ? '/admin/payments' : '/employee/payments';
+
   const handleAddEmployee = async () => {
     const parsedRate = Number(dailyRate);
     if (!name.trim()) {
       toast.error('Введите имя сотрудника.');
+      return;
+    }
+
+    if (!workEmail.trim()) {
+      toast.error('Введите рабочий email сотрудника.');
       return;
     }
 
@@ -123,7 +135,12 @@ export default function DashboardPage() {
     }
 
     setSavingEmployee(true);
-    const result = await addEmployee(name.trim(), parsedRate);
+    const result = await addEmployee({
+      name: name.trim(),
+      workEmail: workEmail.trim(),
+      dailyRate: parsedRate,
+      hiredAt: hiredAt || null,
+    });
     setSavingEmployee(false);
 
     if (!result.ok) {
@@ -132,11 +149,13 @@ export default function DashboardPage() {
     }
 
     setName('');
+    setWorkEmail('');
     setDailyRate('');
+    setHiredAt(getLocalISODate());
     toast.success(result.message ?? 'Сотрудник добавлен.');
   };
 
-const handleArchive = async (employeeId: string) => {
+  const handleArchive = async (employeeId: string) => {
     const result = await removeEmployee(employeeId);
     if (!result.ok) {
       toast.error(result.error);
@@ -201,10 +220,10 @@ const handleArchive = async (employeeId: string) => {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="w-fit rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
-                  {isOwner ? 'Панель владельца' : 'Личный кабинет сотрудника'}
+                  {isOwner ? 'Панель администратора' : 'Личный кабинет сотрудника'}
                 </div>
                 <h1 className="mt-2 text-2xl font-semibold text-stone-900">
-                  {isOwner ? 'Управление ПВЗ: график, ставки и выплаты' : 'Мой график, расчет и выплаты'}
+                  {isOwner ? 'Управление ПВЗ: график, сотрудники и выплаты' : 'Мой график, расчет и выплаты'}
                 </h1>
               </div>
 
@@ -218,8 +237,8 @@ const handleArchive = async (employeeId: string) => {
 
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={handleToday}>Сегодня</Button>
-              <Button variant="outline" onClick={() => navigate('/calendar')}>Календарь</Button>
-              <Button variant="outline" onClick={() => navigate('/payments')}>Выплаты</Button>
+              <Button variant="outline" onClick={() => navigate(calendarPath)}>Календарь</Button>
+              <Button variant="outline" onClick={() => navigate(paymentsPath)}>Выплаты</Button>
               {isOwner ? (
                 <Button variant="outline" onClick={() => document.getElementById('employees-block')?.scrollIntoView({ behavior: 'smooth' })}>
                   Сотрудники
@@ -281,18 +300,30 @@ const handleArchive = async (employeeId: string) => {
                 <CardHeader>
                   <CardTitle>Добавить сотрудника</CardTitle>
                 </CardHeader>
-                <CardContent className="grid gap-3 sm:grid-cols-[1.4fr_1fr_auto]">
+                <CardContent className="grid gap-3 sm:grid-cols-[1.2fr_1.2fr_0.9fr_0.9fr_auto]">
                   <Input
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                     placeholder="Имя сотрудника"
                   />
                   <Input
+                    type="email"
+                    value={workEmail}
+                    onChange={(event) => setWorkEmail(event.target.value)}
+                    placeholder="Рабочий email"
+                  />
+                  <Input
                     type="number"
                     min="1"
                     value={dailyRate}
                     onChange={(event) => setDailyRate(event.target.value)}
-                    placeholder="Ставка за смену"
+                    placeholder="Ставка"
+                  />
+                  <Input
+                    type="date"
+                    value={hiredAt}
+                    onChange={(event) => setHiredAt(event.target.value)}
+                    placeholder="Дата найма"
                   />
                   <Button onClick={() => void handleAddEmployee()} disabled={savingEmployee}>
                     {savingEmployee ? 'Сохранение...' : 'Добавить'}
@@ -310,6 +341,8 @@ const handleArchive = async (employeeId: string) => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Имя</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Статус</TableHead>
                       <TableHead>Ставка</TableHead>
                       <TableHead>Отработано</TableHead>
                       <TableHead>Заработано</TableHead>
@@ -327,6 +360,8 @@ const handleArchive = async (employeeId: string) => {
                       return (
                         <TableRow key={employee.id}>
                           <TableCell className="font-medium">{employee.name}</TableCell>
+                          <TableCell>{employee.workEmail ?? '-'}</TableCell>
+                          <TableCell>{employee.status}</TableCell>
                           <TableCell className="min-w-[180px]">
                             <div className="flex items-center gap-2">
                               <Input
@@ -418,8 +453,8 @@ const handleArchive = async (employeeId: string) => {
                 void handleExport(myEmployee.id);
               }
             }}
-            onOpenCalendar={() => navigate('/calendar')}
-            onOpenPayments={() => navigate('/payments')}
+            onOpenCalendar={() => navigate(calendarPath)}
+            onOpenPayments={() => navigate(paymentsPath)}
           />
         )}
       </main>
@@ -468,13 +503,13 @@ function EmployeeDashboard({
     return (
       <Card>
         <CardContent className="p-5 text-sm text-muted-foreground">
-          Профиль сотрудника пока не привязан к вашему аккаунту. Попроси владельца проверить привязку в базе.
+          Профиль сотрудника пока не привязан к вашему аккаунту. Попроси администратора проверить привязку в базе.
         </CardContent>
       </Card>
     );
   }
 
-  const pendingCount = payments.filter((payment) => payment.status === 'entered').length;
+  const pendingCount = payments.filter((payment) => payment.status === 'pending_confirmation').length;
 
   return (
     <>

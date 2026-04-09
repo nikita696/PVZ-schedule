@@ -1,14 +1,21 @@
 export type ShiftStatusDb = 'planned-work' | 'worked' | 'day-off' | 'vacation' | 'sick' | 'no-show';
 export type ShiftStatus = ShiftStatusDb | 'none';
-export type PaymentStatus = 'entered' | 'confirmed';
-export type UserRole = 'owner' | 'employee';
+
+export type EmployeeStatus = 'pending' | 'active' | 'archived';
+export type PaymentStatus = 'pending_confirmation' | 'confirmed' | 'rejected';
+export type UserRole = 'admin' | 'employee';
 
 export type AppDataStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 export interface Employee {
   id: string;
   userId: string;
+  organizationId: string;
+  profileId: string | null;
   authUserId: string | null;
+  workEmail: string | null;
+  status: EmployeeStatus;
+  createdByProfileId: string | null;
   isOwner: boolean;
   hiredAt: string | null;
   name: string;
@@ -22,10 +29,12 @@ export interface Employee {
 export interface Shift {
   id: string;
   userId: string;
+  organizationId: string;
   employeeId: string;
   date: string;
   status: ShiftStatusDb;
   rateSnapshot: number;
+  createdByProfileId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -33,6 +42,7 @@ export interface Shift {
 export interface Payment {
   id: string;
   userId: string;
+  organizationId: string;
   employeeId: string;
   amount: number;
   date: string;
@@ -40,6 +50,8 @@ export interface Payment {
   status: PaymentStatus;
   createdByAuthUserId: string | null;
   confirmedByAuthUserId: string | null;
+  createdByProfileId: string | null;
+  confirmedByProfileId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -119,6 +131,8 @@ export interface ImportedAppData {
 
 export interface UserAccess {
   role: UserRole;
+  organizationId: string;
   ownerUserId: string;
+  profileId: string;
   employeeId: string | null;
 }
