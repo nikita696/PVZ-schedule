@@ -73,11 +73,11 @@ export default function PaymentsPage() {
     }
 
     setModalOpen(false);
-    toast.success(result.message ?? 'Р’С‹РїР»Р°С‚Р° СЃРѕС…СЂР°РЅРµРЅР°.');
+    toast.success(result.message ?? 'Выплата сохранена.');
   };
 
   const handleDeletePayment = async (id: string) => {
-    const confirmed = window.confirm('РЈРґР°Р»РёС‚СЊ РІС‹РїР»Р°С‚Сѓ? Р­С‚Рѕ РґРµР№СЃС‚РІРёРµ РЅРµР»СЊР·СЏ РѕС‚РјРµРЅРёС‚СЊ.');
+    const confirmed = window.confirm('Удалить выплату? Это действие нельзя отменить.');
     if (!confirmed) return;
 
     const result = await deletePayment(id);
@@ -86,7 +86,7 @@ export default function PaymentsPage() {
       return;
     }
 
-    toast.success(result.message ?? 'Р’С‹РїР»Р°С‚Р° СѓРґР°Р»РµРЅР°.');
+    toast.success(result.message ?? 'Выплата удалена.');
   };
 
   const handleConfirmPayment = async (id: string) => {
@@ -96,7 +96,7 @@ export default function PaymentsPage() {
       return;
     }
 
-    toast.success(result.message ?? 'Р’С‹РїР»Р°С‚Р° РїРѕРґС‚РІРµСЂР¶РґРµРЅР°.');
+    toast.success(result.message ?? 'Выплата подтверждена.');
   };
 
   const handleEditPayment = async (payload: EditPaymentState) => {
@@ -112,7 +112,7 @@ export default function PaymentsPage() {
     }
 
     setEditingPayment(null);
-    toast.success(result.message ?? 'Р’С‹РїР»Р°С‚Р° РѕР±РЅРѕРІР»РµРЅР°.');
+    toast.success(result.message ?? 'Выплата обновлена.');
   };
 
   return (
@@ -122,21 +122,21 @@ export default function PaymentsPage() {
           <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="w-fit rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
-                Р’С‹РїР»Р°С‚С‹
+                Выплаты
               </div>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-900">
-                {isOwner ? 'Р–СѓСЂРЅР°Р» РІС‹РїР»Р°С‚ РїРѕ РџР’Р—' : 'РњРѕРё РІС‹РїР»Р°С‚С‹'}
+                {isOwner ? 'Журнал выплат по ПВЗ' : 'Мои выплаты'}
               </h1>
               <p className="mt-1 text-sm text-stone-600">
                 {isOwner
-                  ? 'Р’Р»Р°РґРµР»РµС† РїРѕРґС‚РІРµСЂР¶РґР°РµС‚ РІС‹РїР»Р°С‚С‹ СЃРѕС‚СЂСѓРґРЅРёРєРѕРІ, РІРЅРµСЃРµРЅРЅС‹Рµ РІСЂСѓС‡РЅСѓСЋ.'
-                  : 'Р’С‹ РјРѕР¶РµС‚Рµ РґРѕР±Р°РІР»СЏС‚СЊ Рё СЂРµРґР°РєС‚РёСЂРѕРІР°С‚СЊ СЃРІРѕРё РІС‹РїР»Р°С‚С‹ РґРѕ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ РІР»Р°РґРµР»СЊС†РµРј.'}
+                  ? 'Владелец подтверждает выплаты сотрудников, внесенные вручную.'
+                  : 'Вы можете добавлять и редактировать свои выплаты до подтверждения владельцем.'}
               </p>
             </div>
 
             <Button onClick={() => setModalOpen(true)} className="bg-orange-600 hover:bg-orange-500">
               <Wallet className="h-4 w-4" />
-              Р”РѕР±Р°РІРёС‚СЊ РІС‹РїР»Р°С‚Сѓ
+              Добавить выплату
             </Button>
           </CardContent>
         </Card>
@@ -144,19 +144,19 @@ export default function PaymentsPage() {
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Card>
             <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">Р’СЃРµРіРѕ РІС‹РїР»Р°С‚</div>
+              <div className="text-xs text-muted-foreground">Всего выплат</div>
               <div className="mt-2 text-2xl font-semibold">{visiblePayments.length}</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">РћР¶РёРґР°СЋС‚ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ</div>
+              <div className="text-xs text-muted-foreground">Ожидают подтверждения</div>
               <div className="mt-2 text-2xl font-semibold text-amber-700">{pendingCount}</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">РџРѕРґС‚РІРµСЂР¶РґРµРЅРѕ</div>
+              <div className="text-xs text-muted-foreground">Подтверждено</div>
               <div className="mt-2 text-2xl font-semibold text-emerald-700">
                 {visiblePayments.filter((payment) => payment.status === 'confirmed').length}
               </div>
@@ -166,14 +166,14 @@ export default function PaymentsPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
-            <CardTitle>Р–СѓСЂРЅР°Р» РІС‹РїР»Р°С‚</CardTitle>
+            <CardTitle>Журнал выплат</CardTitle>
             {isOwner ? (
               <select
                 className="h-10 rounded-md border bg-input-background px-3 text-sm"
                 value={selectedEmployeeId}
                 onChange={(event) => setSelectedEmployeeId(event.target.value)}
               >
-                <option value="all">Р’СЃРµ СЃРѕС‚СЂСѓРґРЅРёРєРё</option>
+                <option value="all">Все сотрудники</option>
                 {visibleEmployees.map((employee) => (
                   <option key={employee.id} value={employee.id}>
                     {employee.name}
@@ -186,12 +186,12 @@ export default function PaymentsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Р”Р°С‚Р°</TableHead>
-                  <TableHead>РЎРѕС‚СЂСѓРґРЅРёРє</TableHead>
-                  <TableHead>РЎСѓРјРјР°</TableHead>
-                  <TableHead>РљРѕРјРјРµРЅС‚Р°СЂРёР№</TableHead>
-                  <TableHead>РЎС‚Р°С‚СѓСЃ</TableHead>
-                  <TableHead className="w-[220px]">Р”РµР№СЃС‚РІРёСЏ</TableHead>
+                  <TableHead>Дата</TableHead>
+                  <TableHead>Сотрудник</TableHead>
+                  <TableHead>Сумма</TableHead>
+                  <TableHead>Комментарий</TableHead>
+                  <TableHead>Статус</TableHead>
+                  <TableHead className="w-[220px]">Действия</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -204,7 +204,7 @@ export default function PaymentsPage() {
                   return (
                     <TableRow key={payment.id}>
                       <TableCell>{payment.date}</TableCell>
-                      <TableCell>{employee?.name ?? 'РЎРѕС‚СЂСѓРґРЅРёРє'}</TableCell>
+                      <TableCell>{employee?.name ?? 'Сотрудник'}</TableCell>
                       <TableCell>{money(payment.amount)}</TableCell>
                       <TableCell>{payment.comment || '-'}</TableCell>
                       <TableCell>
@@ -218,7 +218,7 @@ export default function PaymentsPage() {
                             onClick={() => void handleConfirmPayment(payment.id)}
                           >
                             <CheckCircle2 className="h-4 w-4" />
-                            РџРѕРґС‚РІРµСЂРґРёС‚СЊ
+                            Подтвердить
                           </Button>
                         ) : null}
                         {canEdit ? (
@@ -233,7 +233,7 @@ export default function PaymentsPage() {
                             })}
                           >
                             <Pencil className="h-4 w-4" />
-                            РР·РјРµРЅРёС‚СЊ
+                            Изменить
                           </Button>
                         ) : null}
                         {canDelete ? (
@@ -243,7 +243,7 @@ export default function PaymentsPage() {
                             onClick={() => void handleDeletePayment(payment.id)}
                           >
                             <Trash2 className="h-4 w-4 text-rose-600" />
-                            РЈРґР°Р»РёС‚СЊ
+                            Удалить
                           </Button>
                         ) : null}
                       </TableCell>
@@ -254,7 +254,7 @@ export default function PaymentsPage() {
             </Table>
 
             {visiblePayments.length === 0 ? (
-              <p className="pt-4 text-sm text-muted-foreground">РџРѕРєР° РЅРµС‚ РЅРё РѕРґРЅРѕР№ РІС‹РїР»Р°С‚С‹.</p>
+              <p className="pt-4 text-sm text-muted-foreground">Пока нет ни одной выплаты.</p>
             ) : null}
           </CardContent>
         </Card>
@@ -279,4 +279,5 @@ export default function PaymentsPage() {
     </div>
   );
 }
+
 
