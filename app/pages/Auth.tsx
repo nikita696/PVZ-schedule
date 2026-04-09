@@ -1,4 +1,4 @@
-﻿import { Database, LogIn, Shield, UserRoundPlus } from 'lucide-react';
+﻿import { ArrowRightLeft, Database, LogIn, LogOut, Plus, Shield, Trash2, UserCircle2, UserRoundPlus } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
@@ -23,8 +23,8 @@ const FEATURE_CARDS = [
   },
   {
     icon: UserRoundPlus,
-    title: 'Вход через Яндекс ID',
-    body: 'Без magic link и почтовой возни: входишь через Яндекс, а роль подтягивается автоматически.',
+    title: 'Переключение аккаунтов',
+    body: 'Повторно авторизовываться не нужно: знакомые аккаунты можно открывать прямо с экрана входа.',
   },
 ] as const;
 
@@ -32,11 +32,28 @@ const getLandingPath = (role: 'admin' | 'employee') => (
   role === 'admin' ? '/admin/dashboard' : '/employee/dashboard'
 );
 
+const getRoleLabel = (role: 'admin' | 'employee' | null) => {
+  if (role === 'admin') return 'Администратор';
+  if (role === 'employee') return 'Сотрудник';
+  return 'Без роли';
+};
+
+const getInitials = (value: string) => {
+  const chunks = value.trim().split(/\s+/).filter(Boolean);
+  if (chunks.length === 0) return '•';
+  return chunks.slice(0, 2).map((item) => item[0]?.toUpperCase() ?? '').join('') || '•';
+};
+
 export default function AuthPage() {
   const navigate = useNavigate();
   const { access, status: appStatus, error: appError } = useApp();
   const {
     startYandexAuth,
+    switchRememberedAccount,
+    forgetRememberedAccount,
+    signOut,
+    signOutAll,
+    rememberedAccounts,
     status,
     user,
     isCompletingOAuth,
@@ -47,8 +64,11 @@ export default function AuthPage() {
   const [displayName, setDisplayName] = useState('');
   const [role, setRole] = useState<'admin' | 'employee'>('employee');
   const [submitting, setSubmitting] = useState(false);
+  const [switchingAccountId, setSwitchingAccountId] = useState<string | null>(null);
+  const [signOutMode, setSignOutMode] = useState<'current' | 'all' | null>(null);
 
-  const isBusy = status === 'loading' || status === 'missing-config' || isCompletingOAuth || submitting;
+  const currentUserId = user?.id ?? null;
+  const isBusy = status === 'loading' || status === 'missing-config' || isCompletingOAuth || submitting || !!switchingAccountId || signOutMode !== null;
   const currentError = oauthError ?? (status === 'authenticated' && !access ? appError : null);
   const landingPath = access ? getLandingPath(access.role) : null;
 
@@ -58,11 +78,15 @@ export default function AuthPage() {
     }
 
     if (status === 'authenticated' && access) {
-      return 'Аккаунт уже готов. Можно сразу открыть приложение.';
+      return 'Аккаунт уже готов. Можно открыть кабинет или быстро переключиться на другой сохранённый аккаунт.';
     }
 
-    return 'Используй тот же Яндекс-аккаунт, к которому привязан твой рабочий email. Если ты уже был зарегистрирован, роль восстановится сама.';
-  }, [access, status]);
+    if (rememberedAccounts.length > 0) {
+      return 'Ниже есть сохранённые аккаунты. Их можно открыть сразу, без повторной авторизации через провайдера.';
+    }
+
+    return 'Используй тот же Яндекс-аккаунт, к которому привязан твой рабочий email. Для нового аккаунта выбери роль ниже и войди один раз.';
+  }, [access, rememberedAccounts.length, status]);
 
   const handleYandexAuth = async () => {
     setSubmitting(true);
@@ -83,6 +107,58 @@ export default function AuthPage() {
     toast.success(result.message ?? 'Открываю вход через Яндекс ID...');
   };
 
+  const handleSwitchRememberedAccount = async (accountId: string, accountRole: 'admin' | 'employee' | null) => {
+    setSwitchingAccountId(accountId);
+    clearOAuthError();
+
+    const result = await switchRememberedAccount(accountId);
+
+    setSwitchingAccountId(null);
+
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+
+    toast.success(result.message ?? 'Аккаунт переключён.');
+
+    const nextRole = result.data.role ?? accountRole;
+    if (nextRole) {
+      navigate(getLandingPath(nextRole), { replace: true });
+    }
+  };
+
+  const handleForgetRememberedAccount = (accountId: string, label: string) => {
+    forgetRememberedAccount(accountId);
+    toast.success(`Аккаунт ${label} удалён из локального списка.`);
+  };
+
+  const handleSignOutCurrent = async () => {
+    setSignOutMode('current');
+    const result = await signOut();
+    setSignOutMode(null);
+
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+
+    toast.success(result.message ?? 'Текущий аккаунт закрыт.');
+  };
+
+  const handleSignOutAll = async () => {
+    setSignOutMode('all');
+    const result = await signOutAll();
+    setSignOutMode(null);
+
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+
+    toast.success(result.message ?? 'Все аккаунты очищены.');
+  };
+
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,#fff7ed,white_38%,#f5f5f4)] px-4 py-6 sm:px-6 lg:px-10">
       <div className="mx-auto grid min-h-[calc(100vh-3rem)] max-w-6xl gap-6 lg:grid-cols-[1.2fr_0.95fr]">
@@ -98,8 +174,7 @@ export default function AuthPage() {
                   Вход и регистрация через Яндекс ID
                 </h1>
                 <p className="max-w-xl text-base leading-7 text-stone-600">
-                  Мы убрали нестабильный вход по письмам. Теперь новый пользователь выбирает роль,
-                  заходит через Яндекс, а система сама создаёт или восстанавливает профиль по email.
+                  Здесь можно как первый раз войти через Яндекс, так и быстро открыть уже знакомый аккаунт — почти как в сервисах Google или Яндекса, только без лишней бюрократии.
                 </p>
               </div>
             </div>
@@ -133,10 +208,100 @@ export default function AuthPage() {
                 <p className="text-sm text-emerald-900">
                   Ты уже вошёл{user?.email ? ` как ${user.email}` : ''}. Доступ {access.role === 'admin' ? 'администратора' : 'сотрудника'} активен.
                 </p>
-                <Button onClick={() => navigate(landingPath, { replace: true })} className="w-full bg-emerald-600 hover:bg-emerald-500">
-                  Открыть приложение
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={() => navigate(landingPath, { replace: true })} className="bg-emerald-600 hover:bg-emerald-500">
+                    Открыть приложение
+                  </Button>
+                  <Button variant="outline" onClick={() => void handleSignOutCurrent()} disabled={signOutMode !== null}>
+                    <LogOut className="h-4 w-4" />
+                    {signOutMode === 'current' ? 'Выход...' : 'Выйти из текущего'}
+                  </Button>
+                </div>
               </div>
+            ) : null}
+
+            {rememberedAccounts.length > 0 ? (
+              <section className="space-y-4">
+                <SectionTitle
+                  title="Сохранённые аккаунты"
+                  subtitle="Можно открыть уже знакомый аккаунт без повторной авторизации через провайдера."
+                />
+
+                <div className="grid gap-3">
+                  {rememberedAccounts.map((account) => {
+                    const isCurrent = currentUserId === account.userId && status === 'authenticated';
+
+                    return (
+                      <div key={account.id} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+                        <div className="flex items-start gap-3">
+                          {account.avatarUrl ? (
+                            <img
+                              src={account.avatarUrl}
+                              alt={account.displayName}
+                              className="h-11 w-11 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-stone-100 text-sm font-semibold text-stone-700">
+                              {getInitials(account.displayName || account.email)}
+                            </div>
+                          )}
+
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="truncate text-sm font-semibold text-stone-900">
+                                {account.displayName || account.email}
+                              </div>
+                              <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-700">
+                                {getRoleLabel(account.role)}
+                              </span>
+                              {isCurrent ? (
+                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                                  Текущий
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="truncate text-xs text-stone-500">{account.email}</div>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {isCurrent && landingPath ? (
+                            <Button variant="outline" onClick={() => navigate(landingPath, { replace: true })}>
+                              <UserCircle2 className="h-4 w-4" />
+                              Открыть
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              onClick={() => void handleSwitchRememberedAccount(account.id, account.role)}
+                              disabled={isBusy}
+                            >
+                              <ArrowRightLeft className="h-4 w-4" />
+                              {switchingAccountId === account.id ? 'Переключаю...' : 'Войти'}
+                            </Button>
+                          )}
+
+                          <Button
+                            variant="outline"
+                            onClick={() => handleForgetRememberedAccount(account.id, account.displayName || account.email)}
+                            disabled={isBusy}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Забыть
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" onClick={() => void handleSignOutAll()} disabled={signOutMode !== null}>
+                    <Trash2 className="h-4 w-4" />
+                    {signOutMode === 'all' ? 'Очищаю...' : 'Забыть все аккаунты'}
+                  </Button>
+                </div>
+              </section>
             ) : null}
 
             {status === 'authenticated' && !access ? (
@@ -149,8 +314,10 @@ export default function AuthPage() {
 
             <section className="space-y-4">
               <SectionTitle
-                title="Продолжить через Яндекс"
-                subtitle="Для нового пользователя роль выбирается перед входом. Для уже зарегистрированного роль и имя ниже можно не менять."
+                title={rememberedAccounts.length > 0 ? 'Добавить ещё аккаунт' : 'Продолжить через Яндекс'}
+                subtitle={rememberedAccounts.length > 0
+                  ? 'Новый аккаунт тоже попадёт в локальный список и потом будет открываться в один тап.'
+                  : 'Для нового пользователя роль выбирается перед входом. Для уже зарегистрированного роль и имя ниже можно не менять.'}
               />
 
               <Field label="Как тебя показывать в системе (необязательно)">
@@ -198,14 +365,14 @@ export default function AuthPage() {
                 onClick={() => void handleYandexAuth()}
                 disabled={isBusy}
               >
-                <LogIn className="h-4 w-4" />
-                {submitting ? 'Перенаправляю...' : 'Войти через Яндекс ID'}
+                {rememberedAccounts.length > 0 ? <Plus className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
+                {submitting ? 'Перенаправляю...' : rememberedAccounts.length > 0 ? 'Добавить аккаунт через Яндекс ID' : 'Войти через Яндекс ID'}
               </Button>
             </section>
 
             <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4 text-sm leading-6 text-stone-600">
               Если сотрудник уже создан администратором, входи через тот же Яндекс-аккаунт, где указан этот email.
-              Система сама привяжет профиль к сотруднику.
+              Система сама привяжет профиль к сотруднику и запомнит его для следующего входа.
             </div>
 
             {status === 'missing-config' ? (
