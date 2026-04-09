@@ -14,12 +14,6 @@ jobs:
       CI: true
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
-      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
-      E2E_EMPLOYEE_EMAIL: ${{ secrets.E2E_EMPLOYEE_EMAIL }}
-      E2E_EMPLOYEE_PASSWORD: ${{ secrets.E2E_EMPLOYEE_PASSWORD }}
-      E2E_UNLINKED_EMAIL: ${{ secrets.E2E_UNLINKED_EMAIL }}
-      E2E_UNLINKED_PASSWORD: ${{ secrets.E2E_UNLINKED_PASSWORD }}
 
     steps:
       - name: Checkout

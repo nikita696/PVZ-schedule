@@ -1,32 +1,41 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
-import { activateEmployeeAccountRemote, bootstrapAdminAccountRemote } from '../data/appRepository';
+import { requestRegistrationRemote } from '../data/appRepository';
 import { errorResult, okResult, type ActionResult } from '../lib/result';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { translateSupabaseError } from '../lib/supabaseErrors';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'missing-config';
 
-interface RegisterAdminInput {
+interface RegisterByEmailInput {
   email: string;
-  password: string;
-  organizationName: string;
   displayName: string;
+  isAdmin: boolean;
 }
 
 interface AuthContextType {
   status: AuthStatus;
   session: Session | null;
   user: User | null;
-  signIn: (email: string, password: string) => Promise<ActionResult<void>>;
-  registerAdmin: (input: RegisterAdminInput) => Promise<ActionResult<void>>;
-  activateEmployee: (email: string, password: string) => Promise<ActionResult<void>>;
+  requestLoginLink: (email: string) => Promise<ActionResult<void>>;
+  registerByEmail: (input: RegisterByEmailInput) => Promise<ActionResult<void>>;
   signOut: () => Promise<ActionResult<void>>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const alreadyRegisteredRegex = /already registered/i;
+const getEmailRedirectTo = (): string | undefined => {
+  if (typeof window === 'undefined') return undefined;
+  return `${window.location.origin}/auth/login`;
+};
+
+const ensureSupabaseClient = (): ActionResult<NonNullable<typeof supabase>> => {
+  if (!supabase) {
+    return errorResult('Supabase не настроен. Добавьте переменные окружения.');
+  }
+
+  return okResult(supabase);
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -63,97 +72,79 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signIn = async (email: string, password: string): Promise<ActionResult<void>> => {
-    if (!supabase) {
-      return errorResult('Supabase не настроен. Добавьте переменные окружения.');
+  const sendMagicLink = useCallback(async (
+    email: string,
+    shouldCreateUser: boolean,
+  ): Promise<ActionResult<void>> => {
+    const clientResult = ensureSupabaseClient();
+    if (!clientResult.ok) return clientResult;
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      return errorResult('Введи email.');
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return errorResult(translateSupabaseError(error.message));
-
-    return okResult(undefined, 'Вход выполнен успешно.');
-  };
-
-  const registerAdmin = async (input: RegisterAdminInput): Promise<ActionResult<void>> => {
-    if (!supabase) {
-      return errorResult('Supabase не настроен. Добавьте переменные окружения.');
-    }
-
-    const { data, error } = await supabase.auth.signUp({
-      email: input.email,
-      password: input.password,
+    const { error } = await clientResult.data.auth.signInWithOtp({
+      email: normalizedEmail,
+      options: {
+        shouldCreateUser,
+        emailRedirectTo: getEmailRedirectTo(),
+      },
     });
-    if (error) return errorResult(translateSupabaseError(error.message));
 
-    if (!data.session) {
-      return okResult(
-        undefined,
-        'Аккаунт создан. Подтверди email, затем войди и заверши настройку кабинета администратора.',
-      );
+    if (error) {
+      return errorResult(translateSupabaseError(error.message));
     }
 
-    const bootstrapResult = await bootstrapAdminAccountRemote(
-      input.organizationName.trim() || null,
-      input.displayName.trim() || null,
+    return okResult(undefined, 'Ссылка для входа отправлена на почту.');
+  }, []);
+
+  const requestLoginLink = useCallback(async (email: string): Promise<ActionResult<void>> => (
+    sendMagicLink(email, false)
+  ), [sendMagicLink]);
+
+  const registerByEmail = useCallback(async (input: RegisterByEmailInput): Promise<ActionResult<void>> => {
+    const role = input.isAdmin ? 'admin' : 'employee';
+    const registrationResult = await requestRegistrationRemote({
+      email: input.email,
+      role,
+      displayName: input.displayName.trim() || null,
+    });
+    if (!registrationResult.ok) {
+      return registrationResult;
+    }
+
+    const linkResult = await sendMagicLink(input.email, true);
+    if (!linkResult.ok) {
+      return linkResult;
+    }
+
+    return okResult(
+      undefined,
+      input.isAdmin
+        ? 'Регистрация администратора начата. Перейди по ссылке в письме.'
+        : 'Регистрация сотрудника начата. Перейди по ссылке в письме.',
     );
-    if (!bootstrapResult.ok) {
-      return bootstrapResult;
-    }
+  }, [sendMagicLink]);
 
-    return okResult(undefined, 'Кабинет администратора создан.');
-  };
+  const signOut = useCallback(async (): Promise<ActionResult<void>> => {
+    const clientResult = ensureSupabaseClient();
+    if (!clientResult.ok) return clientResult;
 
-  const activateEmployee = async (email: string, password: string): Promise<ActionResult<void>> => {
-    if (!supabase) {
-      return errorResult('Supabase не настроен. Добавьте переменные окружения.');
-    }
-
-    const signUpResult = await supabase.auth.signUp({ email, password });
-    if (signUpResult.error) {
-      if (alreadyRegisteredRegex.test(signUpResult.error.message)) {
-        const signInResult = await supabase.auth.signInWithPassword({ email, password });
-        if (signInResult.error) {
-          return errorResult(translateSupabaseError(signInResult.error.message));
-        }
-      } else {
-        return errorResult(translateSupabaseError(signUpResult.error.message));
-      }
-    }
-
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) {
-      return okResult(
-        undefined,
-        'Проверь почту и подтверди email. После подтверждения войди и повтори активацию.',
-      );
-    }
-
-    const activationResult = await activateEmployeeAccountRemote();
-    if (!activationResult.ok) return activationResult;
-
-    return okResult(undefined, 'Аккаунт сотрудника активирован.');
-  };
-
-  const signOut = async (): Promise<ActionResult<void>> => {
-    if (!supabase) {
-      return errorResult('Supabase не настроен. Добавьте переменные окружения.');
-    }
-
-    const { error } = await supabase.auth.signOut();
+    const { error } = await clientResult.data.auth.signOut();
     if (error) return errorResult(translateSupabaseError(error.message));
 
     return okResult(undefined, 'Вы вышли из аккаунта.');
-  };
+  }, []);
 
   const value = useMemo<AuthContextType>(() => ({
     status,
     session,
     user: session?.user ?? null,
-    signIn,
-    registerAdmin,
-    activateEmployee,
+    requestLoginLink,
+    registerByEmail,
     signOut,
-  }), [session, status]);
+  }), [registerByEmail, requestLoginLink, session, signOut, status]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

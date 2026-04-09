@@ -89,7 +89,7 @@ function RoleLayout({ role }: { role: 'admin' | 'employee' }) {
   }
 
   if (!access) {
-    return <Navigate to="/auth/activate-employee" replace />;
+    return <Navigate to="/auth/login" replace />;
   }
 
   if (access.role !== role) {
@@ -112,7 +112,7 @@ function RootRedirect() {
   }
 
   if (!access) {
-    return <Navigate to="/auth/activate-employee" replace />;
+    return <Navigate to="/auth/login" replace />;
   }
 
   return <Navigate to={getRoleLandingPath(access.role)} replace />;
@@ -140,9 +140,9 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorBoundary />,
     children: [
       { path: 'login', element: withSuspense(<AuthPage />) },
-      { path: 'register-admin', element: withSuspense(<AuthPage />) },
-      { path: 'activate-employee', element: withSuspense(<AuthPage />) },
-      { path: 'reset-password', element: withSuspense(<AuthPage />) },
+      { path: 'register-admin', element: <Navigate to="/auth/login" replace /> },
+      { path: 'activate-employee', element: <Navigate to="/auth/login" replace /> },
+      { path: 'reset-password', element: <Navigate to="/auth/login" replace /> },
       { index: true, element: <Navigate to="/auth/login" replace /> },
     ],
   },

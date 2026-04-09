@@ -105,18 +105,41 @@ const fetchAccessContext = async (authUserId: string): Promise<ActionResult<Acce
     return errorResult(normalizeError(profileResult.error.message));
   }
 
-  if (!profileResult.data) {
-    return okResult(null);
+  let profile = profileResult.data;
+  if (!profile) {
+    const ensureResult = await client.rpc('ensure_profile_from_registration');
+    if (ensureResult.error) {
+      if (/REGISTRATION_NOT_FOUND/i.test(ensureResult.error.message)) {
+        return okResult(null);
+      }
+
+      return errorResult(normalizeError(ensureResult.error.message));
+    }
+
+    const refreshedProfileResult = await client
+      .from('profiles')
+      .select('*')
+      .eq('id', authUserId)
+      .maybeSingle();
+
+    if (refreshedProfileResult.error) {
+      return errorResult(normalizeError(refreshedProfileResult.error.message));
+    }
+
+    profile = refreshedProfileResult.data;
+    if (!profile) {
+      return okResult(null);
+    }
   }
 
-  if (!profileResult.data.is_active) {
+  if (!profile.is_active) {
     return errorResult('Профиль пользователя отключен. Обратись к администратору.');
   }
 
   const organizationResult = await client
     .from('organizations')
     .select('*')
-    .eq('id', profileResult.data.organization_id)
+    .eq('id', profile.organization_id)
     .single();
 
   if (organizationResult.error) {
@@ -124,11 +147,11 @@ const fetchAccessContext = async (authUserId: string): Promise<ActionResult<Acce
   }
 
   let employeeId: string | null = null;
-  if (profileResult.data.role === 'employee') {
+  if (profile.role === 'employee') {
     const employeeResult = await client
       .from('employees')
       .select('id')
-      .eq('organization_id', profileResult.data.organization_id)
+      .eq('organization_id', profile.organization_id)
       .eq('profile_id', authUserId)
       .eq('status', 'active')
       .limit(1)
@@ -143,13 +166,13 @@ const fetchAccessContext = async (authUserId: string): Promise<ActionResult<Acce
 
   const ownerUserId = organizationResult.data.created_by ?? authUserId;
   return okResult({
-    profile: profileResult.data,
+    profile,
     organization: organizationResult.data,
     access: {
-      role: profileResult.data.role,
-      organizationId: profileResult.data.organization_id,
+      role: profile.role,
+      organizationId: profile.organization_id,
       ownerUserId,
-      profileId: profileResult.data.id,
+      profileId: profile.id,
       employeeId,
     },
   });
@@ -221,6 +244,37 @@ export const fetchAppData = async (authUserId: string): Promise<ActionResult<App
     ...dataResult.data,
     access: accessResult.data.access,
   });
+};
+
+interface RequestRegistrationInput {
+  email: string;
+  role: 'admin' | 'employee';
+  displayName: string | null;
+}
+
+export const requestRegistrationRemote = async (
+  input: RequestRegistrationInput,
+): Promise<ActionResult<void>> => {
+  const clientResult = getClient();
+  if (!clientResult.ok) return clientResult;
+
+  const normalizedEmail = input.email.trim().toLowerCase();
+  if (!normalizedEmail) {
+    return errorResult('Введи email.');
+  }
+
+  const { error } = await clientResult.data.rpc('request_registration', {
+    email_input: normalizedEmail,
+    desired_role_input: input.role,
+    display_name_input: input.displayName?.trim() || null,
+  });
+
+  if (error) return errorResult(normalizeError(error.message));
+
+  return okResult(
+    undefined,
+    'Письмо со ссылкой отправлено. Перейди по ссылке в почте, чтобы завершить вход.',
+  );
 };
 
 export const activateEmployeeAccountRemote = async (): Promise<ActionResult<void>> => {

@@ -55,6 +55,32 @@ export interface Database {
           updated_at?: string;
         };
       };
+      registration_requests: {
+        Row: {
+          email: string;
+          desired_role: 'admin' | 'employee';
+          display_name: string | null;
+          requested_at: string;
+          consumed_at: string | null;
+          consumed_by: string | null;
+        };
+        Insert: {
+          email: string;
+          desired_role: 'admin' | 'employee';
+          display_name?: string | null;
+          requested_at?: string;
+          consumed_at?: string | null;
+          consumed_by?: string | null;
+        };
+        Update: {
+          email?: string;
+          desired_role?: 'admin' | 'employee';
+          display_name?: string | null;
+          requested_at?: string;
+          consumed_at?: string | null;
+          consumed_by?: string | null;
+        };
+      };
       employees: {
         Row: {
           id: string;
@@ -214,6 +240,24 @@ export interface Database {
           organization_name_input?: string | null;
           display_name_input?: string | null;
         };
+        Returns: {
+          organization_id: string;
+          role: 'admin' | 'employee';
+        };
+      };
+      request_registration: {
+        Args: {
+          email_input: string;
+          desired_role_input: 'admin' | 'employee' | string;
+          display_name_input?: string | null;
+        };
+        Returns: {
+          email: string;
+          desired_role: 'admin' | 'employee';
+        };
+      };
+      ensure_profile_from_registration: {
+        Args: Record<string, never>;
         Returns: {
           organization_id: string;
           role: 'admin' | 'employee';
