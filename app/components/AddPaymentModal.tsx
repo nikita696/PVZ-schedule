@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import type { AddPaymentInput, Employee } from '../domain/types';
+import { useLanguage } from '../context/LanguageContext';
 import { getLocalISODate } from '../lib/date';
 import { Button } from './ui/button';
 import {
@@ -28,6 +29,7 @@ export function AddPaymentModal({
   onClose,
   onSubmit,
 }: AddPaymentModalProps) {
+  const { t } = useLanguage();
   const activeEmployees = useMemo(
     () => employees.filter((employee) => !employee.archived),
     [employees],
@@ -58,17 +60,17 @@ export function AddPaymentModal({
   const handleSubmit = async () => {
     const nextAmount = Number(amount);
     if (!employeeId) {
-      toast.error('Выбери сотрудника.');
+      toast.error(t('Выбери сотрудника.', 'Choose an employee.'));
       return;
     }
 
     if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
-      toast.error('Укажи корректную сумму.');
+      toast.error(t('Укажи корректную сумму.', 'Enter a valid amount.'));
       return;
     }
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      toast.error('Укажи дату в формате YYYY-MM-DD.');
+      toast.error(t('Укажи дату в формате YYYY-MM-DD.', 'Enter the date in YYYY-MM-DD format.'));
       return;
     }
 
@@ -86,16 +88,19 @@ export function AddPaymentModal({
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Добавить выплату</DialogTitle>
+          <DialogTitle>{t('Добавить выплату', 'Add payment')}</DialogTitle>
           <DialogDescription>
-            Сотрудник создает запрос на выплату, а администратор потом подтверждает его.
+            {t(
+              'Сотрудник создаёт запрос на выплату, а администратор потом подтверждает его.',
+              'An employee creates a payment request and the administrator confirms it later.',
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4">
           <div className="grid gap-2">
             <label htmlFor="payment-employee" className="text-sm font-medium">
-              Сотрудник
+              {t('Сотрудник', 'Employee')}
             </label>
             <select
               id="payment-employee"
@@ -114,7 +119,7 @@ export function AddPaymentModal({
 
           <div className="grid gap-2">
             <label htmlFor="payment-amount" className="text-sm font-medium">
-              Сумма
+              {t('Сумма', 'Amount')}
             </label>
             <Input
               id="payment-amount"
@@ -128,7 +133,7 @@ export function AddPaymentModal({
 
           <div className="grid gap-2">
             <label htmlFor="payment-date" className="text-sm font-medium">
-              Дата
+              {t('Дата', 'Date')}
             </label>
             <Input
               id="payment-date"
@@ -140,23 +145,23 @@ export function AddPaymentModal({
 
           <div className="grid gap-2">
             <label htmlFor="payment-comment" className="text-sm font-medium">
-              Комментарий
+              {t('Комментарий', 'Comment')}
             </label>
             <Input
               id="payment-comment"
               value={comment}
               onChange={(event) => setComment(event.target.value)}
-              placeholder="Аванс, частичная выплата, наличные..."
+              placeholder={t('Аванс, частичная выплата, наличные...', 'Advance, partial payment, cash...')}
             />
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={submitting}>
-            Отмена
+            {t('Отмена', 'Cancel')}
           </Button>
           <Button onClick={() => void handleSubmit()} disabled={!canSubmit}>
-            {submitting ? 'Сохраняю...' : 'Сохранить выплату'}
+            {submitting ? t('Сохраняю...', 'Saving...') : t('Сохранить выплату', 'Save payment')}
           </Button>
         </DialogFooter>
       </DialogContent>

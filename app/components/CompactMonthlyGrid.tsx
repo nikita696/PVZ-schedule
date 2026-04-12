@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import type { Employee, Shift, ShiftEditorStatus, ShiftStatusDb } from '../domain/types';
 import {
   SHIFT_STATUS_BADGE_CLASS,
-  SHIFT_STATUS_LABEL,
-  SHIFT_STATUS_OPTIONS,
+  getShiftStatusLabel,
+  getShiftStatusOptions,
   isShiftLikeStatus,
 } from '../domain/shiftStatus';
+import { useLanguage } from '../context/LanguageContext';
+import { pickByLanguage, type AppLanguage } from '../lib/i18n';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cn } from './ui/utils';
 
@@ -15,6 +17,7 @@ interface CompactMonthlyGridProps {
   month: number;
   year: number;
   editable: boolean;
+  editableEmployeeIds?: string[];
   onStatusChange?: (employeeId: string, date: string, status: ShiftEditorStatus) => void;
 }
 
@@ -28,21 +31,21 @@ interface DayMeta {
 
 type ActiveEmployeeId = 'all' | string;
 
-const HOLIDAY_BY_MONTH_DAY: Record<string, string> = {
-  '01-01': 'Новый год',
-  '01-02': 'Новогодние каникулы',
-  '01-03': 'Новогодние каникулы',
-  '01-04': 'Новогодние каникулы',
-  '01-05': 'Новогодние каникулы',
-  '01-06': 'Новогодние каникулы',
-  '01-07': 'Рождество',
-  '01-08': 'Новогодние каникулы',
-  '02-23': 'День защитника Отечества',
-  '03-08': 'Международный женский день',
-  '05-01': 'Праздник Весны и Труда',
-  '05-09': 'День Победы',
-  '06-12': 'День России',
-  '11-04': 'День народного единства',
+const HOLIDAY_BY_MONTH_DAY: Record<string, { ru: string; en: string }> = {
+  '01-01': { ru: 'Новый год', en: 'New Year' },
+  '01-02': { ru: 'Новогодние каникулы', en: 'New Year holidays' },
+  '01-03': { ru: 'Новогодние каникулы', en: 'New Year holidays' },
+  '01-04': { ru: 'Новогодние каникулы', en: 'New Year holidays' },
+  '01-05': { ru: 'Новогодние каникулы', en: 'New Year holidays' },
+  '01-06': { ru: 'Новогодние каникулы', en: 'New Year holidays' },
+  '01-07': { ru: 'Рождество', en: 'Christmas' },
+  '01-08': { ru: 'Новогодние каникулы', en: 'New Year holidays' },
+  '02-23': { ru: 'День защитника Отечества', en: 'Defender of the Fatherland Day' },
+  '03-08': { ru: 'Международный женский день', en: 'International Women’s Day' },
+  '05-01': { ru: 'Праздник Весны и Труда', en: 'Spring and Labour Day' },
+  '05-09': { ru: 'День Победы', en: 'Victory Day' },
+  '06-12': { ru: 'День России', en: 'Russia Day' },
+  '11-04': { ru: 'День народного единства', en: 'National Unity Day' },
 };
 
 const isoDate = (year: number, month: number, day: number): string => (
@@ -79,9 +82,10 @@ const splitIntoWeeks = <T,>(items: T[]): T[][] => {
   return weeks;
 };
 
-const getHolidayName = (month: number, day: number): string | null => {
+const getHolidayName = (month: number, day: number, language: AppLanguage): string | null => {
   const key = `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  return HOLIDAY_BY_MONTH_DAY[key] ?? null;
+  const holiday = HOLIDAY_BY_MONTH_DAY[key];
+  return holiday ? pickByLanguage(language, holiday.ru, holiday.en) : null;
 };
 
 export function CompactMonthlyGrid({
@@ -90,21 +94,40 @@ export function CompactMonthlyGrid({
   month,
   year,
   editable,
+  editableEmployeeIds,
   onStatusChange,
 }: CompactMonthlyGridProps) {
+  const { language, t } = useLanguage();
   const [activeEmployeeId, setActiveEmployeeId] = useState<ActiveEmployeeId>('all');
   const [openDayKey, setOpenDayKey] = useState<string | null>(null);
 
+  const statusOptions = useMemo(() => getShiftStatusOptions(language), [language]);
+
+  const editableEmployees = useMemo(() => (
+    employees.filter((employee) => !editableEmployeeIds || editableEmployeeIds.includes(employee.id))
+  ), [editableEmployeeIds, employees]);
+
   useEffect(() => {
-    if (activeEmployeeId === 'all') return;
-    if (!employees.some((employee) => employee.id === activeEmployeeId)) {
+    if (!editable) {
+      return;
+    }
+
+    if (editableEmployees.length === 1) {
+      const onlyEditableEmployee = editableEmployees[0];
+      if (onlyEditableEmployee && activeEmployeeId !== onlyEditableEmployee.id) {
+        setActiveEmployeeId(onlyEditableEmployee.id);
+      }
+      return;
+    }
+
+    if (activeEmployeeId !== 'all' && !editableEmployees.some((employee) => employee.id === activeEmployeeId)) {
       setActiveEmployeeId('all');
     }
-  }, [activeEmployeeId, employees]);
+  }, [activeEmployeeId, editable, editableEmployees]);
 
   const activeEmployee = activeEmployeeId === 'all'
     ? null
-    : employees.find((employee) => employee.id === activeEmployeeId) ?? null;
+    : editableEmployees.find((employee) => employee.id === activeEmployeeId) ?? null;
 
   const dayMeta = useMemo<DayMeta[]>(() => {
     const now = new Date();
@@ -121,10 +144,10 @@ export function CompactMonthlyGrid({
         dayNumber,
         weekend: weekday === 0 || weekday === 6,
         isToday: date === todayKey,
-        holidayName: getHolidayName(month, dayNumber),
+        holidayName: getHolidayName(month, dayNumber, language),
       };
     });
-  }, [month, year]);
+  }, [language, month, year]);
 
   const weeks = useMemo(() => splitIntoWeeks(dayMeta), [dayMeta]);
 
@@ -168,7 +191,7 @@ export function CompactMonthlyGrid({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        {SHIFT_STATUS_OPTIONS.map((status) => (
+        {statusOptions.map((status) => (
           <div key={status.value} className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs text-stone-700">
             <span className={cn('h-3 w-3 rounded-full border border-stone-300', status.colorClass)} />
             <span>{status.label}</span>
@@ -176,9 +199,9 @@ export function CompactMonthlyGrid({
         ))}
       </div>
 
-      {editable ? (
+      {editable && editableEmployees.length > 1 ? (
         <div className="rounded-xl border bg-white p-2">
-          <div className="mb-2 text-xs font-medium text-stone-700">Выбери сотрудника</div>
+          <div className="mb-2 text-xs font-medium text-stone-700">{t('Выбери сотрудника для редактирования', 'Choose an employee to edit')}</div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -193,9 +216,9 @@ export function CompactMonthlyGrid({
                   : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50',
               )}
             >
-              Все
+              {t('Все', 'All')}
             </button>
-            {employees.map((employee) => (
+            {editableEmployees.map((employee) => (
               <button
                 key={employee.id}
                 type="button"
@@ -218,7 +241,7 @@ export function CompactMonthlyGrid({
       ) : null}
 
       <div className="rounded-xl border bg-white p-3">
-        <div className="mb-2 text-xs font-medium text-stone-700">Смен в месяце</div>
+        <div className="mb-2 text-xs font-medium text-stone-700">{t('Смен в месяце', 'Shifts this month')}</div>
         <div className="flex flex-wrap gap-2">
           {employees.map((employee) => (
             <div
@@ -235,15 +258,18 @@ export function CompactMonthlyGrid({
       </div>
 
       <div className="rounded-xl border bg-stone-50/70 p-3 text-sm text-stone-700">
-        <span className="font-medium">Непокрытые дни:</span>{' '}
-        {unfilledDays.length === 0 ? 'нет' : unfilledDays.map((day) => day.dayNumber).join(', ')}
+        <span className="font-medium">{t('Непокрытые дни:', 'Uncovered days:')}</span>{' '}
+        {unfilledDays.length === 0 ? t('нет', 'none') : unfilledDays.map((day) => day.dayNumber).join(', ')}
       </div>
 
       <div className="space-y-2">
         {weeks.map((week, weekIndex) => (
           <div key={`week-${weekIndex}`} className="grid grid-cols-7 gap-2">
             {week.map((day) => {
-              const canOpenDayEditor = editable && activeEmployeeId !== 'all' && !!activeEmployee && !isOutsideEmployment(activeEmployee, day.date);
+              const canOpenDayEditor = editable
+                && activeEmployeeId !== 'all'
+                && !!activeEmployee
+                && !isOutsideEmployment(activeEmployee, day.date);
 
               return (
                 <Popover
@@ -291,11 +317,11 @@ export function CompactMonthlyGrid({
                             >
                               <span className="truncate text-[11px]">{employee.name}</span>
                               {outsideEmployment ? (
-                                <span className="text-[10px] text-stone-400">вне периода</span>
+                                <span className="text-[10px] text-stone-400">{t('вне периода', 'out of range')}</span>
                               ) : (
                                 <span
                                   className={cn('h-3.5 w-3.5 rounded border', SHIFT_STATUS_BADGE_CLASS[status])}
-                                  title={SHIFT_STATUS_LABEL[status]}
+                                  title={getShiftStatusLabel(status, language)}
                                 />
                               )}
                             </div>
@@ -317,7 +343,7 @@ export function CompactMonthlyGrid({
                         {activeEmployee?.name} • {day.dayNumber}.{String(month).padStart(2, '0')}.{year}
                       </div>
                       <div className="grid gap-1">
-                        {SHIFT_STATUS_OPTIONS.map((option) => (
+                        {statusOptions.map((option) => (
                           <button
                             key={`${day.date}:${option.value}`}
                             type="button"

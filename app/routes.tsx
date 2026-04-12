@@ -6,43 +6,49 @@ import {
   isRouteErrorResponse,
   useRouteError,
 } from 'react-router';
+import { RoleShell } from './components/RoleShell';
 import { Button } from './components/ui/button';
 import { useApp } from './context/AppContext';
 import { useAuth } from './context/AuthContext';
+import { useLanguage } from './context/LanguageContext';
 import { lazyWithRetry } from './lib/lazyWithRetry';
 
 const AuthPage = lazyWithRetry(() => import('./pages/Auth'), 'auth-page');
 const DashboardPage = lazyWithRetry(() => import('./pages/Dashboard'), 'dashboard-page');
+const EmployeesPage = lazyWithRetry(() => import('./pages/Employees'), 'employees-page');
 const CalendarPage = lazyWithRetry(() => import('./pages/Calendar'), 'calendar-page');
 const PaymentsPage = lazyWithRetry(() => import('./pages/Payments'), 'payments-page');
 
 function RouteLoader() {
+  const { t } = useLanguage();
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-stone-50 px-4">
       <div className="rounded-2xl border bg-white px-6 py-4 text-sm text-muted-foreground shadow-sm">
-        Загружаю...
+        {t('Загружаю...', 'Loading...')}
       </div>
     </div>
   );
 }
 
 function RouteErrorBoundary() {
+  const { t } = useLanguage();
   const error = useRouteError();
 
   const message = isRouteErrorResponse(error)
     ? `${error.status} ${error.statusText}`
     : error instanceof Error
       ? error.message
-      : 'Произошла ошибка.';
+      : t('Произошла ошибка.', 'Something went wrong.');
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-stone-50 px-4">
       <div className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-sm">
-        <h1 className="text-lg font-semibold text-stone-900">Что-то пошло не так</h1>
+        <h1 className="text-lg font-semibold text-stone-900">{t('Что-то пошло не так', 'Something went wrong')}</h1>
         <p className="mt-2 text-sm text-stone-600">{message}</p>
         <div className="mt-4 flex gap-2">
-          <Button onClick={() => window.location.reload()}>Обновить страницу</Button>
-          <Button variant="outline" onClick={() => window.location.assign('/')}>На главную</Button>
+          <Button onClick={() => window.location.reload()}>{t('Обновить страницу', 'Reload page')}</Button>
+          <Button variant="outline" onClick={() => window.location.assign('/')}>{t('На главную', 'Go home')}</Button>
         </div>
       </div>
     </div>
@@ -72,7 +78,7 @@ function AuthOnlyLayout() {
   return <Outlet />;
 }
 
-function RoleLayout({ role }: { role: 'admin' | 'employee' }) {
+function ProtectedRoleLayout({ role }: { role: 'admin' | 'employee' }) {
   const { status: authStatus } = useAuth();
   const { status: appStatus, access } = useApp();
 
@@ -96,7 +102,11 @@ function RoleLayout({ role }: { role: 'admin' | 'employee' }) {
     return <Navigate to={getRoleLandingPath(access.role)} replace />;
   }
 
-  return <Outlet />;
+  return (
+    <RoleShell role={role}>
+      <Outlet />
+    </RoleShell>
+  );
 }
 
 function RootRedirect() {
@@ -118,11 +128,17 @@ function RootRedirect() {
   return <Navigate to={getRoleLandingPath(access.role)} replace />;
 }
 
-function StubPage({ title }: { title: string }) {
+function StubPage({ titleRu, titleEn }: { titleRu: string; titleEn: string }) {
+  const { t } = useLanguage();
+  const title = t(titleRu, titleEn);
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
       <div className="rounded-xl border bg-white p-5 text-sm text-muted-foreground">
-        Раздел {title} ещё в работе. Основной поток сейчас находится в календаре, сотрудниках и выплатах.
+        {t(
+          `Раздел ${title} ещё в работе. Основной поток сейчас находится в календаре, сотрудниках и выплатах.`,
+          `${title} is still in progress. The main workflow currently lives in calendar, employees, and payments.`,
+        )}
       </div>
     </div>
   );
@@ -148,30 +164,30 @@ export const router = createBrowserRouter([
   },
   {
     path: '/admin',
-    element: <RoleLayout role="admin" />,
+    element: <ProtectedRoleLayout role="admin" />,
     errorElement: <RouteErrorBoundary />,
     children: [
       { path: 'dashboard', element: withSuspense(<DashboardPage />) },
-      { path: 'employees', element: withSuspense(<DashboardPage />) },
+      { path: 'employees', element: withSuspense(<EmployeesPage />) },
       { path: 'calendar', element: withSuspense(<CalendarPage />) },
       { path: 'payments', element: withSuspense(<PaymentsPage />) },
-      { path: 'finance', element: <StubPage title="Финансы" /> },
-      { path: 'settings', element: <StubPage title="Настройки" /> },
-      { path: 'import-export', element: <StubPage title="Импорт / экспорт" /> },
-      { path: 'audit', element: <StubPage title="Журнал изменений" /> },
+      { path: 'finance', element: <StubPage titleRu="Финансы" titleEn="Finance" /> },
+      { path: 'settings', element: <StubPage titleRu="Настройки" titleEn="Settings" /> },
+      { path: 'import-export', element: <StubPage titleRu="Импорт / экспорт" titleEn="Import / export" /> },
+      { path: 'audit', element: <StubPage titleRu="Журнал изменений" titleEn="Audit log" /> },
       { index: true, element: <Navigate to="/admin/dashboard" replace /> },
     ],
   },
   {
     path: '/employee',
-    element: <RoleLayout role="employee" />,
+    element: <ProtectedRoleLayout role="employee" />,
     errorElement: <RouteErrorBoundary />,
     children: [
       { path: 'dashboard', element: withSuspense(<DashboardPage />) },
       { path: 'calendar', element: withSuspense(<CalendarPage />) },
       { path: 'shifts', element: withSuspense(<CalendarPage />) },
       { path: 'payments', element: withSuspense(<PaymentsPage />) },
-      { path: 'profile', element: <StubPage title="Профиль" /> },
+      { path: 'profile', element: <StubPage titleRu="Профиль" titleEn="Profile" /> },
       { index: true, element: <Navigate to="/employee/dashboard" replace /> },
     ],
   },

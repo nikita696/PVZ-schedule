@@ -1,4 +1,5 @@
-import type { ShiftEditorStatus, ShiftStatusDb } from './types';
+﻿import type { ShiftEditorStatus, ShiftStatusDb } from './types';
+import { getCurrentLanguage, pickByLanguage, type AppLanguage } from '../lib/i18n';
 
 export type LegacyShiftStatus =
   | 'working'
@@ -20,13 +21,28 @@ export const isShiftLikeStatus = (status: ShiftStatusDb | null): status is 'shif
   status === 'shift' || status === 'replacement'
 );
 
-export const SHIFT_STATUS_LABEL: Record<ShiftStatusDb, string> = {
-  shift: 'Смена',
-  day_off: 'Выходной',
-  sick_leave: 'Больничный',
-  no_show: 'Невыход',
-  replacement: 'Замена',
-  no_shift: 'Нет смены',
+export const getShiftStatusLabel = (
+  status: ShiftStatusDb | 'none',
+  language: AppLanguage = getCurrentLanguage(),
+): string => {
+  switch (status) {
+    case 'shift':
+      return pickByLanguage(language, 'Смена', 'Shift');
+    case 'day_off':
+      return pickByLanguage(language, 'Выходной', 'Day off');
+    case 'sick_leave':
+      return pickByLanguage(language, 'Больничный', 'Sick leave');
+    case 'no_show':
+      return pickByLanguage(language, 'Невыход', 'No-show');
+    case 'replacement':
+      return pickByLanguage(language, 'Замена', 'Replacement');
+    case 'no_shift':
+      return pickByLanguage(language, 'Нет смены', 'No shift');
+    case 'none':
+      return pickByLanguage(language, 'Очистить', 'Clear');
+    default:
+      return pickByLanguage(language, 'Нет смены', 'No shift');
+  }
 };
 
 export const SHIFT_STATUS_BADGE_CLASS: Record<ShiftStatusDb, string> = {
@@ -38,18 +54,18 @@ export const SHIFT_STATUS_BADGE_CLASS: Record<ShiftStatusDb, string> = {
   no_shift: 'bg-stone-200 border-stone-300',
 };
 
-export const SHIFT_STATUS_OPTIONS: Array<{
+export const getShiftStatusOptions = (language: AppLanguage = getCurrentLanguage()): Array<{
   value: ShiftEditorStatus;
   label: string;
   colorClass: string;
-}> = [
-  { value: 'shift', label: SHIFT_STATUS_LABEL.shift, colorClass: 'bg-emerald-500' },
-  { value: 'day_off', label: SHIFT_STATUS_LABEL.day_off, colorClass: 'bg-blue-500' },
-  { value: 'sick_leave', label: SHIFT_STATUS_LABEL.sick_leave, colorClass: 'bg-violet-500' },
-  { value: 'no_show', label: SHIFT_STATUS_LABEL.no_show, colorClass: 'bg-rose-500' },
-  { value: 'replacement', label: SHIFT_STATUS_LABEL.replacement, colorClass: 'bg-amber-400' },
-  { value: 'no_shift', label: SHIFT_STATUS_LABEL.no_shift, colorClass: 'bg-stone-300' },
-  { value: 'none', label: 'Очистить', colorClass: 'bg-white' },
+}> => [
+  { value: 'shift', label: getShiftStatusLabel('shift', language), colorClass: 'bg-emerald-500' },
+  { value: 'day_off', label: getShiftStatusLabel('day_off', language), colorClass: 'bg-blue-500' },
+  { value: 'sick_leave', label: getShiftStatusLabel('sick_leave', language), colorClass: 'bg-violet-500' },
+  { value: 'no_show', label: getShiftStatusLabel('no_show', language), colorClass: 'bg-rose-500' },
+  { value: 'replacement', label: getShiftStatusLabel('replacement', language), colorClass: 'bg-amber-400' },
+  { value: 'no_shift', label: getShiftStatusLabel('no_shift', language), colorClass: 'bg-stone-300' },
+  { value: 'none', label: getShiftStatusLabel('none', language), colorClass: 'bg-white' },
 ];
 
 export const normalizeShiftStatus = (

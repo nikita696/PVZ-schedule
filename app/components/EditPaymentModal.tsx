@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useLanguage } from '../context/LanguageContext';
 import { Button } from './ui/button';
 import {
   Dialog,
@@ -34,6 +35,7 @@ export function EditPaymentModal({
   onClose,
   onSubmit,
 }: EditPaymentModalProps) {
+  const { t } = useLanguage();
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState('');
   const [comment, setComment] = useState('');
@@ -52,12 +54,12 @@ export function EditPaymentModal({
 
     const parsedAmount = Number(amount);
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      toast.error('Укажи корректную сумму.');
+      toast.error(t('Укажи корректную сумму.', 'Enter a valid amount.'));
       return;
     }
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      toast.error('Укажи дату в формате YYYY-MM-DD.');
+      toast.error(t('Укажи дату в формате YYYY-MM-DD.', 'Enter the date in YYYY-MM-DD format.'));
       return;
     }
 
@@ -75,16 +77,19 @@ export function EditPaymentModal({
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Изменить выплату</DialogTitle>
+          <DialogTitle>{t('Изменить выплату', 'Edit payment')}</DialogTitle>
           <DialogDescription>
-            Можно поправить сумму, дату и комментарий до финального подтверждения.
+            {t(
+              'Можно поправить сумму, дату и комментарий до финального подтверждения.',
+              'You can edit the amount, date, and comment before final approval.',
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4">
           <div className="grid gap-2">
             <label htmlFor="edit-payment-amount" className="text-sm font-medium">
-              Сумма
+              {t('Сумма', 'Amount')}
             </label>
             <Input
               id="edit-payment-amount"
@@ -97,7 +102,7 @@ export function EditPaymentModal({
 
           <div className="grid gap-2">
             <label htmlFor="edit-payment-date" className="text-sm font-medium">
-              Дата
+              {t('Дата', 'Date')}
             </label>
             <Input
               id="edit-payment-date"
@@ -109,23 +114,23 @@ export function EditPaymentModal({
 
           <div className="grid gap-2">
             <label htmlFor="edit-payment-comment" className="text-sm font-medium">
-              Комментарий
+              {t('Комментарий', 'Comment')}
             </label>
             <Input
               id="edit-payment-comment"
               value={comment}
               onChange={(event) => setComment(event.target.value)}
-              placeholder="Причина, формат выплаты..."
+              placeholder={t('Причина, формат выплаты...', 'Reason, payment format...')}
             />
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={submitting}>
-            Отмена
+            {t('Отмена', 'Cancel')}
           </Button>
           <Button onClick={() => void handleSubmit()} disabled={submitting}>
-            {submitting ? 'Сохраняю...' : 'Сохранить'}
+            {submitting ? t('Сохраняю...', 'Saving...') : t('Сохранить', 'Save')}
           </Button>
         </DialogFooter>
       </DialogContent>

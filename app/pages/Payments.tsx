@@ -1,8 +1,7 @@
-import { CheckCircle2, Pencil, Trash2, Wallet, XCircle } from 'lucide-react';
+﻿import { CheckCircle2, Pencil, Trash2, Wallet, XCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { AddPaymentModal } from '../components/AddPaymentModal';
-import { BottomNav } from '../components/BottomNav';
 import { EditPaymentModal } from '../components/EditPaymentModal';
 import { PaymentStatusBadge } from '../components/PaymentStatusBadge';
 import { Button } from '../components/ui/button';
@@ -16,8 +15,9 @@ import {
   TableRow,
 } from '../components/ui/table';
 import { useApp } from '../context/AppContext';
+import { useLanguage } from '../context/LanguageContext';
 
-const money = (value: number) => new Intl.NumberFormat('ru-RU', {
+const money = (value: number, locale: string) => new Intl.NumberFormat(locale, {
   style: 'currency',
   currency: 'RUB',
   maximumFractionDigits: 0,
@@ -31,6 +31,7 @@ interface EditPaymentState {
 }
 
 export default function PaymentsPage() {
+  const { locale, t } = useLanguage();
   const {
     employees,
     payments,
@@ -84,11 +85,14 @@ export default function PaymentsPage() {
     }
 
     setModalOpen(false);
-    toast.success(result.message ?? 'Выплата сохранена.');
+    toast.success(t('Выплата сохранена.', 'Payment saved.'));
   };
 
   const handleDeletePayment = async (id: string) => {
-    const confirmed = window.confirm('Удалить выплату? Это действие нельзя отменить.');
+    const confirmed = window.confirm(t(
+      'Удалить выплату? Это действие нельзя отменить.',
+      'Delete this payment? This action cannot be undone.',
+    ));
     if (!confirmed) return;
 
     const result = await deletePayment(id);
@@ -97,7 +101,7 @@ export default function PaymentsPage() {
       return;
     }
 
-    toast.success(result.message ?? 'Выплата удалена.');
+    toast.success(t('Выплата удалена.', 'Payment deleted.'));
   };
 
   const handleConfirmPayment = async (id: string) => {
@@ -107,7 +111,7 @@ export default function PaymentsPage() {
       return;
     }
 
-    toast.success(result.message ?? 'Выплата подтверждена.');
+    toast.success(t('Выплата подтверждена.', 'Payment approved.'));
   };
 
   const handleRejectPayment = async (id: string) => {
@@ -117,7 +121,7 @@ export default function PaymentsPage() {
       return;
     }
 
-    toast.success(result.message ?? 'Выплата отклонена.');
+    toast.success(t('Выплата отклонена.', 'Payment rejected.'));
   };
 
   const handleEditPayment = async (payload: EditPaymentState) => {
@@ -133,31 +137,26 @@ export default function PaymentsPage() {
     }
 
     setEditingPayment(null);
-    toast.success(result.message ?? 'Выплата обновлена.');
+    toast.success(t('Выплата обновлена.', 'Payment updated.'));
   };
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="bg-stone-50">
       <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6">
-        <Card className="border-orange-100 bg-[radial-gradient(circle_at_top_left,#fff7ed,white_55%)]">
-          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="w-fit rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
-                Выплаты
+        <Card>
+          <CardContent className="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">
+                {isOwner ? t('Все выплаты ПВЗ', 'All PVZ payments') : t('Твои выплаты', 'Your payments')}
               </div>
-              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-stone-900">
-                {isOwner ? 'Журнал выплат по ПВЗ' : 'Мои выплаты'}
-              </h1>
-              <p className="mt-1 text-sm text-stone-600">
-                {isOwner
-                  ? 'Подтверждай, редактируй или отклоняй запросы сотрудников. В долг попадают только подтвержденные выплаты.'
-                  : 'Ты можешь создать запрос на выплату и редактировать его, пока администратор не принял решение.'}
-              </p>
+              <div className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                {t('На подтверждении', 'Pending')}: {pendingCount}
+              </div>
             </div>
 
-            <Button onClick={() => setModalOpen(true)} className="bg-orange-600 hover:bg-orange-500">
+            <Button onClick={() => setModalOpen(true)}>
               <Wallet className="h-4 w-4" />
-              Добавить выплату
+              {t('Добавить выплату', 'Add payment')}
             </Button>
           </CardContent>
         </Card>
@@ -165,21 +164,21 @@ export default function PaymentsPage() {
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Card>
             <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">Всего записей</div>
+              <div className="text-xs text-muted-foreground">{t('Всего записей', 'Total records')}</div>
               <div className="mt-2 text-2xl font-semibold">{visiblePayments.length}</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">На подтверждении</div>
+              <div className="text-xs text-muted-foreground">{t('На подтверждении', 'Pending')}</div>
               <div className="mt-2 text-2xl font-semibold text-amber-700">{pendingCount}</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">Подтверждено / сумма</div>
+              <div className="text-xs text-muted-foreground">{t('Подтверждено / сумма', 'Approved / amount')}</div>
               <div className="mt-2 text-2xl font-semibold text-emerald-700">
-                {approvedCount} / {money(totalApproved)}
+                {approvedCount} / {money(totalApproved, locale)}
               </div>
             </CardContent>
           </Card>
@@ -187,14 +186,14 @@ export default function PaymentsPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
-            <CardTitle>Журнал выплат</CardTitle>
+            <CardTitle>{isOwner ? t('Все выплаты', 'All payments') : t('История моих выплат', 'My payment history')}</CardTitle>
             {isOwner ? (
               <select
                 className="h-10 rounded-md border bg-input-background px-3 text-sm"
                 value={selectedEmployeeId}
                 onChange={(event) => setSelectedEmployeeId(event.target.value)}
               >
-                <option value="all">Все сотрудники</option>
+                <option value="all">{t('Все сотрудники', 'All employees')}</option>
                 {visibleEmployees.map((employee) => (
                   <option key={employee.id} value={employee.id}>
                     {employee.name}
@@ -207,12 +206,12 @@ export default function PaymentsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Дата</TableHead>
-                  <TableHead>Сотрудник</TableHead>
-                  <TableHead>Сумма</TableHead>
-                  <TableHead>Комментарий</TableHead>
-                  <TableHead>Статус</TableHead>
-                  <TableHead className="w-[320px]">Действия</TableHead>
+                  <TableHead>{t('Дата', 'Date')}</TableHead>
+                  <TableHead>{t('Сотрудник', 'Employee')}</TableHead>
+                  <TableHead>{t('Сумма', 'Amount')}</TableHead>
+                  <TableHead>{t('Комментарий', 'Comment')}</TableHead>
+                  <TableHead>{t('Статус', 'Status')}</TableHead>
+                  <TableHead className="w-[320px]">{t('Действия', 'Actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -226,8 +225,8 @@ export default function PaymentsPage() {
                   return (
                     <TableRow key={payment.id}>
                       <TableCell>{payment.date}</TableCell>
-                      <TableCell>{employee?.name ?? 'Сотрудник'}</TableCell>
-                      <TableCell>{money(payment.amount)}</TableCell>
+                      <TableCell>{employee?.name ?? t('Сотрудник', 'Employee')}</TableCell>
+                      <TableCell>{money(payment.amount, locale)}</TableCell>
                       <TableCell>{payment.comment || '-'}</TableCell>
                       <TableCell>
                         <PaymentStatusBadge status={payment.status} />
@@ -240,7 +239,7 @@ export default function PaymentsPage() {
                             onClick={() => void handleConfirmPayment(payment.id)}
                           >
                             <CheckCircle2 className="h-4 w-4" />
-                            Подтвердить
+                            {t('Подтвердить', 'Approve')}
                           </Button>
                         ) : null}
                         {canReject ? (
@@ -250,7 +249,7 @@ export default function PaymentsPage() {
                             onClick={() => void handleRejectPayment(payment.id)}
                           >
                             <XCircle className="h-4 w-4" />
-                            Отклонить
+                            {t('Отклонить', 'Reject')}
                           </Button>
                         ) : null}
                         {canEdit ? (
@@ -265,7 +264,7 @@ export default function PaymentsPage() {
                             })}
                           >
                             <Pencil className="h-4 w-4" />
-                            Изменить
+                            {t('Изменить', 'Edit')}
                           </Button>
                         ) : null}
                         {canDelete ? (
@@ -274,25 +273,29 @@ export default function PaymentsPage() {
                             size="sm"
                             onClick={() => void handleDeletePayment(payment.id)}
                           >
-                            <Trash2 className="h-4 w-4 text-rose-600" />
-                            Удалить
+                            <Trash2 className="h-4 w-4" />
+                            {t('Удалить', 'Delete')}
                           </Button>
                         ) : null}
                       </TableCell>
                     </TableRow>
                   );
                 })}
+
+                {visiblePayments.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                      {isOwner
+                        ? t('Пока нет ни одной выплаты за выбранный период.', 'There are no payments for the selected period yet.')
+                        : t('У тебя пока нет ни одной выплаты.', 'You do not have any payments yet.')}
+                    </TableCell>
+                  </TableRow>
+                ) : null}
               </TableBody>
             </Table>
-
-            {visiblePayments.length === 0 ? (
-              <p className="pt-4 text-sm text-muted-foreground">Пока здесь нет выплат.</p>
-            ) : null}
           </CardContent>
         </Card>
       </main>
-
-      <BottomNav />
 
       <AddPaymentModal
         open={modalOpen}
@@ -303,7 +306,7 @@ export default function PaymentsPage() {
       />
 
       <EditPaymentModal
-        open={Boolean(editingPayment)}
+        open={editingPayment !== null}
         initial={editingPayment}
         onClose={() => setEditingPayment(null)}
         onSubmit={handleEditPayment}

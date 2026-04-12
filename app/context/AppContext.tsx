@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+﻿import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   archiveEmployeeRemote,
   confirmPaymentRemote,
@@ -11,6 +11,7 @@ import {
   rejectPaymentRemote,
   replaceUserDataRemote,
   setScheduleMonthStatusRemote,
+  updateCurrentUserNameRemote,
   updateEmployeeRateRemote,
   updatePaymentRemote,
   upsertShiftRemote,
@@ -31,6 +32,7 @@ import type {
   MonthStatus,
   Payment,
   ScheduleMonth,
+  SessionIdentity,
   Shift,
   ShiftEditorStatus,
   UserAccess,
@@ -38,8 +40,10 @@ import type {
 import { createBackupPayload, parseBackupPayload } from '../lib/backup';
 import { loadUiPreferences, saveUiPreferences } from '../lib/preferences';
 import { errorResult, okResult, type ActionResult } from '../lib/result';
+import { buildInitials, buildSessionIdentity, getRoleLabel } from '../lib/sessionIdentity';
 import { exportEmployeePayslipXlsx as exportEmployeePayslipXlsxFile } from '../lib/xlsx';
 import { useAuth } from './AuthContext';
+import { useLanguage } from './LanguageContext';
 
 interface AddEmployeeInput {
   name: string;
@@ -55,6 +59,7 @@ interface AppContextType {
   shifts: Shift[];
   payments: Payment[];
   access: UserAccess | null;
+  currentUserSummary: SessionIdentity | null;
   selectedMonth: number;
   selectedYear: number;
   selectedMonthStatus: MonthStatus;
@@ -64,6 +69,7 @@ interface AppContextType {
   isOwner: boolean;
   myEmployeeId: string | null;
   canEditSelectedMonth: boolean;
+  updateCurrentUserName: (displayName: string) => Promise<ActionResult<void>>;
   setSelectedMonth: (month: number) => void;
   setSelectedYear: (year: number) => void;
   refreshData: () => Promise<ActionResult<void>>;
@@ -133,7 +139,14 @@ const sortPayments = (items: Payment[]): Payment[] => (
 );
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const { status: authStatus, user, isCompletingOAuth } = useAuth();
+  const {
+    status: authStatus,
+    user,
+    sessionIdentity,
+    isCompletingOAuth,
+    rememberResolvedIdentity,
+  } = useAuth();
+  const { t } = useLanguage();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [rateHistory, setRateHistory] = useState<EmployeeRateHistory[]>([]);
   const [scheduleMonths, setScheduleMonths] = useState<ScheduleMonth[]>([]);
@@ -143,10 +156,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [preferences, setPreferences] = useState(() => loadUiPreferences());
   const [status, setStatus] = useState<AppDataStatus>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [displayNameOverride, setDisplayNameOverride] = useState<string | null>(null);
 
   useEffect(() => {
     saveUiPreferences(preferences);
   }, [preferences]);
+
+  useEffect(() => {
+    setDisplayNameOverride(null);
+  }, [user?.id]);
 
   useEffect(() => {
     if (authStatus === 'loading' || isCompletingOAuth) {
@@ -163,7 +181,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setPayments([]);
       setAccess(null);
       setStatus('error');
-      setError('Supabase не настроен. Проверь `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`.');
+      setError(t('Supabase не настроен. Проверь `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`.', 'Supabase is not configured. Check `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.'));
       return;
     }
 
@@ -206,7 +224,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       isActive = false;
     };
-  }, [authStatus, isCompletingOAuth, user]);
+  }, [authStatus, isCompletingOAuth, t, user]);
+
+  useEffect(() => {
+    if (authStatus !== 'authenticated' || !access) {
+      return;
+    }
+
+    rememberResolvedIdentity({
+      role: access.role,
+      isOwner: access.role === 'admin',
+    });
+  }, [access, authStatus, rememberResolvedIdentity]);
 
   const selectedMonthStatus = useMemo<MonthStatus>(() => {
     const found = scheduleMonths.find((item) => (
@@ -222,9 +251,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return selectedMonthStatus === 'draft';
   }, [access, selectedMonthStatus]);
 
+  const currentUserSummary = useMemo<SessionIdentity | null>(() => {
+    if (!user) {
+      return null;
+    }
+
+    const linkedEmployee = access?.employeeId
+      ? employees.find((employee) => employee.id === access.employeeId) ?? null
+      : null;
+
+    const fallbackIdentity = buildSessionIdentity(user, access ? {
+      role: access.role,
+      isOwner: access.role === 'admin',
+    } : undefined);
+
+    const baseIdentity = sessionIdentity ?? fallbackIdentity;
+    if (!baseIdentity) {
+      return null;
+    }
+
+    const resolvedRole = access?.role ?? baseIdentity.role ?? null;
+    const resolvedDisplayName = (
+      displayNameOverride?.trim()
+      || access?.profileDisplayName?.trim()
+      || linkedEmployee?.name?.trim()
+      || baseIdentity.displayName
+      || t('Пользователь', 'User')
+    );
+
+    return {
+      ...baseIdentity,
+      displayName: resolvedDisplayName,
+      initials: buildInitials(resolvedDisplayName, baseIdentity.email),
+      role: resolvedRole,
+      roleLabel: getRoleLabel(resolvedRole),
+      isOwner: resolvedRole === 'admin',
+    };
+  }, [access, displayNameOverride, employees, sessionIdentity, t, user]);
+
   const requireUser = (): ActionResult<string> => {
     if (!user) {
-      return errorResult('Сначала войди в аккаунт.');
+      return errorResult(t('Сначала войди в аккаунт.', 'Sign in first.'));
     }
 
     return okResult(user.id);
@@ -232,7 +299,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const requireAccess = (): ActionResult<UserAccess> => {
     if (!access) {
-      return errorResult('Профиль еще не создан. Заверши регистрацию через письмо.');
+      return errorResult(t('Профиль ещё не собран. Заверши вход через Яндекс и дождись привязки роли.', 'The profile is not ready yet. Finish the Yandex sign-in flow and wait for role linking.'));
     }
 
     return okResult(access);
@@ -242,7 +309,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const accessResult = requireAccess();
     if (!accessResult.ok) return accessResult;
     if (accessResult.data.role !== 'admin') {
-      return errorResult('Недостаточно прав для этого действия.');
+      return errorResult(t('Недостаточно прав для этого действия.', 'You do not have permission for this action.'));
     }
 
     return okResult(accessResult.data);
@@ -257,7 +324,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     if (!accessResult.data.employeeId || accessResult.data.employeeId !== employeeId) {
-      return errorResult('Можно менять только свои пожелания по сменам.');
+      return errorResult(t('Можно менять только свои пожелания по сменам.', 'You can only edit your own shift preferences.'));
     }
 
     return accessResult;
@@ -294,6 +361,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setSelectedYear = (year: number) => {
     if (!Number.isInteger(year)) return;
     setPreferences((prev) => ({ ...prev, selectedYear: year }));
+  };
+
+  const updateCurrentUserName = async (displayName: string): Promise<ActionResult<void>> => {
+    const accessResult = requireAccess();
+    if (!accessResult.ok) return accessResult;
+
+    const trimmedName = displayName.trim();
+    if (!trimmedName) {
+      return errorResult(t('Укажи имя для профиля.', 'Enter a display name for the profile.'));
+    }
+
+    const result = await updateCurrentUserNameRemote(trimmedName);
+    if (!result.ok) {
+      setError(result.error);
+      return errorResult(result.error);
+    }
+
+    if (result.data.employee) {
+      setEmployees((prev) => sortEmployees(prev.map((employee) => (
+        employee.id === result.data.employee!.id ? result.data.employee! : employee
+      ))));
+    }
+
+    setAccess((prev) => (
+      prev ? { ...prev, profileDisplayName: result.data.displayName } : prev
+    ));
+    setDisplayNameOverride(result.data.displayName);
+    setError(null);
+    return okResult(undefined, result.message);
   };
 
   const setSelectedMonthStatus = async (nextStatus: MonthStatus): Promise<ActionResult<void>> => {
@@ -437,7 +533,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!editorResult.ok) return editorResult;
 
     if (!canEditSelectedMonth) {
-      return errorResult('Этот месяц уже закрыт для редактирования.');
+      return errorResult(t('Этот месяц уже закрыт для редактирования.', 'This month is already locked for editing.'));
     }
 
     if (nextStatus === 'none') {
@@ -476,7 +572,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const isAdmin = accessResult.data.role === 'admin';
     const employeeId = isAdmin ? input.employeeId : accessResult.data.employeeId;
     if (!employeeId) {
-      return errorResult('Не удалось определить сотрудника для выплаты.');
+      return errorResult(t('Не удалось определить сотрудника для выплаты.', 'Could not determine the employee for this payment.'));
     }
 
     const result = await createPaymentRemote({
@@ -584,11 +680,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   ): Promise<ActionResult<void>> => {
     const employee = employees.find((item) => item.id === employeeId);
     if (!employee) {
-      return errorResult('Сотрудник не найден.');
+      return errorResult(t('Сотрудник не найден.', 'Employee not found.'));
     }
 
     if (access?.role === 'employee' && access.employeeId !== employeeId) {
-      return errorResult('Можно выгрузить только свой расчетный лист.');
+      return errorResult(t('Можно выгрузить только свой расчётный лист.', 'You can only export your own payslip.'));
     }
 
     await exportEmployeePayslipXlsxFile({
@@ -601,7 +697,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       stats: getEmployeeStats(payrollSource, employeeId, month, year),
     });
 
-    return okResult(undefined, 'Excel-файл выгружен.');
+    return okResult(undefined, t('Excel-файл выгружен.', 'The Excel file has been exported.'));
   };
 
   const importAppState = async (payload: unknown): Promise<ActionResult<void>> => {
@@ -612,7 +708,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const importedData = parseBackupPayload(payload);
     if (!importedData) {
-      return errorResult('Файл не похож на backup PVZ Schedule.');
+      return errorResult(t('Файл не похож на backup PVZ Schedule.', 'This file does not look like a PVZ Schedule backup.'));
     }
 
     setStatus('loading');
@@ -635,7 +731,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     setStatus('ready');
     setError(null);
-    return okResult(undefined, 'Backup успешно импортирован.');
+    return okResult(undefined, t('Backup успешно импортирован.', 'Backup imported successfully.'));
   };
 
   const value: AppContextType = {
@@ -645,6 +741,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     shifts,
     payments,
     access,
+    currentUserSummary,
     selectedMonth: preferences.selectedMonth,
     selectedYear: preferences.selectedYear,
     selectedMonthStatus,
@@ -654,6 +751,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isOwner: access?.role === 'admin',
     myEmployeeId: access?.employeeId ?? null,
     canEditSelectedMonth,
+    updateCurrentUserName,
     setSelectedMonth,
     setSelectedYear,
     refreshData,

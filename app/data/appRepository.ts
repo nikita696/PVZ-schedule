@@ -12,6 +12,7 @@ import type {
   ShiftStatusDb,
   UserAccess,
 } from '../domain/types';
+import { pickCurrentLanguage } from '../lib/i18n';
 import { errorResult, okResult, type ActionResult } from '../lib/result';
 import { supabase, type Database } from '../lib/supabase';
 import { translateSupabaseError } from '../lib/supabaseErrors';
@@ -39,6 +40,41 @@ interface AccessContext {
   access: UserAccess;
 }
 
+const scoreLinkedEmployee = (
+  row: EmployeeRow,
+  authUserId: string,
+  role: UserAccess['role'],
+): number => {
+  let score = 0;
+
+  if (row.profile_id === authUserId) score += 8;
+  if (row.auth_user_id === authUserId) score += 6;
+  if (row.status === 'active') score += 4;
+  if (role === 'admin' && row.is_owner) score += 3;
+  if (role === 'employee' && !row.is_owner) score += 3;
+
+  return score;
+};
+
+const pickLinkedEmployee = (
+  rows: EmployeeRow[],
+  authUserId: string,
+  role: UserAccess['role'],
+): EmployeeRow | null => {
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return [...rows].sort((left, right) => {
+    const scoreDiff = scoreLinkedEmployee(right, authUserId, role) - scoreLinkedEmployee(left, authUserId, role);
+    if (scoreDiff !== 0) {
+      return scoreDiff;
+    }
+
+    return left.created_at.localeCompare(right.created_at);
+  })[0] ?? null;
+};
+
 const LEGACY_SHIFT_STATUSES = new Set<LegacyShiftStatus>([
   'working',
   'planned-work',
@@ -58,7 +94,10 @@ const LEGACY_SHIFT_STATUSES = new Set<LegacyShiftStatus>([
 
 const getClient = () => {
   if (!supabase) {
-    return errorResult('Supabase не настроен. Проверь VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY.');
+    return errorResult(pickCurrentLanguage(
+      'Supabase не настроен. Проверь VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY.',
+      'Supabase is not configured. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.',
+    ));
   }
 
   return okResult(supabase);
@@ -291,16 +330,17 @@ const fetchAccessContext = async (authUserId: string): Promise<ActionResult<Acce
 
   const employeeResult = await client
     .from('employees')
-    .select('id')
+    .select('*')
     .eq('organization_id', profile.organization_id)
     .or(`profile_id.eq.${authUserId},auth_user_id.eq.${authUserId}`)
     .neq('status', 'archived')
-    .limit(1)
-    .maybeSingle();
+    .order('created_at', { ascending: true });
 
   if (employeeResult.error) {
     return errorResult(normalizeError(employeeResult.error.message));
   }
+
+  const linkedEmployee = pickLinkedEmployee(employeeResult.data ?? [], authUserId, profile.role);
 
   const ownerUserId = organizationResult.data.created_by ?? authUserId;
 
@@ -312,7 +352,8 @@ const fetchAccessContext = async (authUserId: string): Promise<ActionResult<Acce
       organizationId: profile.organization_id,
       ownerUserId,
       profileId: profile.id,
-      employeeId: employeeResult.data?.id ?? null,
+      profileDisplayName: profile.display_name ?? null,
+      employeeId: linkedEmployee?.id ?? null,
     },
   });
 };
@@ -468,7 +509,7 @@ export const createEmployee = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(mapEmployee(data), 'Сотрудник добавлен.');
+    return okResult(mapEmployee(data), pickCurrentLanguage('Сотрудник добавлен.', 'Employee added.'));
 };
 
 export const updateEmployeeRateRemote = async (
@@ -487,7 +528,32 @@ export const updateEmployeeRateRemote = async (
 
   if (error) return errorResult(normalizeError(error.message));
   void access;
-  return okResult(mapEmployee(data), 'Ставка обновлена.');
+    return okResult(mapEmployee(data), pickCurrentLanguage('Ставка обновлена.', 'Rate updated.'));
+};
+
+interface UpdateCurrentUserNameResult {
+  employee: Employee | null;
+  displayName: string;
+}
+
+export const updateCurrentUserNameRemote = async (
+  displayName: string,
+): Promise<ActionResult<UpdateCurrentUserNameResult>> => {
+  const clientResult = getClient();
+  if (!clientResult.ok) return clientResult;
+
+  const { data, error } = await clientResult.data.rpc('update_current_user_display_name', {
+    display_name_input: displayName.trim(),
+  });
+
+  if (error) {
+    return errorResult(normalizeError(error.message));
+  }
+
+  return okResult({
+    employee: data.employee ? mapEmployee(data.employee as EmployeeRow) : null,
+    displayName: typeof data.display_name === 'string' ? data.display_name : displayName.trim(),
+    }, pickCurrentLanguage('Имя обновлено.', 'Display name updated.'));
 };
 
 export const archiveEmployeeRemote = async (
@@ -503,7 +569,7 @@ export const archiveEmployeeRemote = async (
 
   if (error) return errorResult(normalizeError(error.message));
   void access;
-  return okResult(mapEmployee(data), 'Сотрудник отправлен в архив.');
+    return okResult(mapEmployee(data), pickCurrentLanguage('Сотрудник отправлен в архив.', 'Employee moved to archive.'));
 };
 
 export const deleteArchivedEmployeeRemote = async (
@@ -521,7 +587,7 @@ export const deleteArchivedEmployeeRemote = async (
     .eq('status', 'archived');
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(undefined, 'Архивный сотрудник удален.');
+    return okResult(undefined, pickCurrentLanguage('Архивный сотрудник удален.', 'Archived employee deleted.'));
 };
 
 export const upsertShiftRemote = async (
@@ -584,7 +650,7 @@ export const createPaymentRemote = async (
   if (error) return errorResult(normalizeError(error.message));
   void options.authUserId;
   void options.access;
-  return okResult(mapPayment(data), 'Выплата сохранена.');
+    return okResult(mapPayment(data), pickCurrentLanguage('Выплата сохранена.', 'Payment saved.'));
 };
 
 export const updatePaymentRemote = async (
@@ -606,7 +672,7 @@ export const updatePaymentRemote = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(mapPayment(data), 'Выплата обновлена.');
+    return okResult(mapPayment(data), pickCurrentLanguage('Выплата обновлена.', 'Payment updated.'));
 };
 
 export const confirmPaymentRemote = async (
@@ -620,7 +686,7 @@ export const confirmPaymentRemote = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(mapPayment(data), 'Выплата подтверждена.');
+    return okResult(mapPayment(data), pickCurrentLanguage('Выплата подтверждена.', 'Payment approved.'));
 };
 
 export const rejectPaymentRemote = async (
@@ -634,7 +700,7 @@ export const rejectPaymentRemote = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(mapPayment(data), 'Выплата отклонена.');
+    return okResult(mapPayment(data), pickCurrentLanguage('Выплата отклонена.', 'Payment rejected.'));
 };
 
 export const deletePaymentRemote = async (
@@ -648,7 +714,7 @@ export const deletePaymentRemote = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  return okResult(undefined, 'Выплата удалена.');
+    return okResult(undefined, pickCurrentLanguage('Выплата удалена.', 'Payment deleted.'));
 };
 
 export const setScheduleMonthStatusRemote = async (
@@ -681,13 +747,13 @@ export const replaceUserDataRemote = async (
 
   for (const shift of importedData.shifts) {
     if (!employeeByLegacyId.has(shift.employeeId)) {
-      return errorResult('В backup есть смены с неизвестными сотрудниками.');
+      return errorResult(pickCurrentLanguage('В backup есть смены с неизвестными сотрудниками.', 'The backup contains shifts with unknown employees.'));
     }
   }
 
   for (const payment of importedData.payments) {
     if (!employeeByLegacyId.has(payment.employeeId)) {
-      return errorResult('В backup есть выплаты с неизвестными сотрудниками.');
+      return errorResult(pickCurrentLanguage('В backup есть выплаты с неизвестными сотрудниками.', 'The backup contains payments with unknown employees.'));
     }
   }
 

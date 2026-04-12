@@ -1,4 +1,4 @@
-create extension if not exists pgcrypto;
+﻿create extension if not exists pgcrypto;
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -58,7 +58,7 @@ missing_orgs as (
   )
 )
 insert into public.organizations (name, created_by)
-select 'ПВЗ ' || left(owner_user_id::text, 8), owner_user_id
+select '��� ' || left(owner_user_id::text, 8), owner_user_id
 from missing_orgs;
 
 update public.employees e
@@ -96,7 +96,7 @@ select
   org.created_by,
   org.id,
   'admin',
-  coalesce(owner_employee.name, 'Администратор'),
+  coalesce(owner_employee.name, '�������������'),
   true
 from public.organizations org
 left join lateral (
@@ -336,7 +336,7 @@ begin
 
   insert into public.organizations (name, created_by)
   values (
-    coalesce(nullif(trim(organization_name_input), ''), 'Мой ПВЗ'),
+    coalesce(nullif(trim(organization_name_input), ''), '��� ���'),
     current_user_id
   )
   returning id into new_organization_id;
@@ -349,7 +349,7 @@ begin
     coalesce(
       nullif(trim(display_name_input), ''),
       nullif(split_part(coalesce(current_user_email, ''), '@', 1), ''),
-      'Администратор'
+      '�������������'
     ),
     true
   );
@@ -711,3 +711,4 @@ using (
 drop function if exists public.claim_employee_invite(text);
 drop function if exists public.regenerate_employee_invite(uuid);
 drop function if exists public.generate_invite_code();
+

@@ -198,5 +198,28 @@ export interface UserAccess {
   organizationId: string;
   ownerUserId: string;
   profileId: string;
+  profileDisplayName?: string | null;
   employeeId: string | null;
+}
+
+export interface SessionIdentity {
+  authUserId: string;
+  providerSubject: string | null;
+  email: string | null;
+  displayName: string;
+  avatarUrl: string | null;
+  initials: string;
+  role: UserRole | null;
+  roleLabel: string | null;
+  isOwner: boolean;
+}
+
+export interface RecentAccount {
+  authUserId: string;
+  providerSubject: string | null;
+  email: string | null;
+  displayName: string;
+  avatarUrl: string | null;
+  lastResolvedRole: UserRole | null;
+  lastSignedInAt: string;
 }

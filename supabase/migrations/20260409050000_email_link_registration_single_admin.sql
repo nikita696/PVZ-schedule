@@ -1,4 +1,4 @@
-create table if not exists public.registration_requests (
+﻿create table if not exists public.registration_requests (
   email text primary key,
   desired_role text not null check (desired_role in ('admin', 'employee')),
   display_name text null,
@@ -72,7 +72,7 @@ begin
     coalesce(
       nullif(trim(display_name_input), ''),
       nullif(split_part(coalesce(current_user_email, ''), '@', 1), ''),
-      'Администратор'
+      '�������������'
     ),
     true
   );
@@ -212,7 +212,7 @@ begin
   fallback_name := coalesce(
     nullif(trim(request_row.display_name), ''),
     nullif(split_part(current_user_email, '@', 1), ''),
-    'Сотрудник'
+    '���������'
   );
 
   if request_row.desired_role = 'admin' then
@@ -363,3 +363,4 @@ $$;
 grant execute on function public.request_registration(text, text, text) to anon;
 grant execute on function public.request_registration(text, text, text) to authenticated;
 grant execute on function public.ensure_profile_from_registration() to authenticated;
+

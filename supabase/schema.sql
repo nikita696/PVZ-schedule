@@ -1,4 +1,4 @@
-create extension if not exists pgcrypto;
+﻿create extension if not exists pgcrypto;
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -216,7 +216,7 @@ begin
 
   insert into public.organizations (name, created_by)
   values (
-    coalesce(nullif(trim(organization_name_input), ''), 'Мой ПВЗ'),
+    coalesce(nullif(trim(organization_name_input), ''), '��� ���'),
     current_user_id
   )
   returning id into new_organization_id;
@@ -229,7 +229,7 @@ begin
     coalesce(
       nullif(trim(display_name_input), ''),
       nullif(split_part(coalesce(current_user_email, ''), '@', 1), ''),
-      'Администратор'
+      '�������������'
     ),
     true
   );
@@ -651,7 +651,7 @@ begin
     coalesce(
       nullif(trim(display_name_input), ''),
       nullif(split_part(coalesce(current_user_email, ''), '@', 1), ''),
-      'Администратор'
+      '�������������'
     ),
     true
   );
@@ -791,7 +791,7 @@ begin
   fallback_name := coalesce(
     nullif(trim(request_row.display_name), ''),
     nullif(split_part(current_user_email, '@', 1), ''),
-    'Сотрудник'
+    '���������'
   );
 
   if request_row.desired_role = 'admin' then
@@ -942,3 +942,4 @@ $$;
 grant execute on function public.request_registration(text, text, text) to anon;
 grant execute on function public.request_registration(text, text, text) to authenticated;
 grant execute on function public.ensure_profile_from_registration() to authenticated;
+
