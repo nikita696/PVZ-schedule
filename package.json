@@ -78,22 +78,22 @@
     "xlsx": "0.18.5"
   },
   "devDependencies": {
-    "@eslint/js": "9.35.0",
+    "@eslint/js": "9.39.4",
     "@tailwindcss/vite": "4.1.12",
-    "@types/node": "24.3.0",
+    "@types/node": "24.12.2",
     "@types/react": "18.3.24",
     "@types/react-dom": "18.3.7",
     "@vitejs/plugin-react": "4.7.0",
-    "eslint": "9.35.0",
+    "eslint": "9.39.4",
     "eslint-plugin-react-hooks": "5.2.0",
-    "eslint-plugin-react-refresh": "0.4.20",
-    "globals": "16.4.0",
+    "eslint-plugin-react-refresh": "0.5.2",
+    "globals": "16.5.0",
     "supabase": "^2.88.0",
     "tailwindcss": "4.1.12",
-    "typescript": "5.9.2",
+    "typescript": "5.9.3",
     "typescript-eslint": "8.42.0",
     "vercel": "^50.41.0",
-    "vite": "6.3.5",
+    "vite": "6.4.2",
     "vitest": "3.2.4"
   },
   "peerDependencies": {
@@ -110,7 +110,7 @@
   },
   "pnpm": {
     "overrides": {
-      "vite": "6.3.5"
+      "vite": "6.4.2"
     }
   }
 }
