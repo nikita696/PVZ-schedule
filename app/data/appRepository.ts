@@ -12,6 +12,7 @@ import type {
   ShiftStatusDb,
   UserAccess,
 } from '../domain/types';
+import { getLocalISODate } from '../lib/date';
 import { pickCurrentLanguage } from '../lib/i18n';
 import { errorResult, okResult, type ActionResult } from '../lib/result';
 import { supabase, type Database } from '../lib/supabase';
@@ -488,7 +489,6 @@ export const ensureProfileFromAuthRemote = async (
 };
 
 interface CreateEmployeeInput {
-  access: UserAccess;
   name: string;
   workEmail: string;
   dailyRate: number;
@@ -513,7 +513,6 @@ export const createEmployee = async (
 };
 
 export const updateEmployeeRateRemote = async (
-  access: UserAccess,
   employeeId: string,
   dailyRate: number,
 ): Promise<ActionResult<Employee>> => {
@@ -523,12 +522,11 @@ export const updateEmployeeRateRemote = async (
   const { data, error } = await clientResult.data.rpc('update_employee_rate_record', {
     employee_id_input: employeeId,
     daily_rate_input: dailyRate,
-    valid_from_input: new Date().toISOString().slice(0, 10),
+    valid_from_input: getLocalISODate(),
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  void access;
-    return okResult(mapEmployee(data), pickCurrentLanguage('Ставка обновлена.', 'Rate updated.'));
+  return okResult(mapEmployee(data), pickCurrentLanguage('Ставка обновлена.', 'Rate updated.'));
 };
 
 interface UpdateCurrentUserNameResult {
@@ -557,7 +555,6 @@ export const updateCurrentUserNameRemote = async (
 };
 
 export const archiveEmployeeRemote = async (
-  access: UserAccess,
   employeeId: string,
 ): Promise<ActionResult<Employee>> => {
   const clientResult = getClient();
@@ -568,8 +565,7 @@ export const archiveEmployeeRemote = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  void access;
-    return okResult(mapEmployee(data), pickCurrentLanguage('Сотрудник отправлен в архив.', 'Employee moved to archive.'));
+  return okResult(mapEmployee(data), pickCurrentLanguage('Сотрудник отправлен в архив.', 'Employee moved to archive.'));
 };
 
 export const deleteArchivedEmployeeRemote = async (
@@ -591,7 +587,6 @@ export const deleteArchivedEmployeeRemote = async (
 };
 
 export const upsertShiftRemote = async (
-  access: UserAccess,
   employeeId: string,
   date: string,
   status: ShiftStatusDb,
@@ -606,12 +601,10 @@ export const upsertShiftRemote = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  void access;
   return okResult(mapShift(data));
 };
 
 export const deleteShiftRemote = async (
-  access: UserAccess,
   employeeId: string,
   date: string,
 ): Promise<ActionResult<void>> => {
@@ -624,13 +617,10 @@ export const deleteShiftRemote = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  void access;
   return okResult(undefined);
 };
 
 interface CreatePaymentOptions {
-  authUserId: string;
-  access: UserAccess;
   input: AddPaymentInput;
 }
 
@@ -648,9 +638,7 @@ export const createPaymentRemote = async (
   });
 
   if (error) return errorResult(normalizeError(error.message));
-  void options.authUserId;
-  void options.access;
-    return okResult(mapPayment(data), pickCurrentLanguage('Выплата сохранена.', 'Payment saved.'));
+  return okResult(mapPayment(data), pickCurrentLanguage('Выплата сохранена.', 'Payment saved.'));
 };
 
 export const updatePaymentRemote = async (

@@ -38,6 +38,7 @@ import type {
   UserAccess,
 } from '../domain/types';
 import { createBackupPayload, parseBackupPayload } from '../lib/backup';
+import { getLocalISODate } from '../lib/date';
 import { loadUiPreferences, saveUiPreferences } from '../lib/preferences';
 import { errorResult, okResult, type ActionResult } from '../lib/result';
 import { buildInitials, buildSessionIdentity, getRoleLabel } from '../lib/sessionIdentity';
@@ -418,7 +419,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!adminResult.ok) return adminResult;
 
     const result = await createEmployee({
-      access: adminResult.data,
       ...input,
     });
     if (!result.ok) {
@@ -448,7 +448,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const adminResult = requireAdmin();
     if (!adminResult.ok) return adminResult;
 
-    const result = await archiveEmployeeRemote(adminResult.data, id);
+    const result = await archiveEmployeeRemote(id);
     if (!result.ok) {
       setError(result.error);
       return errorResult(result.error);
@@ -488,13 +488,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const adminResult = requireAdmin();
     if (!adminResult.ok) return adminResult;
 
-    const result = await updateEmployeeRateRemote(adminResult.data, id, dailyRate);
+    const result = await updateEmployeeRateRemote(id, dailyRate);
     if (!result.ok) {
       setError(result.error);
       return errorResult(result.error);
     }
 
-    const effectiveFrom = new Date().toISOString().slice(0, 10);
+    const effectiveFrom = getLocalISODate();
 
     setEmployees((prev) => sortEmployees(prev.map((employee) => (
       employee.id === id ? result.data : employee
@@ -537,7 +537,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     if (nextStatus === 'none') {
-      const result = await deleteShiftRemote(editorResult.data, employeeId, date);
+      const result = await deleteShiftRemote(employeeId, date);
       if (!result.ok) {
         setError(result.error);
         return errorResult(result.error);
@@ -548,7 +548,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return okResult(undefined);
     }
 
-    const result = await upsertShiftRemote(editorResult.data, employeeId, date, nextStatus);
+    const result = await upsertShiftRemote(employeeId, date, nextStatus);
 
     if (!result.ok) {
       setError(result.error);
@@ -576,8 +576,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     const result = await createPaymentRemote({
-      authUserId: userResult.data,
-      access: accessResult.data,
       input: {
         ...input,
         employeeId,

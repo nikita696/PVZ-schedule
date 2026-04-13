@@ -7,6 +7,7 @@ import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { isShiftLikeStatus } from '../domain/shiftStatus';
 import type { Employee, EmployeeStats, Payment, Shift } from '../domain/types';
+import { getLocalISODate } from '../lib/date';
 import { getMonthStatusLabels, getDashboardCopy } from './dashboardCopy';
 
 const money = (value: number, locale: string) => new Intl.NumberFormat(locale, {
@@ -81,7 +82,7 @@ export default function DashboardPage() {
   ), [payments, selectedMonth, selectedYear]);
 
   const todayInfo = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalISODate();
     const todayShifts = shifts.filter((shift) => shift.date === today);
 
     const planned = todayShifts.filter((shift) => isShiftLikeStatus(resolveShiftStatus(shift)));
