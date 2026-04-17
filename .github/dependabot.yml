@@ -38,3 +38,7 @@ updates:
     rebase-strategy: "disabled"
     commit-message:
       prefix: "chore(ci)"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
