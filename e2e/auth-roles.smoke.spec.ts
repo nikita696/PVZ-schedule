@@ -37,6 +37,21 @@ test.describe('auth and localization smoke', () => {
     await expect(page.evaluate(() => window.localStorage.getItem('pvz-schedule.language'))).resolves.toBe('en');
   });
 
+  test('selected role is encoded into the oauth redirect so callback can recover it', async ({ page, baseURL }) => {
+    await page.goto('/auth/login');
+
+    const authRequestPromise = page.waitForRequest((request) => request.url().includes('/auth/v1/authorize'));
+
+    await page.getByRole('radio', { name: 'Администратор' }).click();
+    await page.getByRole('button', { name: 'Войти через Яндекс ID' }).click();
+
+    const authRequest = await authRequestPromise;
+    const authUrl = new URL(authRequest.url());
+
+    expect(authUrl.searchParams.get('redirect_to'))
+      .toBe(`${baseURL}/auth/login?oauthRole=admin`);
+  });
+
   test('legacy auth routes keep redirecting into the localized login page', async ({ page }) => {
     await page.goto('/auth/login');
     await page.getByRole('button', { name: /EN/ }).click();

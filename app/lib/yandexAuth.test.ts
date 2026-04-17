@@ -1,10 +1,13 @@
 ﻿import { beforeEach, describe, expect, it } from 'vitest';
 import { setCurrentLanguage } from './i18n';
 import {
+  buildAuthRedirectTo,
   buildYandexAuthQueryParams,
   getIncompleteYandexAuthMessage,
   getYandexAuthSuccessMessage,
   isPendingAuthFlowFresh,
+  readPendingYandexRoleFromUrl,
+  stripPendingYandexRoleFromUrl,
 } from './yandexAuth';
 
 describe('yandex auth helpers', () => {
@@ -15,6 +18,26 @@ describe('yandex auth helpers', () => {
   it('builds force_confirm query params only for forced chooser', () => {
     expect(buildYandexAuthQueryParams(false)).toBeUndefined();
     expect(buildYandexAuthQueryParams(true)).toEqual({ force_confirm: 'yes' });
+  });
+
+  it('persists the selected role inside the auth redirect url', () => {
+    expect(buildAuthRedirectTo('https://pvz-schedule.vercel.app', 'employee'))
+      .toBe('https://pvz-schedule.vercel.app/auth/login?oauthRole=employee');
+    expect(buildAuthRedirectTo('https://pvz-schedule.vercel.app/', 'admin'))
+      .toBe('https://pvz-schedule.vercel.app/auth/login?oauthRole=admin');
+    expect(buildAuthRedirectTo('https://pvz-schedule.vercel.app'))
+      .toBe('https://pvz-schedule.vercel.app/auth/login');
+  });
+
+  it('reads and strips oauth role hints from callback urls', () => {
+    expect(readPendingYandexRoleFromUrl('https://pvz-schedule.vercel.app/auth/login?oauthRole=employee&code=123'))
+      .toBe('employee');
+    expect(readPendingYandexRoleFromUrl('https://pvz-schedule.vercel.app/auth/login?oauthRole=admin'))
+      .toBe('admin');
+    expect(readPendingYandexRoleFromUrl('https://pvz-schedule.vercel.app/auth/login'))
+      .toBeNull();
+    expect(stripPendingYandexRoleFromUrl('https://pvz-schedule.vercel.app/auth/login?oauthRole=employee&code=123'))
+      .toBe('https://pvz-schedule.vercel.app/auth/login?code=123');
   });
 
   it('returns correct UX messages for login and switch-account flows', () => {

@@ -5,10 +5,13 @@ import { ensureProfileFromAuthRemote } from '../data/appRepository';
 import { buildSessionIdentity, mergeRecentAccounts } from '../lib/sessionIdentity';
 import { pickCurrentLanguage } from '../lib/i18n';
 import {
+  buildAuthRedirectTo,
   buildYandexAuthQueryParams,
   getIncompleteYandexAuthMessage,
   getYandexAuthSuccessMessage,
   isPendingAuthFlowFresh,
+  readPendingYandexRoleFromUrl,
+  stripPendingYandexRoleFromUrl,
   type PendingAuthFlowMode,
 } from '../lib/yandexAuth';
 import { errorResult, okResult, type ActionResult } from '../lib/result';
@@ -86,8 +89,6 @@ const getAppUrl = (): string => {
   return window.location.origin.replace(/\/+$/, '');
 };
 
-const getAuthRedirectTo = (): string => `${getAppUrl()}/auth/login`;
-
 const getYandexProvider = (): string => (
   import.meta.env.VITE_SUPABASE_YANDEX_PROVIDER?.trim() || DEFAULT_YANDEX_PROVIDER
 );
@@ -130,6 +131,23 @@ const readPendingYandexRegistration = (): PendingYandexRegistration | null => {
   }
 };
 
+const readPendingYandexRegistrationFromLocation = (): PendingYandexRegistration | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const role = readPendingYandexRoleFromUrl(window.location.href);
+  if (!role) {
+    return null;
+  }
+
+  return {
+    role,
+    displayName: '',
+    createdAt: new Date().toISOString(),
+  };
+};
+
 const savePendingYandexRegistration = (input: StartYandexAuthInput) => {
   if (typeof window === 'undefined' || !input.role) {
     return;
@@ -150,6 +168,17 @@ const clearPendingYandexRegistration = () => {
   }
 
   window.localStorage.removeItem(PENDING_YANDEX_STORAGE_KEY);
+};
+
+const clearPendingYandexRegistrationFromLocation = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const nextUrl = stripPendingYandexRoleFromUrl(window.location.href);
+  if (nextUrl !== window.location.href) {
+    window.history.replaceState(window.history.state, '', nextUrl);
+  }
 };
 
 const savePendingAuthFlow = (input: PendingAuthFlow) => {
@@ -362,7 +391,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const pendingRegistration = readPendingYandexRegistration();
+    const pendingRegistration = readPendingYandexRegistration() ?? readPendingYandexRegistrationFromLocation();
     if (!pendingRegistration) {
       setIsCompletingOAuth(false);
       return;
@@ -383,6 +412,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       clearPendingYandexRegistration();
+      clearPendingYandexRegistrationFromLocation();
 
       if (!result.ok) {
         setOAuthError(result.error);
@@ -424,7 +454,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await clientResult.data.auth.signInWithOAuth({
       provider: getYandexProvider() as never,
       options: {
-        redirectTo: getAuthRedirectTo(),
+        redirectTo: buildAuthRedirectTo(getAppUrl(), input?.role),
         scopes: getYandexScopes(),
         queryParams: buildYandexAuthQueryParams(shouldForceAccountSelection),
       },
@@ -475,6 +505,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     clearPendingAuthFlow();
     clearPendingYandexRegistration();
+    clearPendingYandexRegistrationFromLocation();
     setOAuthError(null);
     setResolvedIdentity(null);
 
