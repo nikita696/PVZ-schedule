@@ -1,45 +1,49 @@
+﻿import type { ShiftEditorStatus } from '../domain/types';
+import { getShiftStatusLabel } from '../domain/shiftStatus';
+import { useLanguage } from '../context/LanguageContext';
 import { cn } from './ui/utils';
-import type { ShiftStatus } from '../domain/types';
 
 interface ShiftStatusButtonProps {
-  status: ShiftStatus;
+  status: ShiftEditorStatus;
   active: boolean;
   onClick: () => void;
 }
 
-const STATUS_META: Record<ShiftStatus, { label: string; activeClass: string }> = {
-  'planned-work': {
-    label: 'План',
-    activeClass: 'border-blue-300 bg-blue-50 text-blue-700',
-  },
-  worked: {
-    label: 'Отработал',
-    activeClass: 'border-emerald-300 bg-emerald-50 text-emerald-700',
-  },
-  'day-off': {
-    label: 'Выходной',
-    activeClass: 'border-slate-300 bg-slate-100 text-slate-700',
-  },
-  vacation: {
-    label: 'Отпуск',
-    activeClass: 'border-indigo-300 bg-indigo-50 text-indigo-700',
-  },
-  sick: {
-    label: 'Больничный',
-    activeClass: 'border-amber-300 bg-amber-50 text-amber-700',
-  },
-  'no-show': {
-    label: 'Не вышел',
-    activeClass: 'border-rose-300 bg-rose-50 text-rose-700',
-  },
-  none: {
-    label: 'Очистить',
-    activeClass: 'border-stone-300 bg-stone-50 text-stone-700',
-  },
-};
-
 export function ShiftStatusButton({ status, active, onClick }: ShiftStatusButtonProps) {
-  const meta = STATUS_META[status];
+  const { language } = useLanguage();
+
+  const statusMeta: Record<ShiftEditorStatus, { label: string; activeClass: string }> = {
+    shift: {
+      label: getShiftStatusLabel('shift', language),
+      activeClass: 'border-emerald-300 bg-emerald-50 text-emerald-700',
+    },
+    day_off: {
+      label: getShiftStatusLabel('day_off', language),
+      activeClass: 'border-blue-300 bg-blue-50 text-blue-700',
+    },
+    sick_leave: {
+      label: getShiftStatusLabel('sick_leave', language),
+      activeClass: 'border-violet-300 bg-violet-50 text-violet-700',
+    },
+    no_show: {
+      label: getShiftStatusLabel('no_show', language),
+      activeClass: 'border-rose-300 bg-rose-50 text-rose-700',
+    },
+    replacement: {
+      label: getShiftStatusLabel('replacement', language),
+      activeClass: 'border-amber-300 bg-amber-50 text-amber-700',
+    },
+    no_shift: {
+      label: getShiftStatusLabel('no_shift', language),
+      activeClass: 'border-stone-300 bg-stone-100 text-stone-700',
+    },
+    none: {
+      label: getShiftStatusLabel('none', language),
+      activeClass: 'border-stone-300 bg-stone-50 text-stone-700',
+    },
+  };
+
+  const meta = statusMeta[status];
 
   return (
     <button
@@ -54,4 +58,3 @@ export function ShiftStatusButton({ status, active, onClick }: ShiftStatusButton
     </button>
   );
 }
-

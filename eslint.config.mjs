@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['build', 'node_modules'],
+    ignores: ['build', 'node_modules', 'playwright-report', 'test-results', '.edge-profile'],
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

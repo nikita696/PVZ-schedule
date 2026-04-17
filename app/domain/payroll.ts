@@ -1,23 +1,66 @@
 import { parseLocalDate } from '../lib/date';
+import { isShiftLikeStatus } from './shiftStatus';
 import type {
   Employee,
+  EmployeeRateHistory,
   EmployeeStats,
   MonthlyBreakdownRow,
   Payment,
   Shift,
+  ShiftStatusDb,
 } from './types';
 
 interface PayrollSource {
   employees: Employee[];
+  rateHistory?: EmployeeRateHistory[];
   shifts: Shift[];
   payments: Payment[];
 }
 
-const isTodayOrFuture = (date: Date): boolean => {
+const isPastOrToday = (date: Date): boolean => {
   const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-  return date >= todayStart;
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  return date <= todayEnd;
 };
+
+const isFuture = (date: Date): boolean => !isPastOrToday(date);
+
+const resolveDisplayStatus = (shift: Shift): ShiftStatusDb => (
+  shift.actualStatus ?? shift.approvedStatus ?? shift.requestedStatus ?? shift.status
+);
+
+const resolveActualStatus = (shift: Shift, date: Date): ShiftStatusDb | null => {
+  if (shift.actualStatus) return shift.actualStatus;
+  if (isPastOrToday(date)) return shift.approvedStatus ?? shift.requestedStatus ?? shift.status ?? null;
+  return null;
+};
+
+const resolveForecastStatus = (shift: Shift): ShiftStatusDb | null => (
+  shift.approvedStatus ?? shift.requestedStatus ?? shift.status ?? null
+);
+
+const getEffectiveRate = (
+  source: PayrollSource,
+  employee: Employee,
+  workDate: string,
+): number => {
+  const history = (source.rateHistory ?? [])
+    .filter((item) => item.employeeId === employee.id)
+    .sort((left, right) => right.validFrom.localeCompare(left.validFrom));
+
+  const matched = history.find((item) => (
+    item.validFrom <= workDate &&
+    (item.validTo === null || item.validTo >= workDate)
+  ));
+
+  return matched?.rate ?? employee.dailyRate;
+};
+
+const getShiftRate = (
+  source: PayrollSource,
+  employee: Employee,
+  shift: Shift,
+): number => shift.rateSnapshot > 0 ? shift.rateSnapshot : getEffectiveRate(source, employee, shift.date);
 
 const calculateStats = (
   source: PayrollSource,
@@ -31,9 +74,9 @@ const calculateStats = (
       workedCount: 0,
       plannedCount: 0,
       sickCount: 0,
-      vacationCount: 0,
+      dayOffCount: 0,
       earnedActual: 0,
-      paidConfirmed: 0,
+      paidApproved: 0,
       dueNow: 0,
       forecastTotal: 0,
     };
@@ -44,34 +87,54 @@ const calculateStats = (
     isShiftIncluded(parseLocalDate(shift.date))
   ));
 
-  const workedShifts = eligibleShifts.filter((shift) => shift.status === 'worked');
-  const plannedFutureShifts = eligibleShifts.filter((shift) => (
-    shift.status === 'planned-work' && isTodayOrFuture(parseLocalDate(shift.date))
-  ));
-  const sickCount = eligibleShifts.filter((shift) => shift.status === 'sick').length;
-  const vacationCount = eligibleShifts.filter((shift) => shift.status === 'vacation').length;
+  const workedShifts = eligibleShifts.filter((shift) => {
+    const status = resolveActualStatus(shift, parseLocalDate(shift.date));
+    return isShiftLikeStatus(status);
+  });
+
+  const plannedFutureShifts = eligibleShifts.filter((shift) => {
+    const date = parseLocalDate(shift.date);
+    const status = resolveForecastStatus(shift);
+    return isFuture(date) && isShiftLikeStatus(status);
+  });
+
+  const sickCount = eligibleShifts.filter((shift) => (
+    resolveDisplayStatus(shift) === 'sick_leave'
+  )).length;
+
+  const dayOffCount = eligibleShifts.filter((shift) => {
+    const status = resolveDisplayStatus(shift);
+    return status === 'day_off' || status === 'no_shift';
+  }).length;
 
   const workedCount = workedShifts.length;
   const plannedCount = plannedFutureShifts.length;
-  const earnedActual = workedShifts.reduce((sum, shift) => sum + shift.rateSnapshot, 0);
+  const earnedActual = workedShifts.reduce(
+    (sum, shift) => sum + getShiftRate(source, employee, shift),
+    0,
+  );
 
-  const paidConfirmed = source.payments
+  const paidApproved = source.payments
     .filter((payment) => (
       payment.employeeId === employeeId &&
-      payment.status === 'confirmed' &&
+      payment.status === 'approved' &&
       isPaymentIncluded(parseLocalDate(payment.date))
     ))
     .reduce((sum, payment) => sum + payment.amount, 0);
-  const forecastTotal = earnedActual + plannedFutureShifts.reduce((sum, shift) => sum + shift.rateSnapshot, 0);
+
+  const forecastTotal = earnedActual + plannedFutureShifts.reduce(
+    (sum, shift) => sum + getShiftRate(source, employee, shift),
+    0,
+  );
 
   return {
     workedCount,
     plannedCount,
     sickCount,
-    vacationCount,
+    dayOffCount,
     earnedActual,
-    paidConfirmed,
-    dueNow: earnedActual - paidConfirmed,
+    paidApproved,
+    dueNow: earnedActual - paidApproved,
     forecastTotal,
   };
 };
@@ -85,14 +148,8 @@ export const getEmployeeStats = (
   calculateStats(
     source,
     employeeId,
-    (date) => (
-      date.getMonth() + 1 === month &&
-      date.getFullYear() === year
-    ),
-    (date) => (
-      date.getMonth() + 1 === month &&
-      date.getFullYear() === year
-    ),
+    (date) => date.getMonth() + 1 === month && date.getFullYear() === year,
+    (date) => date.getMonth() + 1 === month && date.getFullYear() === year,
   )
 );
 
@@ -100,12 +157,7 @@ export const getEmployeeLifetimeStats = (
   source: PayrollSource,
   employeeId: string,
 ): EmployeeStats => (
-  calculateStats(
-    source,
-    employeeId,
-    () => true,
-    () => true,
-  )
+  calculateStats(source, employeeId, () => true, () => true)
 );
 
 export const getEmployeeMonthlyBreakdown = (
@@ -125,16 +177,16 @@ export const getEmployeeMonthlyBreakdown = (
   return Array.from({ length: 12 }, (_, index) => {
     const month = index + 1;
     const monthStats = getEmployeeStats(source, employeeId, month, year);
-    const delta = monthStats.earnedActual - monthStats.paidConfirmed;
+    const delta = monthStats.earnedActual - monthStats.paidApproved;
     runningBalance += delta;
 
     return {
       month,
       workedCount: monthStats.workedCount,
       sickCount: monthStats.sickCount,
-      vacationCount: monthStats.vacationCount,
+      dayOffCount: monthStats.dayOffCount,
       earnedActual: monthStats.earnedActual,
-      paidConfirmed: monthStats.paidConfirmed,
+      paidApproved: monthStats.paidApproved,
       forecastTotal: monthStats.forecastTotal,
       delta,
       balanceEnd: runningBalance,
@@ -166,30 +218,30 @@ export const getCompanyMonthlyBreakdown = (
       const stats = getEmployeeStats(source, employeeId, month, year);
       acc.workedCount += stats.workedCount;
       acc.sickCount += stats.sickCount;
-      acc.vacationCount += stats.vacationCount;
+      acc.dayOffCount += stats.dayOffCount;
       acc.earnedActual += stats.earnedActual;
-      acc.paidConfirmed += stats.paidConfirmed;
+      acc.paidApproved += stats.paidApproved;
       acc.forecastTotal += stats.forecastTotal;
       return acc;
     }, {
       workedCount: 0,
       sickCount: 0,
-      vacationCount: 0,
+      dayOffCount: 0,
       earnedActual: 0,
-      paidConfirmed: 0,
+      paidApproved: 0,
       forecastTotal: 0,
     });
 
-    const delta = total.earnedActual - total.paidConfirmed;
+    const delta = total.earnedActual - total.paidApproved;
     runningBalance += delta;
 
     return {
       month,
       workedCount: total.workedCount,
       sickCount: total.sickCount,
-      vacationCount: total.vacationCount,
+      dayOffCount: total.dayOffCount,
       earnedActual: total.earnedActual,
-      paidConfirmed: total.paidConfirmed,
+      paidApproved: total.paidApproved,
       forecastTotal: total.forecastTotal,
       delta,
       balanceEnd: runningBalance,
