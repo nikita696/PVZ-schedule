@@ -42,7 +42,6 @@ import { getLocalISODate } from '../lib/date';
 import { loadUiPreferences, saveUiPreferences } from '../lib/preferences';
 import { errorResult, okResult, type ActionResult } from '../lib/result';
 import { buildInitials, buildSessionIdentity, getRoleLabel } from '../lib/sessionIdentity';
-import { exportEmployeePayslipXlsx as exportEmployeePayslipXlsxFile } from '../lib/xlsx';
 import { useAuth } from './AuthContext';
 import { useLanguage } from './LanguageContext';
 
@@ -684,6 +683,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (access?.role === 'employee' && access.employeeId !== employeeId) {
       return errorResult(t('Можно выгрузить только свой расчётный лист.', 'You can only export your own payslip.'));
     }
+
+    const { exportEmployeePayslipXlsx: exportEmployeePayslipXlsxFile } = await import('../lib/xlsx');
 
     await exportEmployeePayslipXlsxFile({
       employee,
