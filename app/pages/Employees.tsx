@@ -1,4 +1,5 @@
-﻿import { useMemo, useState } from 'react';
+import { Loader2, Save } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { MonthYearSelector } from '../components/MonthYearSelector';
 import { Button } from '../components/ui/button';
@@ -12,6 +13,8 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
+import { cn } from '../components/ui/utils';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { getLocalISODate } from '../lib/date';
@@ -21,6 +24,76 @@ const money = (value: number, locale: string) => new Intl.NumberFormat(locale, {
   currency: 'RUB',
   maximumFractionDigits: 0,
 }).format(value);
+
+function InlineSaveButton({
+  label,
+  disabled,
+  loading,
+  onClick,
+}: {
+  label: string;
+  disabled: boolean;
+  loading: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex shrink-0">
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            aria-label={label}
+            title={label}
+            className={cn(
+              'size-8 border-stone-200 text-stone-500',
+              !disabled && !loading && 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800',
+            )}
+            disabled={disabled || loading}
+            onClick={onClick}
+          >
+            {loading ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+            <span className="sr-only">{label}</span>
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent sideOffset={6}>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function StatusTrafficLight({
+  status,
+  label,
+}: {
+  status: 'active' | 'archived';
+  label: string;
+}) {
+  const isArchived = status === 'archived';
+  const isActive = status === 'active';
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          aria-label={label}
+          title={label}
+          className={cn(
+            'inline-flex h-9 w-6 flex-col items-center justify-center gap-0.5 rounded-full border bg-stone-100 px-1 py-1 shadow-inner',
+            isArchived ? 'border-rose-200' : 'border-emerald-200',
+          )}
+        >
+          <span className={cn('size-2 rounded-full', isArchived ? 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.55)]' : 'bg-stone-300')} />
+          <span className="size-2 rounded-full bg-stone-300" />
+          <span className={cn('size-2 rounded-full', isActive ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.55)]' : 'bg-stone-300')} />
+          <span className="sr-only">{label}</span>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent sideOffset={6}>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 export default function EmployeesPage() {
   const { locale, t } = useLanguage();
@@ -49,6 +122,7 @@ export default function EmployeesPage() {
   const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({});
   const [hireDateDrafts, setHireDateDrafts] = useState<Record<string, string>>({});
   const [savingHireDateId, setSavingHireDateId] = useState<string | null>(null);
+  const [savingRateId, setSavingRateId] = useState<string | null>(null);
 
   const activeEmployees = useMemo(() => employees.filter((employee) => !employee.archived), [employees]);
   const archivedEmployees = useMemo(() => employees.filter((employee) => employee.archived), [employees]);
@@ -131,12 +205,20 @@ export default function EmployeesPage() {
       return;
     }
 
+    setSavingRateId(employeeId);
     const result = await updateEmployeeRate(employeeId, nextRate);
+    setSavingRateId(null);
+
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
 
+    setRateDrafts((prev) => {
+      const next = { ...prev };
+      delete next[employeeId];
+      return next;
+    });
     toast.success(t('Ставка обновлена.', 'Rate updated.'));
   };
 
@@ -220,21 +302,21 @@ export default function EmployeesPage() {
             <CardTitle>{t('Активные сотрудники', 'Active employees')}</CardTitle>
           </CardHeader>
           <CardContent className="overflow-auto">
-            <Table>
+            <Table className="text-[13px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t('Имя', 'Name')}</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>{t('Статус', 'Status')}</TableHead>
-                  <TableHead>{t('Дата трудоустройства', 'Hire date')}</TableHead>
-                  <TableHead>{t('Ставка', 'Rate')}</TableHead>
-                  <TableHead>{t('Смен', 'Shifts')}</TableHead>
-                  <TableHead>{t('Начислено', 'Accrued')}</TableHead>
-                  <TableHead>{t('Выплачено', 'Paid')}</TableHead>
-                  <TableHead>{t('Долг', 'Balance')}</TableHead>
-                  <TableHead>{t('Потенциал', 'Forecast')}</TableHead>
-                  <TableHead>{t('Больничные', 'Sick days')}</TableHead>
-                  <TableHead>{t('Выходные', 'Days off')}</TableHead>
+                  <TableHead className="w-[112px]">{t('Имя', 'Name')}</TableHead>
+                  <TableHead className="w-[176px]">Email</TableHead>
+                  <TableHead className="w-[72px] text-center">{t('Статус', 'Status')}</TableHead>
+                  <TableHead className="w-[172px] whitespace-normal leading-4">{t('Дата трудоустройства', 'Hire date')}</TableHead>
+                  <TableHead className="w-[128px]">{t('Ставка', 'Rate')}</TableHead>
+                  <TableHead className="w-[56px] text-center">{t('Смен', 'Shifts')}</TableHead>
+                  <TableHead className="w-[88px] text-right" title={t('Начислено', 'Accrued')}>{t('Начисл.', 'Accrued')}</TableHead>
+                  <TableHead className="w-[88px] text-right" title={t('Выплачено', 'Paid')}>{t('Выплач.', 'Paid')}</TableHead>
+                  <TableHead className="w-[78px] text-right">{t('Долг', 'Balance')}</TableHead>
+                  <TableHead className="w-[90px] text-right" title={t('Потенциал', 'Forecast')}>{t('Потенц.', 'Forecast')}</TableHead>
+                  <TableHead className="w-[64px] text-center" title={t('Больничные', 'Sick days')}>{t('Больн.', 'Sick')}</TableHead>
+                  <TableHead className="w-[66px] text-center" title={t('Выходные', 'Days off')}>{t('Вых.', 'Days off')}</TableHead>
                   <TableHead>{t('Действия', 'Actions')}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -243,56 +325,65 @@ export default function EmployeesPage() {
                   const stats = getEmployeeStats(employee.id, selectedMonth, selectedYear);
                   const hireDateFallback = employee.hiredAt ?? employee.createdAt.slice(0, 10);
                   const hireDateValue = getHireDateValue(employee.id, hireDateFallback);
+                  const statusLabel = getEmployeeStatusLabel(employee.status);
+                  const rateValue = rateDrafts[employee.id] ?? String(employee.dailyRate);
+                  const parsedRate = Number(rateValue);
+                  const canSaveRate = Number.isFinite(parsedRate) && parsedRate > 0 && parsedRate !== employee.dailyRate;
+                  const canSaveHireDate = Boolean(hireDateValue) && hireDateValue !== hireDateFallback;
+
                   return (
                     <TableRow key={employee.id}>
-                      <TableCell className="font-medium">{employee.name}</TableCell>
-                      <TableCell>{employee.workEmail ?? '-'}</TableCell>
-                      <TableCell>{getEmployeeStatusLabel(employee.status)}</TableCell>
-                      <TableCell className="min-w-[220px]">
+                      <TableCell className="max-w-[112px] truncate font-medium" title={employee.name}>{employee.name}</TableCell>
+                      <TableCell className="max-w-[176px] truncate text-stone-600" title={employee.workEmail ?? undefined}>{employee.workEmail ?? '-'}</TableCell>
+                      <TableCell className="text-center">
+                        <StatusTrafficLight status={employee.status} label={statusLabel} />
+                      </TableCell>
+                      <TableCell className="min-w-[172px]">
                         <div className="flex items-center gap-2">
                           <Input
                             type="date"
                             value={hireDateValue}
                             onChange={(event) => setHireDateDrafts((prev) => ({ ...prev, [employee.id]: event.target.value }))}
-                            className="h-8"
+                            className="h-8 w-[130px] min-w-0"
                           />
-                          <Button
-                            size="sm"
-                            variant="outline"
+                          <InlineSaveButton
+                            label={t('Сохранить дату трудоустройства', 'Save hire date')}
+                            disabled={!canSaveHireDate}
+                            loading={savingHireDateId === employee.id}
                             onClick={() => void handleHireDateSave(employee.id, hireDateFallback)}
-                            disabled={savingHireDateId === employee.id || !hireDateValue || hireDateValue === hireDateFallback}
-                          >
-                            {savingHireDateId === employee.id ? t('Сохраняю...', 'Saving...') : t('Сохранить', 'Save')}
-                          </Button>
+                          />
                         </div>
                       </TableCell>
-                      <TableCell className="min-w-[180px]">
+                      <TableCell className="min-w-[128px]">
                         <div className="flex items-center gap-2">
                           <Input
                             type="number"
                             min="1"
-                            value={rateDrafts[employee.id] ?? String(employee.dailyRate)}
+                            value={rateValue}
                             onChange={(event) => setRateDrafts((prev) => ({ ...prev, [employee.id]: event.target.value }))}
-                            className="h-8"
+                            className="h-8 w-[82px] min-w-0 text-right font-medium tabular-nums"
                           />
-                          <Button size="sm" variant="outline" onClick={() => void handleRateSave(employee.id, employee.dailyRate)}>
-                            {t('Сохранить', 'Save')}
-                          </Button>
+                          <InlineSaveButton
+                            label={t('Сохранить ставку', 'Save rate')}
+                            disabled={!canSaveRate}
+                            loading={savingRateId === employee.id}
+                            onClick={() => void handleRateSave(employee.id, employee.dailyRate)}
+                          />
                         </div>
                       </TableCell>
-                      <TableCell>{stats.workedCount}</TableCell>
-                      <TableCell>{money(stats.earnedActual, locale)}</TableCell>
-                      <TableCell>{money(stats.paidApproved, locale)}</TableCell>
-                      <TableCell>{money(stats.dueNow, locale)}</TableCell>
-                      <TableCell>{money(stats.forecastTotal, locale)}</TableCell>
-                      <TableCell>{stats.sickCount}</TableCell>
-                      <TableCell>{stats.dayOffCount}</TableCell>
-                      <TableCell className="space-x-2 whitespace-nowrap">
+                      <TableCell className="text-center font-medium tabular-nums">{stats.workedCount}</TableCell>
+                      <TableCell className="text-right tabular-nums">{money(stats.earnedActual, locale)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{money(stats.paidApproved, locale)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{money(stats.dueNow, locale)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{money(stats.forecastTotal, locale)}</TableCell>
+                      <TableCell className="text-center font-medium tabular-nums">{stats.sickCount}</TableCell>
+                      <TableCell className="text-center font-medium tabular-nums">{stats.dayOffCount}</TableCell>
+                      <TableCell className="space-x-1.5 whitespace-nowrap">
                         <Button size="sm" variant="outline" onClick={() => void handleExport(employee.id)}>
                           Excel
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => void handleArchive(employee.id)}>
-                          {t('В архив', 'Archive')}
+                          {t('Архив', 'Archive')}
                         </Button>
                       </TableCell>
                     </TableRow>
