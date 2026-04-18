@@ -139,16 +139,22 @@ export function RoleShell({ role, children }: RoleShellProps) {
   ), [role, t]);
 
   const shellMeta = ROLE_META[role];
+  const normalizedPathname = useMemo(() => (
+    location.pathname.startsWith('/employee/shifts')
+      ? location.pathname.replace('/employee/shifts', '/employee/calendar')
+      : location.pathname
+  ), [location.pathname]);
+  const isCalendarWorkspace = /^\/(admin|employee)\/calendar(\/classic)?$/.test(normalizedPathname);
 
   const routeLabel = useMemo(() => {
-    const matchedLink = links.find((link) => location.pathname.startsWith(link.to));
+    const matchedLink = links.find((link) => normalizedPathname.startsWith(link.to));
     return matchedLink?.label ?? matchedLink?.roleBadge ?? t('Пользователь', 'User');
-  }, [links, location.pathname, t]);
+  }, [links, normalizedPathname, t]);
 
   const pageMeta = useMemo(() => {
-    const matchedLink = links.find((link) => location.pathname.startsWith(link.to));
+    const matchedLink = links.find((link) => normalizedPathname.startsWith(link.to));
     return matchedLink ?? null;
-  }, [links, location.pathname]);
+  }, [links, normalizedPathname]);
 
   const handleSignOut = async () => {
     setBusyAction('logout');
@@ -191,6 +197,98 @@ export function RoleShell({ role, children }: RoleShellProps) {
   };
 
   const isNameDirty = nameDraft.trim() !== (currentUserSummary?.displayName ?? '').trim();
+
+  if (isCalendarWorkspace) {
+    return (
+      <>
+        <header className="sticky top-0 z-30 border-b border-stone-200 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+          <div className="mx-auto flex max-w-[1500px] flex-col gap-3 px-3 py-3 sm:px-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <Avatar className="hidden size-10 border border-stone-200 sm:flex">
+                  {currentUserSummary?.avatarUrl ? (
+                    <AvatarImage src={currentUserSummary.avatarUrl} alt={currentUserSummary.displayName} />
+                  ) : null}
+                  <AvatarFallback className="bg-stone-100 text-xs font-semibold text-stone-700">
+                    {currentUserSummary?.initials ?? 'PV'}
+                  </AvatarFallback>
+                </Avatar>
+
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={cn('rounded-full px-3 py-1 text-xs font-semibold', shellMeta.badgeClassName)}>
+                      {pageMeta?.roleBadge ?? t('Пользователь', 'User')}
+                    </span>
+                    <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">
+                      {pageMeta?.title ?? routeLabel}
+                    </span>
+                  </div>
+                  <div className="mt-1 truncate text-sm font-semibold text-stone-900">
+                    {currentUserSummary?.displayName ?? t('Пользователь', 'User')}
+                  </div>
+                  <div className="truncate text-xs text-stone-500">
+                    {currentUserSummary?.email ?? t('Email не найден', 'Email not found')}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <LanguageToggle compact />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  onClick={() => void handleSwitchAccount()}
+                  disabled={busyAction !== null}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span className="hidden sm:inline">
+                    {busyAction === 'switch' ? t('Переключаю...', 'Switching...') : t('Сменить аккаунт', 'Switch account')}
+                  </span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  onClick={() => void handleSignOut()}
+                  disabled={busyAction !== null}
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span className="hidden sm:inline">
+                    {busyAction === 'logout' ? t('Выхожу...', 'Signing out...') : t('Выйти', 'Sign out')}
+                  </span>
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-700">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                {pageMeta?.sectionBadge ?? t('Рабочая область', 'Workspace')}
+              </div>
+              {links.map(({ to, label, icon: Icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  className={({ isActive }) => cn(
+                    'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition',
+                    isActive
+                      ? 'border-stone-900 bg-stone-900 text-white'
+                      : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50',
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{label}</span>
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        </header>
+
+        {children}
+      </>
+    );
+  }
 
   return (
     <>

@@ -22,7 +22,6 @@ export default defineConfig({
 
           if (id.includes('@supabase')) return 'supabase';
           if (id.includes('recharts')) return 'charts';
-          if (id.includes('@radix-ui')) return 'radix';
           if (id.includes('@mui') || id.includes('@emotion')) return 'mui';
           if (id.includes('react-router')) return 'router';
           if (id.includes('lucide-react')) return 'icons';

@@ -17,6 +17,7 @@ const AuthPage = lazyWithRetry(() => import('./pages/Auth'), 'auth-page');
 const DashboardPage = lazyWithRetry(() => import('./pages/Dashboard'), 'dashboard-page');
 const EmployeesPage = lazyWithRetry(() => import('./pages/Employees'), 'employees-page');
 const CalendarPage = lazyWithRetry(() => import('./pages/Calendar'), 'calendar-page');
+const CalendarLegacyPage = lazyWithRetry(() => import('./pages/calendar/LegacyCalendarPage'), 'calendar-legacy-page');
 const PaymentsPage = lazyWithRetry(() => import('./pages/Payments'), 'payments-page');
 
 function RouteLoader() {
@@ -170,6 +171,7 @@ export const router = createBrowserRouter([
       { path: 'dashboard', element: withSuspense(<DashboardPage />) },
       { path: 'employees', element: withSuspense(<EmployeesPage />) },
       { path: 'calendar', element: withSuspense(<CalendarPage />) },
+      { path: 'calendar/classic', element: withSuspense(<CalendarLegacyPage />) },
       { path: 'payments', element: withSuspense(<PaymentsPage />) },
       { path: 'finance', element: <StubPage titleRu="Финансы" titleEn="Finance" /> },
       { path: 'settings', element: <StubPage titleRu="Настройки" titleEn="Settings" /> },
@@ -185,7 +187,9 @@ export const router = createBrowserRouter([
     children: [
       { path: 'dashboard', element: withSuspense(<DashboardPage />) },
       { path: 'calendar', element: withSuspense(<CalendarPage />) },
+      { path: 'calendar/classic', element: withSuspense(<CalendarLegacyPage />) },
       { path: 'shifts', element: withSuspense(<CalendarPage />) },
+      { path: 'shifts/classic', element: withSuspense(<CalendarLegacyPage />) },
       { path: 'payments', element: withSuspense(<PaymentsPage />) },
       { path: 'profile', element: <StubPage titleRu="Профиль" titleEn="Profile" /> },
       { index: true, element: <Navigate to="/employee/dashboard" replace /> },
