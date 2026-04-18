@@ -1,5 +1,5 @@
-import { Loader2, Save } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Loader2, Save, X } from 'lucide-react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { MonthYearSelector } from '../components/MonthYearSelector';
 import { Button } from '../components/ui/button';
@@ -25,6 +25,47 @@ const money = (value: number, locale: string) => new Intl.NumberFormat(locale, {
   maximumFractionDigits: 0,
 }).format(value);
 
+const DATE_INPUT_CLASSNAME = 'h-8 min-w-0 pr-2 [color-scheme:light] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100';
+
+function InlineIconButton({
+  label,
+  icon,
+  disabled = false,
+  onClick,
+  variant = 'outline',
+  className,
+}: {
+  label: string;
+  icon: ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+  variant?: 'outline' | 'ghost';
+  className?: string;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex shrink-0">
+          <Button
+            type="button"
+            size="icon"
+            variant={variant}
+            aria-label={label}
+            title={label}
+            className={className}
+            disabled={disabled}
+            onClick={onClick}
+          >
+            {icon}
+            <span className="sr-only">{label}</span>
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent sideOffset={6}>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 function InlineSaveButton({
   label,
   disabled,
@@ -37,29 +78,33 @@ function InlineSaveButton({
   onClick: () => void;
 }) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex shrink-0">
-          <Button
-            type="button"
-            size="icon"
-            variant="outline"
-            aria-label={label}
-            title={label}
-            className={cn(
-              'size-8 border-stone-200 text-stone-500',
-              !disabled && !loading && 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800',
-            )}
-            disabled={disabled || loading}
-            onClick={onClick}
-          >
-            {loading ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-            <span className="sr-only">{label}</span>
-          </Button>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent sideOffset={6}>{label}</TooltipContent>
-    </Tooltip>
+    <InlineIconButton
+      label={label}
+      disabled={disabled || loading}
+      onClick={onClick}
+      className={cn(
+        'size-8 border-stone-200 text-stone-500',
+        !disabled && !loading && 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800',
+      )}
+      icon={loading ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+    />
+  );
+}
+
+function InlineCancelButton({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <InlineIconButton
+      label={label}
+      onClick={onClick}
+      className="size-8 border-stone-200 text-stone-500 hover:bg-stone-100 hover:text-stone-800"
+      icon={<X className="size-4" />}
+    />
   );
 }
 
@@ -70,8 +115,7 @@ function StatusTrafficLight({
   status: 'active' | 'archived';
   label: string;
 }) {
-  const isArchived = status === 'archived';
-  const isActive = status === 'active';
+  const activeLamp: 'red' | 'green' = status === 'archived' ? 'red' : 'green';
 
   return (
     <Tooltip>
@@ -79,14 +123,11 @@ function StatusTrafficLight({
         <div
           aria-label={label}
           title={label}
-          className={cn(
-            'inline-flex h-9 w-6 flex-col items-center justify-center gap-0.5 rounded-full border bg-stone-100 px-1 py-1 shadow-inner',
-            isArchived ? 'border-rose-200' : 'border-emerald-200',
-          )}
+          className="inline-flex h-9 w-6 flex-col items-center justify-center gap-0.5 rounded-full border border-stone-200 bg-stone-100 px-1 py-1 shadow-inner"
         >
-          <span className={cn('size-2 rounded-full', isArchived ? 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.55)]' : 'bg-stone-300')} />
+          <span className={cn('size-2 rounded-full', activeLamp === 'red' ? 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.55)]' : 'bg-stone-300')} />
           <span className="size-2 rounded-full bg-stone-300" />
-          <span className={cn('size-2 rounded-full', isActive ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.55)]' : 'bg-stone-300')} />
+          <span className={cn('size-2 rounded-full', activeLamp === 'green' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.55)]' : 'bg-stone-300')} />
           <span className="sr-only">{label}</span>
         </div>
       </TooltipTrigger>
@@ -108,6 +149,7 @@ export default function EmployeesPage() {
     addEmployee,
     removeEmployee,
     deleteArchivedEmployee,
+    updateEmployeeName,
     updateEmployeeRate,
     updateEmployeeHireDate,
     getEmployeeStats,
@@ -119,8 +161,11 @@ export default function EmployeesPage() {
   const [hiredAt, setHiredAt] = useState(getLocalISODate());
   const [dailyRate, setDailyRate] = useState('');
   const [savingEmployee, setSavingEmployee] = useState(false);
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
   const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({});
   const [hireDateDrafts, setHireDateDrafts] = useState<Record<string, string>>({});
+  const [savingNameId, setSavingNameId] = useState<string | null>(null);
   const [savingHireDateId, setSavingHireDateId] = useState<string | null>(null);
   const [savingRateId, setSavingRateId] = useState<string | null>(null);
 
@@ -192,6 +237,51 @@ export default function EmployeesPage() {
     }
 
     toast.success(t('Архивный сотрудник удалён.', 'Archived employee deleted.'));
+  };
+
+  const getNameDraftValue = (employeeId: string, fallbackName: string) => (
+    nameDrafts[employeeId] ?? fallbackName
+  );
+
+  const handleStartNameEdit = (employeeId: string, fallbackName: string) => {
+    setEditingNameId(employeeId);
+    setNameDrafts((prev) => (
+      prev[employeeId] !== undefined ? prev : { ...prev, [employeeId]: fallbackName }
+    ));
+  };
+
+  const handleCancelNameEdit = (employeeId: string) => {
+    setEditingNameId((prev) => (prev === employeeId ? null : prev));
+    setNameDrafts((prev) => {
+      const next = { ...prev };
+      delete next[employeeId];
+      return next;
+    });
+  };
+
+  const handleNameSave = async (employeeId: string, fallbackName: string) => {
+    const nextName = getNameDraftValue(employeeId, fallbackName).trim();
+    if (!nextName) {
+      toast.error(t('Укажи имя сотрудника.', 'Enter employee name.'));
+      return;
+    }
+
+    if (nextName === fallbackName) {
+      handleCancelNameEdit(employeeId);
+      return;
+    }
+
+    setSavingNameId(employeeId);
+    const result = await updateEmployeeName(employeeId, nextName);
+    setSavingNameId(null);
+
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+
+    handleCancelNameEdit(employeeId);
+    toast.success(t('Имя сотрудника обновлено.', 'Employee name updated.'));
   };
 
   const handleRateSave = async (employeeId: string, currentRate: number) => {
@@ -289,8 +379,8 @@ export default function EmployeesPage() {
           <CardContent className="grid gap-3 sm:grid-cols-[1.2fr_1.2fr_0.9fr_0.9fr_auto]">
             <Input value={name} onChange={(event) => setName(event.target.value)} placeholder={t('Имя сотрудника', 'Employee name')} />
             <Input type="email" value={workEmail} onChange={(event) => setWorkEmail(event.target.value)} placeholder={t('Рабочий email', 'Work email')} />
-            <Input type="number" min="1" value={dailyRate} onChange={(event) => setDailyRate(event.target.value)} placeholder={t('Ставка', 'Rate')} />
-            <Input type="date" value={hiredAt} onChange={(event) => setHiredAt(event.target.value)} placeholder={t('Дата выхода', 'Hire date')} />
+            <Input type="number" min="100" step={100} value={dailyRate} onChange={(event) => setDailyRate(event.target.value)} placeholder={t('Ставка', 'Rate')} />
+            <Input type="date" value={hiredAt} onChange={(event) => setHiredAt(event.target.value)} placeholder={t('Дата выхода', 'Hire date')} className={DATE_INPUT_CLASSNAME} />
             <Button onClick={() => void handleAddEmployee()} disabled={savingEmployee}>
               {savingEmployee ? t('Сохраняю...', 'Saving...') : t('Добавить', 'Add')}
             </Button>
@@ -305,11 +395,11 @@ export default function EmployeesPage() {
             <Table className="text-[13px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[112px]">{t('Имя', 'Name')}</TableHead>
+                  <TableHead className="w-[160px]">{t('Имя', 'Name')}</TableHead>
                   <TableHead className="w-[176px]">Email</TableHead>
                   <TableHead className="w-[72px] text-center">{t('Статус', 'Status')}</TableHead>
-                  <TableHead className="w-[172px] whitespace-normal leading-4">{t('Дата трудоустройства', 'Hire date')}</TableHead>
-                  <TableHead className="w-[128px]">{t('Ставка', 'Rate')}</TableHead>
+                  <TableHead className="w-[180px] whitespace-normal leading-4">{t('Дата трудоустройства', 'Hire date')}</TableHead>
+                  <TableHead className="w-[132px]">{t('Ставка', 'Rate')}</TableHead>
                   <TableHead className="w-[56px] text-center">{t('Смен', 'Shifts')}</TableHead>
                   <TableHead className="w-[88px] text-right" title={t('Начислено', 'Accrued')}>{t('Начисл.', 'Accrued')}</TableHead>
                   <TableHead className="w-[88px] text-right" title={t('Выплачено', 'Paid')}>{t('Выплач.', 'Paid')}</TableHead>
@@ -317,7 +407,7 @@ export default function EmployeesPage() {
                   <TableHead className="w-[90px] text-right" title={t('Потенциал', 'Forecast')}>{t('Потенц.', 'Forecast')}</TableHead>
                   <TableHead className="w-[64px] text-center" title={t('Больничные', 'Sick days')}>{t('Больн.', 'Sick')}</TableHead>
                   <TableHead className="w-[66px] text-center" title={t('Выходные', 'Days off')}>{t('Вых.', 'Days off')}</TableHead>
-                  <TableHead>{t('Действия', 'Actions')}</TableHead>
+                  <TableHead>{t('Экспорт', 'Export')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -325,26 +415,69 @@ export default function EmployeesPage() {
                   const stats = getEmployeeStats(employee.id, selectedMonth, selectedYear);
                   const hireDateFallback = employee.hiredAt ?? employee.createdAt.slice(0, 10);
                   const hireDateValue = getHireDateValue(employee.id, hireDateFallback);
+                  const nameValue = getNameDraftValue(employee.id, employee.name);
                   const statusLabel = getEmployeeStatusLabel(employee.status);
                   const rateValue = rateDrafts[employee.id] ?? String(employee.dailyRate);
                   const parsedRate = Number(rateValue);
                   const canSaveRate = Number.isFinite(parsedRate) && parsedRate > 0 && parsedRate !== employee.dailyRate;
                   const canSaveHireDate = Boolean(hireDateValue) && hireDateValue !== hireDateFallback;
+                  const canSaveName = Boolean(nameValue.trim()) && nameValue.trim() !== employee.name;
+                  const isEditingName = editingNameId === employee.id;
 
                   return (
                     <TableRow key={employee.id}>
-                      <TableCell className="max-w-[112px] truncate font-medium" title={employee.name}>{employee.name}</TableCell>
+                      <TableCell className="max-w-[160px]">
+                        {isEditingName ? (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              value={nameValue}
+                              onChange={(event) => setNameDrafts((prev) => ({ ...prev, [employee.id]: event.target.value }))}
+                              className="h-8 w-[118px] min-w-0"
+                              autoFocus
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault();
+                                  void handleNameSave(employee.id, employee.name);
+                                }
+                                if (event.key === 'Escape') {
+                                  event.preventDefault();
+                                  handleCancelNameEdit(employee.id);
+                                }
+                              }}
+                            />
+                            <InlineSaveButton
+                              label={t('Сохранить имя сотрудника', 'Save employee name')}
+                              disabled={!canSaveName}
+                              loading={savingNameId === employee.id}
+                              onClick={() => void handleNameSave(employee.id, employee.name)}
+                            />
+                            <InlineCancelButton
+                              label={t('Отменить редактирование имени', 'Cancel employee name editing')}
+                              onClick={() => handleCancelNameEdit(employee.id)}
+                            />
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleStartNameEdit(employee.id, employee.name)}
+                            className="max-w-full truncate text-left font-medium text-stone-900 transition hover:text-stone-600 hover:underline"
+                            title={t('Нажми, чтобы изменить имя сотрудника', 'Click to rename employee')}
+                          >
+                            {employee.name}
+                          </button>
+                        )}
+                      </TableCell>
                       <TableCell className="max-w-[176px] truncate text-stone-600" title={employee.workEmail ?? undefined}>{employee.workEmail ?? '-'}</TableCell>
                       <TableCell className="text-center">
                         <StatusTrafficLight status={employee.status} label={statusLabel} />
                       </TableCell>
-                      <TableCell className="min-w-[172px]">
+                      <TableCell className="min-w-[180px]">
                         <div className="flex items-center gap-2">
                           <Input
                             type="date"
                             value={hireDateValue}
                             onChange={(event) => setHireDateDrafts((prev) => ({ ...prev, [employee.id]: event.target.value }))}
-                            className="h-8 w-[130px] min-w-0"
+                            className={cn(DATE_INPUT_CLASSNAME, 'w-[138px]')}
                           />
                           <InlineSaveButton
                             label={t('Сохранить дату трудоустройства', 'Save hire date')}
@@ -354,14 +487,15 @@ export default function EmployeesPage() {
                           />
                         </div>
                       </TableCell>
-                      <TableCell className="min-w-[128px]">
+                      <TableCell className="min-w-[132px]">
                         <div className="flex items-center gap-2">
                           <Input
                             type="number"
-                            min="1"
+                            min="100"
+                            step={100}
                             value={rateValue}
                             onChange={(event) => setRateDrafts((prev) => ({ ...prev, [employee.id]: event.target.value }))}
-                            className="h-8 w-[82px] min-w-0 text-right font-medium tabular-nums"
+                            className="h-8 w-[86px] min-w-0 text-right font-medium tabular-nums"
                           />
                           <InlineSaveButton
                             label={t('Сохранить ставку', 'Save rate')}

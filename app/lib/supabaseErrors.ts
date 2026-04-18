@@ -39,6 +39,7 @@ const ERROR_RULES: Array<{ pattern: RegExp; message: string }> = [
   { pattern: /MONTH_HAS_EMPTY_DAYS/i, message: localized('Нельзя утвердить месяц, пока есть дни без назначенной смены.', 'You cannot approve the month while some days have no assigned shift.') },
   { pattern: /MONTH_MUST_BE_APPROVED_FIRST/i, message: localized('Сначала утверди месяц, а потом закрывай его.', 'Approve the month before closing it.') },
   { pattern: /EMPLOYEE_NAME_REQUIRED/i, message: localized('Укажи имя сотрудника.', 'Enter employee name.') },
+  { pattern: /EMPLOYEE_NAME_TOO_LONG/i, message: localized('Имя сотрудника слишком длинное. Сделай его короче.', 'The employee name is too long. Make it shorter.') },
   { pattern: /DISPLAY_NAME_REQUIRED/i, message: localized('Укажи имя для профиля.', 'Enter a display name for the profile.') },
   { pattern: /DISPLAY_NAME_TOO_LONG/i, message: localized('Имя слишком длинное. Сделай его короче.', 'The name is too long. Make it shorter.') },
   { pattern: /unsupported provider|provider is not enabled|custom provider/i, message: localized('Yandex ID ещё не настроен в Supabase Auth.', 'Yandex ID is not configured in Supabase Auth yet.') },

@@ -529,6 +529,22 @@ export const updateEmployeeRateRemote = async (
   return okResult(mapEmployee(data), pickCurrentLanguage('Ставка обновлена.', 'Rate updated.'));
 };
 
+export const updateEmployeeNameRemote = async (
+  employeeId: string,
+  name: string,
+): Promise<ActionResult<Employee>> => {
+  const clientResult = getClient();
+  if (!clientResult.ok) return clientResult;
+
+  const { data, error } = await clientResult.data.rpc('update_employee_name_record', {
+    employee_id_input: employeeId,
+    name_input: name.trim(),
+  });
+
+  if (error) return errorResult(normalizeError(error.message));
+  return okResult(mapEmployee(data), pickCurrentLanguage('Имя сотрудника обновлено.', 'Employee name updated.'));
+};
+
 export const updateEmployeeHiredAtRemote = async (
   employeeId: string,
   hiredAt: string,

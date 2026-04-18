@@ -12,6 +12,7 @@ import {
   replaceUserDataRemote,
   setScheduleMonthStatusRemote,
   updateCurrentUserNameRemote,
+  updateEmployeeNameRemote,
   updateEmployeeHiredAtRemote,
   updateEmployeeRateRemote,
   updatePaymentRemote,
@@ -87,6 +88,7 @@ interface AppContextType {
   addEmployee: (input: AddEmployeeInput) => Promise<ActionResult<void>>;
   removeEmployee: (id: string) => Promise<ActionResult<void>>;
   deleteArchivedEmployee: (id: string) => Promise<ActionResult<void>>;
+  updateEmployeeName: (id: string, name: string) => Promise<ActionResult<void>>;
   updateEmployeeRate: (id: string, dailyRate: number) => Promise<ActionResult<void>>;
   updateEmployeeHireDate: (id: string, hiredAt: string) => Promise<ActionResult<void>>;
   exportEmployeePayslipXlsx: (employeeId: string, month: number, year: number) => Promise<ActionResult<void>>;
@@ -525,6 +527,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return okResult(undefined, result.message);
   };
 
+  const updateEmployeeName = async (id: string, name: string): Promise<ActionResult<void>> => {
+    const adminResult = requireAdmin();
+    if (!adminResult.ok) return adminResult;
+
+    const normalizedName = name.trim();
+    if (!normalizedName) {
+      return errorResult(t('Укажи имя сотрудника.', 'Enter employee name.'));
+    }
+
+    const result = await updateEmployeeNameRemote(id, normalizedName);
+    if (!result.ok) {
+      setError(result.error);
+      return errorResult(result.error);
+    }
+
+    setEmployees((prev) => sortEmployees(prev.map((employee) => (
+      employee.id === id ? result.data : employee
+    ))));
+
+    if (access?.employeeId === id) {
+      setAccess((prev) => (
+        prev ? { ...prev, profileDisplayName: result.data.name } : prev
+      ));
+      setDisplayNameOverride(result.data.name);
+    }
+
+    setError(null);
+    return okResult(undefined, result.message);
+  };
+
   const updateEmployeeHireDate = async (id: string, hiredAt: string): Promise<ActionResult<void>> => {
     const adminResult = requireAdmin();
     if (!adminResult.ok) return adminResult;
@@ -788,6 +820,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addEmployee,
     removeEmployee,
     deleteArchivedEmployee,
+    updateEmployeeName,
     updateEmployeeRate,
     updateEmployeeHireDate,
     exportEmployeePayslipXlsx,
