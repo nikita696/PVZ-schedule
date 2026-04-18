@@ -12,6 +12,7 @@ import {
   replaceUserDataRemote,
   setScheduleMonthStatusRemote,
   updateCurrentUserNameRemote,
+  updateEmployeeHiredAtRemote,
   updateEmployeeRateRemote,
   updatePaymentRemote,
   upsertShiftRemote,
@@ -87,6 +88,7 @@ interface AppContextType {
   removeEmployee: (id: string) => Promise<ActionResult<void>>;
   deleteArchivedEmployee: (id: string) => Promise<ActionResult<void>>;
   updateEmployeeRate: (id: string, dailyRate: number) => Promise<ActionResult<void>>;
+  updateEmployeeHireDate: (id: string, hiredAt: string) => Promise<ActionResult<void>>;
   exportEmployeePayslipXlsx: (employeeId: string, month: number, year: number) => Promise<ActionResult<void>>;
   getEmployeeStats: (employeeId: string, month: number, year: number) => EmployeeStats;
   getEmployeeLifetimeStats: (employeeId: string) => EmployeeStats;
@@ -523,6 +525,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return okResult(undefined, result.message);
   };
 
+  const updateEmployeeHireDate = async (id: string, hiredAt: string): Promise<ActionResult<void>> => {
+    const adminResult = requireAdmin();
+    if (!adminResult.ok) return adminResult;
+
+    const normalizedDate = hiredAt.trim();
+    if (!normalizedDate) {
+      return errorResult(t('Укажи дату трудоустройства.', 'Enter a hire date.'));
+    }
+
+    const result = await updateEmployeeHiredAtRemote(id, normalizedDate);
+    if (!result.ok) {
+      setError(result.error);
+      return errorResult(result.error);
+    }
+
+    setEmployees((prev) => sortEmployees(prev.map((employee) => (
+      employee.id === id ? result.data : employee
+    ))));
+    setError(null);
+    return okResult(undefined, result.message);
+  };
+
   const updateShift = async (
     employeeId: string,
     date: string,
@@ -765,6 +789,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     removeEmployee,
     deleteArchivedEmployee,
     updateEmployeeRate,
+    updateEmployeeHireDate,
     exportEmployeePayslipXlsx,
     getEmployeeStats: (employeeId, month, year) => getEmployeeStats(payrollSource, employeeId, month, year),
     getEmployeeLifetimeStats: (employeeId) => getEmployeeLifetimeStats(payrollSource, employeeId),

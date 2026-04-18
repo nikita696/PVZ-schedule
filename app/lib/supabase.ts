@@ -430,6 +430,13 @@ export interface Database {
         };
         Returns: Database['public']['Tables']['employees']['Row'];
       };
+      update_employee_hired_at_record: {
+        Args: {
+          employee_id_input: string;
+          hired_at_input: string;
+        };
+        Returns: Database['public']['Tables']['employees']['Row'];
+      };
       upsert_shift_entry: {
         Args: {
           employee_id_input: string;

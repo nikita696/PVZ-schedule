@@ -36,6 +36,7 @@ export default function EmployeesPage() {
     removeEmployee,
     deleteArchivedEmployee,
     updateEmployeeRate,
+    updateEmployeeHireDate,
     getEmployeeStats,
     exportEmployeePayslipXlsx,
   } = useApp();
@@ -46,6 +47,8 @@ export default function EmployeesPage() {
   const [dailyRate, setDailyRate] = useState('');
   const [savingEmployee, setSavingEmployee] = useState(false);
   const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({});
+  const [hireDateDrafts, setHireDateDrafts] = useState<Record<string, string>>({});
+  const [savingHireDateId, setSavingHireDateId] = useState<string | null>(null);
 
   const activeEmployees = useMemo(() => employees.filter((employee) => !employee.archived), [employees]);
   const archivedEmployees = useMemo(() => employees.filter((employee) => employee.archived), [employees]);
@@ -147,6 +150,38 @@ export default function EmployeesPage() {
     toast.success(t('Расчётный лист выгружен.', 'Payslip exported.'));
   };
 
+  const getHireDateValue = (employeeId: string, fallbackDate: string) => (
+    hireDateDrafts[employeeId] ?? fallbackDate
+  );
+
+  const handleHireDateSave = async (employeeId: string, fallbackDate: string) => {
+    const nextHireDate = getHireDateValue(employeeId, fallbackDate).trim();
+    if (!nextHireDate) {
+      toast.error(t('Укажи дату трудоустройства.', 'Enter a hire date.'));
+      return;
+    }
+
+    if (nextHireDate === fallbackDate) {
+      return;
+    }
+
+    setSavingHireDateId(employeeId);
+    const result = await updateEmployeeHireDate(employeeId, nextHireDate);
+    setSavingHireDateId(null);
+
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+
+    setHireDateDrafts((prev) => {
+      const next = { ...prev };
+      delete next[employeeId];
+      return next;
+    });
+    toast.success(t('Дата трудоустройства обновлена.', 'Hire date updated.'));
+  };
+
   return (
     <div className="bg-stone-50">
       <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6">
@@ -191,6 +226,7 @@ export default function EmployeesPage() {
                   <TableHead>{t('Имя', 'Name')}</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>{t('Статус', 'Status')}</TableHead>
+                  <TableHead>{t('Дата трудоустройства', 'Hire date')}</TableHead>
                   <TableHead>{t('Ставка', 'Rate')}</TableHead>
                   <TableHead>{t('Смен', 'Shifts')}</TableHead>
                   <TableHead>{t('Начислено', 'Accrued')}</TableHead>
@@ -205,11 +241,31 @@ export default function EmployeesPage() {
               <TableBody>
                 {activeEmployees.map((employee) => {
                   const stats = getEmployeeStats(employee.id, selectedMonth, selectedYear);
+                  const hireDateFallback = employee.hiredAt ?? employee.createdAt.slice(0, 10);
+                  const hireDateValue = getHireDateValue(employee.id, hireDateFallback);
                   return (
                     <TableRow key={employee.id}>
                       <TableCell className="font-medium">{employee.name}</TableCell>
                       <TableCell>{employee.workEmail ?? '-'}</TableCell>
                       <TableCell>{getEmployeeStatusLabel(employee.status)}</TableCell>
+                      <TableCell className="min-w-[220px]">
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="date"
+                            value={hireDateValue}
+                            onChange={(event) => setHireDateDrafts((prev) => ({ ...prev, [employee.id]: event.target.value }))}
+                            className="h-8"
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void handleHireDateSave(employee.id, hireDateFallback)}
+                            disabled={savingHireDateId === employee.id || !hireDateValue || hireDateValue === hireDateFallback}
+                          >
+                            {savingHireDateId === employee.id ? t('Сохраняю...', 'Saving...') : t('Сохранить', 'Save')}
+                          </Button>
+                        </div>
+                      </TableCell>
                       <TableCell className="min-w-[180px]">
                         <div className="flex items-center gap-2">
                           <Input
