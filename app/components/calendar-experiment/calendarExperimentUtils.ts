@@ -1,7 +1,7 @@
 import { isShiftLikeStatus } from '../../domain/shiftStatus';
+import type { Employee, Shift, ShiftStatusDb } from '../../domain/types';
 import type { AppLanguage } from '../../lib/i18n';
 import { MONTH_NAMES, pickByLanguage } from '../../lib/i18n';
-import type { Employee, Shift, ShiftStatusDb } from '../../domain/types';
 
 export interface DayIssueSummary {
   coverage: boolean;
