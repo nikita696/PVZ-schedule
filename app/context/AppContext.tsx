@@ -20,6 +20,7 @@ import {
 } from '../data/appRepository';
 import {
   getCompanyMonthlyBreakdown,
+  getEmployeeDebtSnapshot,
   getEmployeeLifetimeStats,
   getEmployeeMonthlyBreakdown,
   getEmployeeStats,
@@ -27,6 +28,7 @@ import {
 import type {
   AddPaymentInput,
   AppDataStatus,
+  EmployeeDebtSnapshot,
   Employee,
   EmployeeRateHistory,
   EmployeeStats,
@@ -93,6 +95,7 @@ interface AppContextType {
   updateEmployeeHireDate: (id: string, hiredAt: string) => Promise<ActionResult<void>>;
   exportEmployeePayslipXlsx: (employeeId: string, month: number, year: number) => Promise<ActionResult<void>>;
   getEmployeeStats: (employeeId: string, month: number, year: number) => EmployeeStats;
+  getEmployeeDebtSnapshot: (employeeId: string) => EmployeeDebtSnapshot;
   getEmployeeLifetimeStats: (employeeId: string) => EmployeeStats;
   getEmployeeMonthlyBreakdown: (employeeId: string, year: number) => MonthlyBreakdownRow[];
   getCompanyMonthlyBreakdown: (year: number) => MonthlyBreakdownRow[];
@@ -825,6 +828,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updateEmployeeHireDate,
     exportEmployeePayslipXlsx,
     getEmployeeStats: (employeeId, month, year) => getEmployeeStats(payrollSource, employeeId, month, year),
+    getEmployeeDebtSnapshot: (employeeId) => getEmployeeDebtSnapshot(payrollSource, employeeId),
     getEmployeeLifetimeStats: (employeeId) => getEmployeeLifetimeStats(payrollSource, employeeId),
     getEmployeeMonthlyBreakdown: (employeeId, year) => getEmployeeMonthlyBreakdown(payrollSource, employeeId, year),
     getCompanyMonthlyBreakdown: (year) => getCompanyMonthlyBreakdown(payrollSource, year),

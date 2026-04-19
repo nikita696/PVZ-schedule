@@ -111,6 +111,14 @@ export interface EmployeeStats {
   forecastTotal: number;
 }
 
+export interface EmployeeDebtSnapshot {
+  workedCountTotalToDate: number;
+  workedCountCurrentMonthToDate: number;
+  accruedToDate: number;
+  paidToDate: number;
+  debtToDate: number;
+}
+
 export interface MonthlyBreakdownRow {
   month: number;
   workedCount: number;

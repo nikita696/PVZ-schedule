@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { getCompanyMonthlyBreakdown, getEmployeeLifetimeStats, getEmployeeStats } from './payroll';
+import {
+  getCompanyMonthlyBreakdown,
+  getEmployeeDebtSnapshot,
+  getEmployeeLifetimeStats,
+  getEmployeeStats,
+} from './payroll';
 import type { Employee, EmployeeRateHistory, Payment, Shift } from './types';
 
 const employees: Employee[] = [
@@ -175,6 +180,42 @@ const shifts: Shift[] = [
     createdAt: '2025-01-12T00:00:00.000Z',
     updatedAt: '2025-01-12T00:00:00.000Z',
   },
+  {
+    id: 'shift-7',
+    userId: 'owner-1',
+    organizationId: 'org-1',
+    employeeId: 'employee-1',
+    date: '2025-02-05',
+    status: 'shift',
+    requestedStatus: 'shift',
+    approvedStatus: 'shift',
+    actualStatus: 'shift',
+    rateSnapshot: 0,
+    createdByProfileId: 'profile-1',
+    requestedByProfileId: 'profile-1',
+    approvedByProfileId: 'owner-profile',
+    actualByProfileId: 'owner-profile',
+    createdAt: '2025-02-05T00:00:00.000Z',
+    updatedAt: '2025-02-05T00:00:00.000Z',
+  },
+  {
+    id: 'shift-8',
+    userId: 'owner-1',
+    organizationId: 'org-1',
+    employeeId: 'employee-1',
+    date: '2025-02-20',
+    status: 'shift',
+    requestedStatus: 'shift',
+    approvedStatus: 'shift',
+    actualStatus: null,
+    rateSnapshot: 3000,
+    createdByProfileId: 'owner-profile',
+    requestedByProfileId: 'owner-profile',
+    approvedByProfileId: 'owner-profile',
+    actualByProfileId: null,
+    createdAt: '2025-02-20T00:00:00.000Z',
+    updatedAt: '2025-02-20T00:00:00.000Z',
+  },
 ];
 
 const payments: Payment[] = [
@@ -231,6 +272,60 @@ const payments: Payment[] = [
     editedByAdmin: false,
     createdAt: '2025-01-09T00:00:00.000Z',
     updatedAt: '2025-01-09T00:00:00.000Z',
+  },
+  {
+    id: 'payment-4',
+    userId: 'owner-1',
+    organizationId: 'org-1',
+    employeeId: 'employee-1',
+    amount: 700,
+    date: '2025-02-06',
+    comment: 'Rejected correction',
+    status: 'rejected',
+    requestedByAuthUserId: 'auth-owner',
+    approvedByAuthUserId: null,
+    requestedByProfileId: 'owner-profile',
+    approvedByProfileId: null,
+    approvedAt: null,
+    editedByAdmin: false,
+    createdAt: '2025-02-06T00:00:00.000Z',
+    updatedAt: '2025-02-06T00:00:00.000Z',
+  },
+  {
+    id: 'payment-5',
+    userId: 'owner-1',
+    organizationId: 'org-1',
+    employeeId: 'employee-1',
+    amount: 800,
+    date: '2025-02-07',
+    comment: 'Pending payout',
+    status: 'pending',
+    requestedByAuthUserId: 'auth-1',
+    approvedByAuthUserId: null,
+    requestedByProfileId: 'profile-1',
+    approvedByProfileId: null,
+    approvedAt: null,
+    editedByAdmin: false,
+    createdAt: '2025-02-07T00:00:00.000Z',
+    updatedAt: '2025-02-07T00:00:00.000Z',
+  },
+  {
+    id: 'payment-6',
+    userId: 'owner-1',
+    organizationId: 'org-1',
+    employeeId: 'employee-1',
+    amount: 900,
+    date: '2025-03-01',
+    comment: 'Future payout',
+    status: 'approved',
+    requestedByAuthUserId: 'auth-owner',
+    approvedByAuthUserId: 'auth-owner',
+    requestedByProfileId: 'owner-profile',
+    approvedByProfileId: 'owner-profile',
+    approvedAt: '2025-03-01T00:00:00.000Z',
+    editedByAdmin: false,
+    createdAt: '2025-03-01T00:00:00.000Z',
+    updatedAt: '2025-03-01T00:00:00.000Z',
   },
 ];
 
@@ -289,6 +384,16 @@ describe('payroll domain', () => {
       forecastTotal: 5000,
       delta: 2000,
       balanceEnd: 3800,
+    });
+  });
+
+  it('builds debt snapshot as of today with pending payments and historical rates', () => {
+    expect(getEmployeeDebtSnapshot(source, 'employee-1', '2025-02-10')).toEqual({
+      workedCountTotalToDate: 3,
+      workedCountCurrentMonthToDate: 1,
+      accruedToDate: 8000,
+      paidToDate: 4400,
+      debtToDate: 3600,
     });
   });
 });

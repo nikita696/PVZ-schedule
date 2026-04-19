@@ -66,6 +66,17 @@ export const getDashboardCopy = (language: AppLanguage) => ({
     title: pickByLanguage(language, 'Мой график, выплаты и расчёт', 'My schedule, payments, and summary'),
     description: pickByLanguage(language, 'Здесь собрана твоя личная сводка: заработок, выплаты и быстрый доступ к расчётному листу.', 'Your personal summary lives here: earnings, payments, and quick access to the payslip.'),
     unlinked: pickByLanguage(language, 'Этот аккаунт пока не связан с сотрудником. Попроси администратора завершить настройку профиля.', 'This account is not linked to an employee yet. Ask the admin to finish the profile setup.'),
+    debtCard: {
+      title: pickByLanguage(language, 'Компания должна на сегодня', 'Amount due today'),
+      helper: pickByLanguage(language, 'Считается по всем рабочим сменам до сегодня и всем выплатам, кроме отклонённых.', 'Calculated from all worked shifts up to today and every non-rejected payment.'),
+      totalShifts: pickByLanguage(language, 'Смен всего', 'Total shifts'),
+      currentMonthShifts: pickByLanguage(language, 'Смен в этом месяце', 'Shifts this month'),
+      formula: (accrued: string, paid: string) => pickByLanguage(
+        language,
+        `Начислено ${accrued} · учтено выплат ${paid}`,
+        `Accrued ${accrued} · payments counted ${paid}`,
+      ),
+    },
     stats: {
       workedCount: pickByLanguage(language, 'Отработано дней', 'Worked days'),
       workedCountHint: pickByLanguage(language, 'мои смены / дней по графику', 'my shifts / scheduled days'),

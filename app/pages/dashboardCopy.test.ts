@@ -37,6 +37,18 @@ describe('dashboardCopy', () => {
     expect(en.employee.stats.workedCountHint).toBe('my shifts / scheduled days');
   });
 
+  it('keeps debt calculator copy readable in both languages', () => {
+    const ru = getDashboardCopy('ru');
+    const en = getDashboardCopy('en');
+
+    expect(ru.employee.debtCard.title).toBe('Компания должна на сегодня');
+    expect(ru.employee.debtCard.totalShifts).toBe('Смен всего');
+    expect(ru.employee.debtCard.currentMonthShifts).toBe('Смен в этом месяце');
+    expect(en.employee.debtCard.title).toBe('Amount due today');
+    expect(en.employee.debtCard.totalShifts).toBe('Total shifts');
+    expect(en.employee.debtCard.currentMonthShifts).toBe('Shifts this month');
+  });
+
   it('keeps key dashboard copy free from mojibake markers', () => {
     const ru = getDashboardCopy('ru');
     const en = getDashboardCopy('en');
@@ -47,11 +59,15 @@ describe('dashboardCopy', () => {
       ru.employee.title,
       ru.employee.description,
       ru.employee.unlinked,
+      ru.employee.debtCard.title,
+      ru.employee.debtCard.helper,
+      ru.employee.debtCard.formula('1000 ₽', '500 ₽'),
       ru.employee.stats.workedCountHint,
       ru.messages.employeeAdded,
       ru.messages.ownNameUpdated,
       en.admin.title,
       en.employee.title,
+      en.employee.debtCard.title,
       en.messages.employeeAdded,
     ];
 

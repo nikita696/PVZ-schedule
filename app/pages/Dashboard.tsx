@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { isShiftLikeStatus } from '../domain/shiftStatus';
-import type { Employee, EmployeeStats, Payment, Shift } from '../domain/types';
+import type { Employee, EmployeeDebtSnapshot, EmployeeStats, Payment, Shift } from '../domain/types';
 import { getLocalISODate } from '../lib/date';
 import { getMonthStatusLabels, getDashboardCopy } from './dashboardCopy';
 
@@ -45,6 +45,7 @@ export default function DashboardPage() {
     setSelectedMonth,
     setSelectedYear,
     getEmployeeStats,
+    getEmployeeDebtSnapshot,
     exportEmployeePayslipXlsx,
     isOwner,
     myEmployeeId,
@@ -178,6 +179,7 @@ export default function DashboardPage() {
         ) : (
           <EmployeeDashboard
             employee={myEmployee}
+            debtSnapshot={myEmployee ? getEmployeeDebtSnapshot(myEmployee.id) : null}
             stats={myEmployee ? getEmployeeStats(myEmployee.id, selectedMonth, selectedYear) : null}
             monthWorkdayTotal={monthWorkdayTotal}
             payments={myEmployee ? payments.filter((payment) => payment.employeeId === myEmployee.id) : []}
@@ -236,8 +238,18 @@ function InfoLine({ label, value }: { label: string; value: string }) {
   );
 }
 
+function CompactMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-3">
+      <div className="text-xs font-medium text-stone-500">{label}</div>
+      <div className="mt-2 text-xl font-semibold leading-none text-stone-950 tabular-nums">{value}</div>
+    </div>
+  );
+}
+
 function EmployeeDashboard({
   employee,
+  debtSnapshot,
   stats,
   monthWorkdayTotal,
   payments,
@@ -246,6 +258,7 @@ function EmployeeDashboard({
   onExport,
 }: {
   employee: Employee | null;
+  debtSnapshot: EmployeeDebtSnapshot | null;
   stats: EmployeeStats | null;
   monthWorkdayTotal: number;
   payments: Payment[];
@@ -267,6 +280,39 @@ function EmployeeDashboard({
 
   return (
     <>
+      <Card className="border-stone-200/80 shadow-sm shadow-stone-100/60">
+        <CardContent className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-stone-500">
+              {copy.employee.debtCard.title}
+            </div>
+            <div className="mt-2 text-3xl font-semibold leading-none text-stone-950 tabular-nums">
+              {money(debtSnapshot?.debtToDate ?? 0, locale)}
+            </div>
+            <div className="mt-2 max-w-2xl text-sm text-stone-500">
+              {copy.employee.debtCard.helper}
+            </div>
+            <div className="mt-2 text-xs text-stone-500">
+              {copy.employee.debtCard.formula(
+                money(debtSnapshot?.accruedToDate ?? 0, locale),
+                money(debtSnapshot?.paidToDate ?? 0, locale),
+              )}
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[320px]">
+            <CompactMetric
+              label={copy.employee.debtCard.totalShifts}
+              value={String(debtSnapshot?.workedCountTotalToDate ?? 0)}
+            />
+            <CompactMetric
+              label={copy.employee.debtCard.currentMonthShifts}
+              value={String(debtSnapshot?.workedCountCurrentMonthToDate ?? 0)}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           label={copy.employee.stats.workedCount}

@@ -1,6 +1,7 @@
-import { parseLocalDate } from '../lib/date';
+import { getLocalISODate, parseLocalDate } from '../lib/date';
 import { isShiftLikeStatus } from './shiftStatus';
 import type {
+  EmployeeDebtSnapshot,
   Employee,
   EmployeeRateHistory,
   EmployeeStats,
@@ -159,6 +160,54 @@ export const getEmployeeLifetimeStats = (
 ): EmployeeStats => (
   calculateStats(source, employeeId, () => true, () => true)
 );
+
+export const getEmployeeDebtSnapshot = (
+  source: PayrollSource,
+  employeeId: string,
+  todayDate: string = getLocalISODate(),
+): EmployeeDebtSnapshot => {
+  const employee = source.employees.find((item) => item.id === employeeId);
+  if (!employee) {
+    return {
+      workedCountTotalToDate: 0,
+      workedCountCurrentMonthToDate: 0,
+      accruedToDate: 0,
+      paidToDate: 0,
+      debtToDate: 0,
+    };
+  }
+
+  const currentMonthKey = todayDate.slice(0, 7);
+  const workedShifts = source.shifts.filter((shift) => {
+    if (shift.employeeId !== employeeId || shift.date > todayDate) {
+      return false;
+    }
+
+    const status = shift.actualStatus ?? shift.approvedStatus ?? shift.requestedStatus ?? shift.status ?? null;
+    return isShiftLikeStatus(status);
+  });
+
+  const accruedToDate = workedShifts.reduce(
+    (sum, shift) => sum + getShiftRate(source, employee, shift),
+    0,
+  );
+
+  const paidToDate = source.payments
+    .filter((payment) => (
+      payment.employeeId === employeeId &&
+      payment.status !== 'rejected' &&
+      payment.date <= todayDate
+    ))
+    .reduce((sum, payment) => sum + payment.amount, 0);
+
+  return {
+    workedCountTotalToDate: workedShifts.length,
+    workedCountCurrentMonthToDate: workedShifts.filter((shift) => shift.date.startsWith(currentMonthKey)).length,
+    accruedToDate,
+    paidToDate,
+    debtToDate: accruedToDate - paidToDate,
+  };
+};
 
 export const getEmployeeMonthlyBreakdown = (
   source: PayrollSource,
