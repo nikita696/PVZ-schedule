@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { MonthYearSelector } from '../components/MonthYearSelector';
 import { Button } from '../components/ui/button';
@@ -31,6 +32,7 @@ const resolveShiftStatus = (shift: Shift) => (
 );
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const { language, locale, t } = useLanguage();
   const copy = getDashboardCopy(language);
   const monthStatusLabels = getMonthStatusLabels(language);
@@ -128,6 +130,18 @@ export default function DashboardPage() {
     toast.success(copy.messages.payslipExported);
   };
 
+  const adminCalculatorCopy = {
+    title: t('Калькулятор сотрудников', 'Team calculator'),
+    description: t(
+      'Ставки, начисления, долг и выгрузка Excel находятся во вкладке Сотрудники.',
+      'Rates, payroll, balances, and Excel export live in the Employees tab.',
+    ),
+    teamSize: t('Сотрудников в расчёте', 'Employees in view'),
+    scheduledDays: t('Рабочих дней в месяце', 'Scheduled days this month'),
+    balance: t('Долг команды', 'Team balance'),
+    open: t('Открыть калькулятор', 'Open calculator'),
+  };
+
   return (
     <div className="bg-stone-50">
       <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6">
@@ -163,17 +177,36 @@ export default function DashboardPage() {
               <StatCard label={copy.admin.stats.pendingPayments} value={String(pendingPaymentsCount)} />
             </section>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>{copy.admin.today.title}</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
-                <InfoLine label={copy.admin.today.planned} value={todayInfo.planned.join(', ') || copy.admin.today.nobody} />
-                <InfoLine label={copy.admin.today.sick} value={todayInfo.sick.join(', ') || copy.admin.today.none} />
-                <InfoLine label={copy.admin.today.dayOff} value={todayInfo.dayOff.join(', ') || copy.admin.today.none} />
-                <InfoLine label={copy.admin.today.coverage} value={todayInfo.issue ? copy.admin.today.issue : copy.admin.today.closed} />
-              </CardContent>
-            </Card>
+            <section className="grid gap-4 xl:grid-cols-[1.3fr_0.9fr]">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{copy.admin.today.title}</CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                  <InfoLine label={copy.admin.today.planned} value={todayInfo.planned.join(', ') || copy.admin.today.nobody} />
+                  <InfoLine label={copy.admin.today.sick} value={todayInfo.sick.join(', ') || copy.admin.today.none} />
+                  <InfoLine label={copy.admin.today.dayOff} value={todayInfo.dayOff.join(', ') || copy.admin.today.none} />
+                  <InfoLine label={copy.admin.today.coverage} value={todayInfo.issue ? copy.admin.today.issue : copy.admin.today.closed} />
+                </CardContent>
+              </Card>
+
+              <Card className="border-stone-200/80 shadow-sm shadow-stone-100/60">
+                <CardHeader className="pb-3">
+                  <CardTitle>{adminCalculatorCopy.title}</CardTitle>
+                  <p className="text-sm text-muted-foreground">{adminCalculatorCopy.description}</p>
+                </CardHeader>
+                <CardContent className="grid gap-4">
+                  <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                    <InfoLine label={adminCalculatorCopy.teamSize} value={String(activeEmployees.length)} />
+                    <InfoLine label={adminCalculatorCopy.scheduledDays} value={String(monthWorkdayTotal)} />
+                    <InfoLine label={adminCalculatorCopy.balance} value={money(monthStats.dueNow, locale)} />
+                  </div>
+                  <Button variant="outline" className="w-full sm:w-auto" onClick={() => navigate('/admin/employees')}>
+                    {adminCalculatorCopy.open}
+                  </Button>
+                </CardContent>
+              </Card>
+            </section>
           </>
         ) : (
           <EmployeeDashboard
