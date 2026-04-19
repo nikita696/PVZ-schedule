@@ -1,4 +1,4 @@
-﻿import { expect, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 test.describe('auth and localization smoke', () => {
   test('guest is redirected to /auth/login from protected routes', async ({ page }) => {
@@ -14,7 +14,6 @@ test.describe('auth and localization smoke', () => {
 
     await expect(page.getByRole('heading', { name: 'Вход и регистрация через Яндекс ID' })).toBeVisible();
     await expect(page.getByText('Роль при первом входе')).toBeVisible();
-    await expect(page.getByRole('button', { name: /RU/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /EN/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Войти через Яндекс ID' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Войти другим Яндекс-аккаунтом' })).toBeVisible();
@@ -27,6 +26,7 @@ test.describe('auth and localization smoke', () => {
 
     await expect(page.getByRole('heading', { name: 'Sign in and register with Yandex ID' })).toBeVisible();
     await expect(page.getByText('Role on first sign-in')).toBeVisible();
+    await expect(page.getByRole('button', { name: /RU/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Sign in with Yandex ID' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Use a different Yandex account' })).toBeVisible();
 
@@ -34,6 +34,7 @@ test.describe('auth and localization smoke', () => {
 
     await expect(page.getByRole('heading', { name: 'Sign in and register with Yandex ID' })).toBeVisible();
     await expect(page.getByText('Role on first sign-in')).toBeVisible();
+    await expect(page.getByRole('button', { name: /RU/ })).toBeVisible();
     await expect(page.evaluate(() => window.localStorage.getItem('pvz-schedule.language'))).resolves.toBe('en');
   });
 

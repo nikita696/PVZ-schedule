@@ -1,4 +1,4 @@
-﻿import { useMemo } from 'react';
+import { useMemo } from 'react';
 import { toast } from 'sonner';
 import { MonthYearSelector } from '../components/MonthYearSelector';
 import { Button } from '../components/ui/button';
@@ -45,6 +45,7 @@ export default function DashboardPage() {
     setSelectedMonth,
     setSelectedYear,
     getEmployeeStats,
+    getEmployeeLifetimeStats,
     exportEmployeePayslipXlsx,
     isOwner,
     myEmployeeId,
@@ -57,23 +58,35 @@ export default function DashboardPage() {
   );
 
   const monthStats = useMemo(() => {
+    let workedCount = 0;
+    let workedTotal = 0;
     let earnedActual = 0;
     let paidApproved = 0;
     let dueNow = 0;
 
     for (const employee of activeEmployees) {
       const stats = getEmployeeStats(employee.id, selectedMonth, selectedYear);
+      const lifetimeStats = getEmployeeLifetimeStats(employee.id);
+      workedCount += stats.workedCount;
+      workedTotal += lifetimeStats.workedCount;
       earnedActual += stats.earnedActual;
       paidApproved += stats.paidApproved;
       dueNow += stats.dueNow;
     }
 
     return {
+      workedCount,
+      workedTotal,
       earnedActual,
       paidApproved,
       dueNow,
     };
-  }, [activeEmployees, getEmployeeStats, selectedMonth, selectedYear]);
+  }, [activeEmployees, getEmployeeLifetimeStats, getEmployeeStats, selectedMonth, selectedYear]);
+
+  const myLifetimeStats = useMemo(
+    () => (myEmployee ? getEmployeeLifetimeStats(myEmployee.id) : null),
+    [getEmployeeLifetimeStats, myEmployee],
+  );
 
   const pendingPaymentsCount = useMemo(() => (
     payments.filter((payment) => (
@@ -138,7 +151,13 @@ export default function DashboardPage() {
 
         {isOwner ? (
           <>
-            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <StatCard
+                label={copy.admin.stats.workedDays}
+                value={String(monthStats.workedCount)}
+                detail={String(monthStats.workedTotal)}
+                helper={copy.admin.stats.workedDaysHint}
+              />
               <StatCard label={copy.admin.stats.earnedActual} value={money(monthStats.earnedActual, locale)} />
               <StatCard label={copy.admin.stats.paidApproved} value={money(monthStats.paidApproved, locale)} />
               <StatCard label={copy.admin.stats.dueNow} value={money(monthStats.dueNow, locale)} />
@@ -161,6 +180,7 @@ export default function DashboardPage() {
           <EmployeeDashboard
             employee={myEmployee}
             stats={myEmployee ? getEmployeeStats(myEmployee.id, selectedMonth, selectedYear) : null}
+            lifetimeStats={myLifetimeStats}
             payments={myEmployee ? payments.filter((payment) => payment.employeeId === myEmployee.id) : []}
             copy={copy}
             locale={locale}
@@ -176,12 +196,33 @@ export default function DashboardPage() {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({
+  label,
+  value,
+  detail,
+  helper,
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+  helper?: string;
+}) {
   return (
-    <Card>
+    <Card className="border-stone-200/80 shadow-sm shadow-stone-100/60">
       <CardContent className="p-4">
-        <div className="text-xs text-muted-foreground">{label}</div>
-        <div className="mt-2 text-2xl font-semibold">{value}</div>
+        <div className="text-xs font-medium text-muted-foreground">{label}</div>
+        <div className="mt-2 flex items-end gap-2">
+          <div className="text-2xl font-semibold leading-none tabular-nums">{value}</div>
+          {detail ? (
+            <div className="flex items-center gap-2 pb-0.5 text-sm text-stone-400">
+              <span>/</span>
+              <span className="font-medium text-stone-500 tabular-nums">{detail}</span>
+            </div>
+          ) : null}
+        </div>
+        {helper ? (
+          <div className="mt-2 text-xs text-stone-500">{helper}</div>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -199,6 +240,7 @@ function InfoLine({ label, value }: { label: string; value: string }) {
 function EmployeeDashboard({
   employee,
   stats,
+  lifetimeStats,
   payments,
   copy,
   locale,
@@ -206,12 +248,13 @@ function EmployeeDashboard({
 }: {
   employee: Employee | null;
   stats: EmployeeStats | null;
+  lifetimeStats: EmployeeStats | null;
   payments: Payment[];
   copy: ReturnType<typeof getDashboardCopy>;
   locale: string;
   onExport: () => void;
 }) {
-  if (!employee || !stats) {
+  if (!employee || !stats || !lifetimeStats) {
     return (
       <Card>
         <CardContent className="p-5 text-sm text-muted-foreground">
@@ -225,15 +268,20 @@ function EmployeeDashboard({
 
   return (
     <>
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label={copy.employee.stats.workedCount} value={String(stats.workedCount)} />
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <StatCard
+          label={copy.employee.stats.workedCount}
+          value={String(stats.workedCount)}
+          detail={String(lifetimeStats.workedCount)}
+          helper={copy.employee.stats.workedCountHint}
+        />
         <StatCard label={copy.employee.stats.earnedActual} value={money(stats.earnedActual, locale)} />
         <StatCard label={copy.employee.stats.paidApproved} value={money(stats.paidApproved, locale)} />
         <StatCard label={copy.employee.stats.dueNow} value={money(stats.dueNow, locale)} />
+        <StatCard label={copy.employee.stats.forecastTotal} value={money(stats.forecastTotal, locale)} />
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard label={copy.employee.stats.forecastTotal} value={money(stats.forecastTotal, locale)} />
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
         <StatCard label={copy.employee.stats.sickCount} value={String(stats.sickCount)} />
         <StatCard label={copy.employee.stats.dayOffCount} value={String(stats.dayOffCount)} />
       </section>

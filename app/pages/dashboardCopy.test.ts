@@ -1,4 +1,4 @@
-﻿import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { getMonthStatusLabels, getDashboardCopy } from './dashboardCopy';
 
 describe('dashboardCopy', () => {
@@ -27,6 +27,20 @@ describe('dashboardCopy', () => {
     expect(en.common.saveName).toBe('Save name');
   });
 
+  it('keeps worked days summary copy readable in both languages', () => {
+    const ru = getDashboardCopy('ru');
+    const en = getDashboardCopy('en');
+
+    expect(ru.admin.stats.workedDays).toBe('Отработано дней');
+    expect(ru.admin.stats.workedDaysHint).toBe('месяц / всего');
+    expect(ru.employee.stats.workedCount).toBe('Отработано дней');
+    expect(ru.employee.stats.workedCountHint).toBe('месяц / всего');
+    expect(en.admin.stats.workedDays).toBe('Worked days');
+    expect(en.admin.stats.workedDaysHint).toBe('month / total');
+    expect(en.employee.stats.workedCount).toBe('Worked days');
+    expect(en.employee.stats.workedCountHint).toBe('month / total');
+  });
+
   it('keeps key dashboard copy free from mojibake markers', () => {
     const ru = getDashboardCopy('ru');
     const en = getDashboardCopy('en');
@@ -34,12 +48,15 @@ describe('dashboardCopy', () => {
       ru.admin.title,
       ru.admin.description,
       ru.admin.today.title,
+      ru.admin.stats.workedDays,
       ru.employee.title,
       ru.employee.description,
       ru.employee.unlinked,
+      ru.employee.stats.workedCountHint,
       ru.messages.employeeAdded,
       ru.messages.ownNameUpdated,
       en.admin.title,
+      en.admin.stats.workedDaysHint,
       en.employee.title,
       en.messages.employeeAdded,
     ];
