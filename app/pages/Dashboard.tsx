@@ -45,7 +45,6 @@ export default function DashboardPage() {
     setSelectedMonth,
     setSelectedYear,
     getEmployeeStats,
-    getEmployeeLifetimeStats,
     exportEmployeePayslipXlsx,
     isOwner,
     myEmployeeId,
@@ -58,35 +57,41 @@ export default function DashboardPage() {
   );
 
   const monthStats = useMemo(() => {
-    let workedCount = 0;
-    let workedTotal = 0;
     let earnedActual = 0;
     let paidApproved = 0;
     let dueNow = 0;
 
     for (const employee of activeEmployees) {
       const stats = getEmployeeStats(employee.id, selectedMonth, selectedYear);
-      const lifetimeStats = getEmployeeLifetimeStats(employee.id);
-      workedCount += stats.workedCount;
-      workedTotal += lifetimeStats.workedCount;
       earnedActual += stats.earnedActual;
       paidApproved += stats.paidApproved;
       dueNow += stats.dueNow;
     }
 
     return {
-      workedCount,
-      workedTotal,
       earnedActual,
       paidApproved,
       dueNow,
     };
-  }, [activeEmployees, getEmployeeLifetimeStats, getEmployeeStats, selectedMonth, selectedYear]);
+  }, [activeEmployees, getEmployeeStats, selectedMonth, selectedYear]);
 
-  const myLifetimeStats = useMemo(
-    () => (myEmployee ? getEmployeeLifetimeStats(myEmployee.id) : null),
-    [getEmployeeLifetimeStats, myEmployee],
-  );
+  const monthWorkdayTotal = useMemo(() => {
+    const scheduledDays = new Set<string>();
+
+    for (const shift of shifts) {
+      if (!isInMonth(shift.date, selectedMonth, selectedYear)) {
+        continue;
+      }
+
+      if (!isShiftLikeStatus(resolveShiftStatus(shift))) {
+        continue;
+      }
+
+      scheduledDays.add(shift.date);
+    }
+
+    return scheduledDays.size;
+  }, [selectedMonth, selectedYear, shifts]);
 
   const pendingPaymentsCount = useMemo(() => (
     payments.filter((payment) => (
@@ -151,13 +156,7 @@ export default function DashboardPage() {
 
         {isOwner ? (
           <>
-            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-              <StatCard
-                label={copy.admin.stats.workedDays}
-                value={String(monthStats.workedCount)}
-                detail={String(monthStats.workedTotal)}
-                helper={copy.admin.stats.workedDaysHint}
-              />
+            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard label={copy.admin.stats.earnedActual} value={money(monthStats.earnedActual, locale)} />
               <StatCard label={copy.admin.stats.paidApproved} value={money(monthStats.paidApproved, locale)} />
               <StatCard label={copy.admin.stats.dueNow} value={money(monthStats.dueNow, locale)} />
@@ -180,7 +179,7 @@ export default function DashboardPage() {
           <EmployeeDashboard
             employee={myEmployee}
             stats={myEmployee ? getEmployeeStats(myEmployee.id, selectedMonth, selectedYear) : null}
-            lifetimeStats={myLifetimeStats}
+            monthWorkdayTotal={monthWorkdayTotal}
             payments={myEmployee ? payments.filter((payment) => payment.employeeId === myEmployee.id) : []}
             copy={copy}
             locale={locale}
@@ -240,7 +239,7 @@ function InfoLine({ label, value }: { label: string; value: string }) {
 function EmployeeDashboard({
   employee,
   stats,
-  lifetimeStats,
+  monthWorkdayTotal,
   payments,
   copy,
   locale,
@@ -248,13 +247,13 @@ function EmployeeDashboard({
 }: {
   employee: Employee | null;
   stats: EmployeeStats | null;
-  lifetimeStats: EmployeeStats | null;
+  monthWorkdayTotal: number;
   payments: Payment[];
   copy: ReturnType<typeof getDashboardCopy>;
   locale: string;
   onExport: () => void;
 }) {
-  if (!employee || !stats || !lifetimeStats) {
+  if (!employee || !stats) {
     return (
       <Card>
         <CardContent className="p-5 text-sm text-muted-foreground">
@@ -271,8 +270,8 @@ function EmployeeDashboard({
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           label={copy.employee.stats.workedCount}
-          value={String(stats.workedCount)}
-          detail={String(lifetimeStats.workedCount)}
+          value={String(stats.workedCount + stats.plannedCount)}
+          detail={String(monthWorkdayTotal)}
           helper={copy.employee.stats.workedCountHint}
         />
         <StatCard label={copy.employee.stats.earnedActual} value={money(stats.earnedActual, locale)} />

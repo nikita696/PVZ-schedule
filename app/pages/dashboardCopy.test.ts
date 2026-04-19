@@ -31,14 +31,10 @@ describe('dashboardCopy', () => {
     const ru = getDashboardCopy('ru');
     const en = getDashboardCopy('en');
 
-    expect(ru.admin.stats.workedDays).toBe('Отработано дней');
-    expect(ru.admin.stats.workedDaysHint).toBe('месяц / всего');
     expect(ru.employee.stats.workedCount).toBe('Отработано дней');
-    expect(ru.employee.stats.workedCountHint).toBe('месяц / всего');
-    expect(en.admin.stats.workedDays).toBe('Worked days');
-    expect(en.admin.stats.workedDaysHint).toBe('month / total');
+    expect(ru.employee.stats.workedCountHint).toBe('мои смены / дней по графику');
     expect(en.employee.stats.workedCount).toBe('Worked days');
-    expect(en.employee.stats.workedCountHint).toBe('month / total');
+    expect(en.employee.stats.workedCountHint).toBe('my shifts / scheduled days');
   });
 
   it('keeps key dashboard copy free from mojibake markers', () => {
@@ -48,7 +44,6 @@ describe('dashboardCopy', () => {
       ru.admin.title,
       ru.admin.description,
       ru.admin.today.title,
-      ru.admin.stats.workedDays,
       ru.employee.title,
       ru.employee.description,
       ru.employee.unlinked,
@@ -56,7 +51,6 @@ describe('dashboardCopy', () => {
       ru.messages.employeeAdded,
       ru.messages.ownNameUpdated,
       en.admin.title,
-      en.admin.stats.workedDaysHint,
       en.employee.title,
       en.messages.employeeAdded,
     ];

@@ -45,8 +45,6 @@ export const getDashboardCopy = (language: AppLanguage) => ({
     title: pickByLanguage(language, 'Сотрудники, график и выплаты', 'Team, schedule, and payments'),
     description: pickByLanguage(language, 'Здесь собрана управленческая сводка по команде, графику и заявкам на выплаты.', 'This is the management overview for the team, schedule, and payment requests.'),
     stats: {
-      workedDays: pickByLanguage(language, 'Отработано дней', 'Worked days'),
-      workedDaysHint: pickByLanguage(language, 'месяц / всего', 'month / total'),
       earnedActual: pickByLanguage(language, 'Начислено', 'Accrued'),
       paidApproved: pickByLanguage(language, 'Выплачено', 'Paid'),
       dueNow: pickByLanguage(language, 'Текущий долг', 'Current balance'),
@@ -70,7 +68,7 @@ export const getDashboardCopy = (language: AppLanguage) => ({
     unlinked: pickByLanguage(language, 'Этот аккаунт пока не связан с сотрудником. Попроси администратора завершить настройку профиля.', 'This account is not linked to an employee yet. Ask the admin to finish the profile setup.'),
     stats: {
       workedCount: pickByLanguage(language, 'Отработано дней', 'Worked days'),
-      workedCountHint: pickByLanguage(language, 'месяц / всего', 'month / total'),
+      workedCountHint: pickByLanguage(language, 'мои смены / дней по графику', 'my shifts / scheduled days'),
       earnedActual: pickByLanguage(language, 'Заработано', 'Earned'),
       paidApproved: pickByLanguage(language, 'Выплачено', 'Paid'),
       dueNow: pickByLanguage(language, 'Долг ПВЗ', 'Amount due'),
