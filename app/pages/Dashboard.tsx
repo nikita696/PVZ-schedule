@@ -39,6 +39,7 @@ export default function DashboardPage() {
     employees,
     shifts,
     payments,
+    currentUserSummary,
     selectedMonth,
     selectedYear,
     selectedMonthStatus,
@@ -53,8 +54,34 @@ export default function DashboardPage() {
 
   const activeEmployees = useMemo(() => employees.filter((employee) => !employee.archived), [employees]);
   const myEmployee = useMemo(
-    () => (myEmployeeId ? employees.find((employee) => employee.id === myEmployeeId) ?? null : null),
-    [employees, myEmployeeId],
+    () => {
+      if (myEmployeeId) {
+        return employees.find((employee) => employee.id === myEmployeeId) ?? null;
+      }
+
+      const normalizedEmail = currentUserSummary?.email?.trim().toLowerCase() ?? null;
+
+      return employees.find((employee) => {
+        if (employee.archived) {
+          return false;
+        }
+
+        if (currentUserSummary?.authUserId && employee.authUserId === currentUserSummary.authUserId) {
+          return true;
+        }
+
+        if (normalizedEmail && employee.workEmail?.trim().toLowerCase() === normalizedEmail) {
+          return true;
+        }
+
+        return isOwner && employee.isOwner;
+      }) ?? null;
+    },
+    [currentUserSummary?.authUserId, currentUserSummary?.email, employees, isOwner, myEmployeeId],
+  );
+  const myDebtSnapshot = useMemo(
+    () => (myEmployee ? getEmployeeDebtSnapshot(myEmployee.id) : null),
+    [getEmployeeDebtSnapshot, myEmployee],
   );
 
   const monthStats = useMemo(() => {
@@ -157,6 +184,14 @@ export default function DashboardPage() {
 
         {isOwner ? (
           <>
+            {myEmployee ? (
+              <EmployeeDebtCard
+                snapshot={myDebtSnapshot}
+                copy={copy}
+                locale={locale}
+              />
+            ) : null}
+
             <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard label={copy.admin.stats.earnedActual} value={money(monthStats.earnedActual, locale)} />
               <StatCard label={copy.admin.stats.paidApproved} value={money(monthStats.paidApproved, locale)} />
@@ -179,7 +214,7 @@ export default function DashboardPage() {
         ) : (
           <EmployeeDashboard
             employee={myEmployee}
-            debtSnapshot={myEmployee ? getEmployeeDebtSnapshot(myEmployee.id) : null}
+            debtSnapshot={myDebtSnapshot}
             stats={myEmployee ? getEmployeeStats(myEmployee.id, selectedMonth, selectedYear) : null}
             monthWorkdayTotal={monthWorkdayTotal}
             payments={myEmployee ? payments.filter((payment) => payment.employeeId === myEmployee.id) : []}
@@ -247,6 +282,51 @@ function CompactMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function EmployeeDebtCard({
+  snapshot,
+  copy,
+  locale,
+}: {
+  snapshot: EmployeeDebtSnapshot | null;
+  copy: ReturnType<typeof getDashboardCopy>;
+  locale: string;
+}) {
+  return (
+    <Card className="border-stone-200/80 shadow-sm shadow-stone-100/60">
+      <CardContent className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <div className="text-xs font-medium uppercase tracking-[0.16em] text-stone-500">
+            {copy.employee.debtCard.title}
+          </div>
+          <div className="mt-2 text-3xl font-semibold leading-none text-stone-950 tabular-nums">
+            {money(snapshot?.debtToDate ?? 0, locale)}
+          </div>
+          <div className="mt-2 max-w-2xl text-sm text-stone-500">
+            {copy.employee.debtCard.helper}
+          </div>
+          <div className="mt-2 text-xs text-stone-500">
+            {copy.employee.debtCard.formula(
+              money(snapshot?.accruedToDate ?? 0, locale),
+              money(snapshot?.paidToDate ?? 0, locale),
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[320px]">
+          <CompactMetric
+            label={copy.employee.debtCard.totalShifts}
+            value={String(snapshot?.workedCountTotalToDate ?? 0)}
+          />
+          <CompactMetric
+            label={copy.employee.debtCard.currentMonthShifts}
+            value={String(snapshot?.workedCountCurrentMonthToDate ?? 0)}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function EmployeeDashboard({
   employee,
   debtSnapshot,
@@ -280,38 +360,7 @@ function EmployeeDashboard({
 
   return (
     <>
-      <Card className="border-stone-200/80 shadow-sm shadow-stone-100/60">
-        <CardContent className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <div className="text-xs font-medium uppercase tracking-[0.16em] text-stone-500">
-              {copy.employee.debtCard.title}
-            </div>
-            <div className="mt-2 text-3xl font-semibold leading-none text-stone-950 tabular-nums">
-              {money(debtSnapshot?.debtToDate ?? 0, locale)}
-            </div>
-            <div className="mt-2 max-w-2xl text-sm text-stone-500">
-              {copy.employee.debtCard.helper}
-            </div>
-            <div className="mt-2 text-xs text-stone-500">
-              {copy.employee.debtCard.formula(
-                money(debtSnapshot?.accruedToDate ?? 0, locale),
-                money(debtSnapshot?.paidToDate ?? 0, locale),
-              )}
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[320px]">
-            <CompactMetric
-              label={copy.employee.debtCard.totalShifts}
-              value={String(debtSnapshot?.workedCountTotalToDate ?? 0)}
-            />
-            <CompactMetric
-              label={copy.employee.debtCard.currentMonthShifts}
-              value={String(debtSnapshot?.workedCountCurrentMonthToDate ?? 0)}
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <EmployeeDebtCard snapshot={debtSnapshot} copy={copy} locale={locale} />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
