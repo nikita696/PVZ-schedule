@@ -10,12 +10,12 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
-import { getMonthStatusLabels } from '../../pages/dashboardCopy';
 import { getShiftStatusLabel, getShiftStatusOptions, isShiftLikeStatus } from '../../domain/shiftStatus';
 import type { Employee, MonthStatus } from '../../domain/types';
-import { MONTH_NAMES } from '../../lib/i18n';
 import { useApp } from '../../context/AppContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { MONTH_NAMES } from '../../lib/i18n';
+import { getMonthStatusLabels } from '../../pages/dashboardCopy';
 import { Button } from '../ui/button';
 import {
   Select,
@@ -33,7 +33,6 @@ import {
   CALENDAR_WEEKDAY_LABELS,
   formatMonthHeading,
   getEffectiveShiftStatus,
-  getEmployeeShortName,
   getShiftKey,
   getStatusCompactLabel,
   isOutsideEmployment,
@@ -65,13 +64,6 @@ const ISSUE_FRAME_CLASS: Record<'danger' | 'warning' | 'attention' | 'neutral', 
   neutral: 'border-stone-200 bg-white',
 };
 
-const ISSUE_ACCENT_CLASS: Record<'danger' | 'warning' | 'attention' | 'neutral', string> = {
-  danger: 'bg-rose-500',
-  warning: 'bg-amber-400',
-  attention: 'bg-violet-500',
-  neutral: 'bg-stone-200',
-};
-
 const getMonthShiftSummaryLabel = (count: number, language: 'ru' | 'en'): string => {
   if (language === 'en') {
     return count === 1 ? '1 shift' : `${count} shifts`;
@@ -89,10 +81,10 @@ const getDateLabel = (date: string): string => {
 
 const getAssignmentName = (employee: Employee, isMobile: boolean): string => {
   if (isMobile) {
-    return getEmployeeShortName(employee.name, 3);
+    return employee.name.trim().split(/\s+/)[0] ?? employee.name;
   }
 
-  return getEmployeeShortName(employee.name, 10);
+  return employee.name;
 };
 
 const getStatusDotClass = (status: ReturnType<typeof getEffectiveShiftStatus>) => {
@@ -207,7 +199,6 @@ export function ExperimentalCalendarWorkspace({ classicHref }: ExperimentalCalen
       staffedDays,
       problemDays,
       assignedShiftCount,
-      visibleEmployeeCount: visibleEmployees.length,
       monthDayCount: currentMonthDays.length,
     };
   }, [monthDays, shiftLookup, visibleEmployees]);
@@ -268,120 +259,55 @@ export function ExperimentalCalendarWorkspace({ classicHref }: ExperimentalCalen
 
   return (
     <div className="min-h-full bg-[linear-gradient(180deg,#f7f4ee_0%,#efe9de_100%)]">
-      <main className="mx-auto max-w-[1520px] px-2 py-2 sm:px-3 sm:py-3">
-        <section className="rounded-[28px] border border-stone-300 bg-[#fcfbf8] shadow-[0_20px_60px_rgba(28,25,23,0.08)]">
-          <div className="border-b border-stone-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8f4eb_100%)] px-3 py-3 sm:px-4">
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-2 rounded-full border border-stone-900 bg-stone-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white">
+      <main className="mx-auto max-w-[1520px] px-2 py-2 sm:px-3 sm:py-2 lg:h-[calc(100svh-8.75rem)] lg:max-h-[calc(100svh-8.75rem)] lg:overflow-hidden">
+        <section
+          data-testid="experimental-calendar-shell"
+          className="flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] border border-stone-300/90 bg-[#fcfbf8] shadow-[0_12px_32px_rgba(28,25,23,0.08)]"
+        >
+          <div className="shrink-0 border-b border-stone-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8f4eb_100%)] px-2.5 py-2.5 sm:px-3 lg:px-4 lg:py-2.5">
+            <div className="flex flex-col gap-2.5">
+              <div
+                data-testid="calendar-toolbar"
+                className="grid gap-2 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center"
+              >
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-stone-900 bg-stone-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
                     <CalendarDays className="h-3.5 w-3.5" />
                     {t('Рабочий календарь', 'Operations calendar')}
                   </span>
-                  <span className={cn('rounded-full border px-3 py-1 text-xs font-semibold', monthMeta.className)}>
+                  <span className={cn('rounded-full border px-2.5 py-1 text-[11px] font-semibold', monthMeta.className)}>
                     {t('Месяц', 'Month')}: {monthStatusLabels[selectedMonthStatus]}
                   </span>
-                  <span className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-medium text-stone-600">
+                  <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1 text-[11px] font-medium text-stone-600">
                     {employeeFilter === 'all'
                       ? t(`Все сотрудники: ${visibleEmployees.length}`, `All employees: ${visibleEmployees.length}`)
                       : visibleEmployees[0]?.name ?? t('Сотрудник', 'Employee')}
                   </span>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button asChild size="sm" variant="outline" className="rounded-full border-stone-300 bg-white">
-                    <Link to={classicHref}>{t('Старая версия', 'Classic fallback')}</Link>
-                  </Button>
-                </div>
-              </div>
-
-              <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
-                <div className="grid gap-2 md:grid-cols-[auto_auto_minmax(220px,1fr)]">
-                  <div className="inline-flex items-center rounded-[18px] border border-stone-300 bg-white p-1 shadow-sm">
-                    <Button size="icon" variant="ghost" className="rounded-[14px]" onClick={handlePrevMonth}>
+                <div className="flex min-w-0 flex-wrap items-center justify-start gap-1.5 lg:justify-center">
+                  <div className="inline-flex items-center rounded-[16px] border border-stone-300 bg-white p-0.5 shadow-sm">
+                    <Button size="icon" variant="ghost" className="size-8 rounded-[12px]" onClick={handlePrevMonth}>
                       <ArrowLeft className="h-4 w-4" />
                     </Button>
-                    <div className="min-w-[160px] px-2 text-center text-sm font-semibold text-stone-900 sm:min-w-[220px]">
+                    <div className="min-w-[150px] px-2 text-center text-sm font-semibold text-stone-900 sm:min-w-[210px]">
                       {currentMonthLabel}
                     </div>
-                    <Button size="icon" variant="ghost" className="rounded-[14px]" onClick={handleNextMonth}>
+                    <Button size="icon" variant="ghost" className="size-8 rounded-[12px]" onClick={handleNextMonth}>
                       <ArrowRight className="h-4 w-4" />
                     </Button>
                   </div>
 
-                  <Button variant="outline" className="h-11 rounded-[18px] border-stone-300 bg-white px-4" onClick={handleToday}>
+                  <Button variant="outline" size="sm" className="h-9 rounded-full border-stone-300 bg-white px-3" onClick={handleToday}>
                     <CalendarDays className="h-4 w-4" />
                     {t('Сегодня', 'Today')}
                   </Button>
-
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <div className="rounded-[18px] border border-stone-200 bg-white px-3 py-2">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500">
-                        {t('Проблемных дней', 'Problem days')}
-                      </div>
-                      <div className="mt-1 text-xl font-semibold text-stone-900">{monthSummary.problemDays}</div>
-                    </div>
-                    <div className="rounded-[18px] border border-stone-200 bg-white px-3 py-2">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500">
-                        {t('Назначено смен', 'Assigned shifts')}
-                      </div>
-                      <div className="mt-1 text-xl font-semibold text-stone-900">{monthSummary.assignedShiftCount}</div>
-                    </div>
-                    <div className="rounded-[18px] border border-stone-200 bg-white px-3 py-2">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-500">
-                        {t('Закрыто дней', 'Covered days')}
-                      </div>
-                      <div className="mt-1 text-xl font-semibold text-stone-900">
-                        {monthSummary.staffedDays}/{monthSummary.monthDayCount}
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-start justify-start gap-2 lg:max-w-[460px] lg:justify-end">
-                  {legendOptions.map((option) => (
-                    <div
-                      key={option.value}
-                      className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-2.5 py-1 text-[11px] font-medium text-stone-700"
-                    >
-                      <span className={cn('h-2.5 w-2.5 rounded-full border border-black/10', option.colorClass)} />
-                      <span>{option.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-[20px] border border-stone-200 bg-white px-3 py-2.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  {problemSummary.coverage > 0 ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      {t('Без сотрудника', 'No coverage')}: {problemSummary.coverage}
-                    </span>
-                  ) : null}
-                  {problemSummary.conflict > 0 ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-                      <CircleAlert className="h-3.5 w-3.5" />
-                      {t('Конфликты', 'Conflicts')}: {problemSummary.conflict}
-                    </span>
-                  ) : null}
-                  {problemSummary.noShow > 0 ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700">
-                      <ShieldAlert className="h-3.5 w-3.5" />
-                      {t('Невыходы', 'No-shows')}: {problemSummary.noShow}
-                    </span>
-                  ) : null}
-                  {problemSummary.coverage === 0 && problemSummary.conflict === 0 && problemSummary.noShow === 0 ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                      {t('Месяц выглядит чисто', 'Month looks clean')}
-                    </span>
-                  ) : null}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex min-w-0 flex-wrap items-center justify-start gap-1.5 lg:justify-end">
                   {activeEmployees.length > 1 ? (
                     <Select value={employeeFilter} onValueChange={(value) => setEmployeeFilter(value as 'all' | string)}>
-                      <SelectTrigger className="h-9 min-w-[180px] rounded-full border-stone-300 bg-white text-sm">
+                      <SelectTrigger className="h-9 min-w-[170px] rounded-full border-stone-300 bg-white text-xs sm:text-sm">
                         <SelectValue placeholder={t('Фильтр по сотруднику', 'Employee filter')} />
                       </SelectTrigger>
                       <SelectContent>
@@ -396,31 +322,35 @@ export function ExperimentalCalendarWorkspace({ classicHref }: ExperimentalCalen
                   ) : null}
 
                   {!isOwner && myEmployeeId ? (
-                    <span className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs font-medium text-stone-700">
+                    <span className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-stone-50 px-3 text-xs font-medium text-stone-700">
                       <UserRound className="h-3.5 w-3.5" />
                       {visibleEmployees[0]?.name ?? t('Мой график', 'My schedule')}
                     </span>
                   ) : null}
 
+                  <Button asChild size="sm" variant="outline" className="h-9 rounded-full border-stone-300 bg-white px-3">
+                    <Link to={classicHref}>{t('Старая версия', 'Classic fallback')}</Link>
+                  </Button>
+
                   {isOwner ? (
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       {selectedMonthStatus === 'draft' ? (
-                        <Button size="sm" variant="outline" className="rounded-full" onClick={() => void handleMonthStatusChange('pending_approval')}>
+                        <Button size="sm" variant="outline" className="h-9 rounded-full px-3" onClick={() => void handleMonthStatusChange('pending_approval')}>
                           {t('На утверждение', 'Send for approval')}
                         </Button>
                       ) : null}
                       {(selectedMonthStatus === 'draft' || selectedMonthStatus === 'pending_approval') ? (
-                        <Button size="sm" className="rounded-full bg-stone-900 text-white hover:bg-stone-800" onClick={() => void handleMonthStatusChange('approved')}>
+                        <Button size="sm" className="h-9 rounded-full bg-stone-900 px-3 text-white hover:bg-stone-800" onClick={() => void handleMonthStatusChange('approved')}>
                           {t('Утвердить', 'Approve')}
                         </Button>
                       ) : null}
                       {selectedMonthStatus === 'approved' ? (
-                        <Button size="sm" variant="outline" className="rounded-full" onClick={() => void handleMonthStatusChange('closed')}>
+                        <Button size="sm" variant="outline" className="h-9 rounded-full px-3" onClick={() => void handleMonthStatusChange('closed')}>
                           {t('Закрыть', 'Close')}
                         </Button>
                       ) : null}
                       {selectedMonthStatus === 'pending_approval' ? (
-                        <Button size="sm" variant="ghost" className="rounded-full" onClick={() => void handleMonthStatusChange('draft')}>
+                        <Button size="sm" variant="ghost" className="h-9 rounded-full px-3" onClick={() => void handleMonthStatusChange('draft')}>
                           {t('В черновик', 'Back to draft')}
                         </Button>
                       ) : null}
@@ -428,23 +358,80 @@ export function ExperimentalCalendarWorkspace({ classicHref }: ExperimentalCalen
                   ) : null}
                 </div>
               </div>
+
+              <div
+                data-testid="calendar-info-strip"
+                className="flex flex-wrap items-center justify-between gap-1.5 rounded-[16px] border border-stone-200 bg-white/85 px-2.5 py-1.5 text-[10px] leading-none text-stone-600"
+              >
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {problemSummary.coverage > 0 ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-1 font-semibold text-rose-700">
+                      <AlertTriangle className="h-3 w-3" />
+                      {t('Нет покрытия', 'No coverage')}: {problemSummary.coverage}
+                    </span>
+                  ) : null}
+                  {problemSummary.conflict > 0 ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 font-semibold text-amber-800">
+                      <CircleAlert className="h-3 w-3" />
+                      {t('Конфликты', 'Conflicts')}: {problemSummary.conflict}
+                    </span>
+                  ) : null}
+                  {problemSummary.noShow > 0 ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-1 font-semibold text-violet-700">
+                      <ShieldAlert className="h-3 w-3" />
+                      {t('Невыходы', 'No-shows')}: {problemSummary.noShow}
+                    </span>
+                  ) : null}
+                  {problemSummary.coverage === 0 && problemSummary.conflict === 0 && problemSummary.noShow === 0 ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 font-semibold text-emerald-700">
+                      {t('Месяц выглядит чисто', 'Month looks clean')}
+                    </span>
+                  ) : null}
+                  <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-1 font-medium text-stone-700">
+                    {t('Смен', 'Shifts')}: {monthSummary.assignedShiftCount}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-1 font-medium text-stone-700">
+                    {t('Покрыто', 'Covered')}: {monthSummary.staffedDays}/{monthSummary.monthDayCount}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-1 font-medium text-stone-700">
+                    {t('Проблемных дней', 'Problem days')}: {monthSummary.problemDays}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
+                  {legendOptions.map((option) => (
+                    <div
+                      key={option.value}
+                      className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-white px-2 py-1 font-medium text-stone-700"
+                    >
+                      <span className={cn('h-2 w-2 rounded-full border border-black/10', option.colorClass)} />
+                      <span>{option.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="p-2 sm:p-3">
-            <div className="grid grid-cols-7 gap-1.5">
+          <div className="flex min-h-0 flex-1 flex-col p-1.5 sm:p-2 lg:p-2">
+            <div className="grid grid-cols-7 gap-1">
               {CALENDAR_WEEKDAY_LABELS[language].map((label, index) => (
                 <div
                   key={label}
                   className={cn(
-                    'rounded-[16px] border border-stone-200 bg-stone-100 px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-500 sm:text-[11px]',
+                    'rounded-[12px] border border-stone-200 bg-stone-100 px-1.5 py-1 text-center text-[9px] font-semibold uppercase tracking-[0.14em] text-stone-500 sm:text-[10px]',
                     index >= 5 ? 'bg-rose-50 text-rose-500' : '',
                   )}
                 >
                   {label}
                 </div>
               ))}
+            </div>
 
+            <div
+              data-testid="calendar-grid"
+              className="mt-1 grid min-h-0 flex-1 grid-cols-7 gap-1 lg:grid-rows-6"
+            >
               {monthDays.map((day) => {
                 const assignments = visibleEmployees.map((employee) => {
                   const outsideEmployment = isOutsideEmployment(employee, day.date);
@@ -461,47 +448,49 @@ export function ExperimentalCalendarWorkspace({ classicHref }: ExperimentalCalen
 
                 const rowLimit = isMobile
                   ? (employeeFilter === 'all' ? 2 : 3)
-                  : (employeeFilter === 'all' ? 4 : 5);
+                  : (employeeFilter === 'all' ? 2 : 3);
                 const visibleAssignments = assignments.slice(0, rowLimit);
                 const hiddenAssignmentsCount = Math.max(0, assignments.length - visibleAssignments.length);
 
                 return (
                   <div
                     key={day.date}
+                    data-testid="calendar-day-card"
+                    data-day={day.date}
                     className={cn(
-                      'relative flex min-h-[122px] flex-col overflow-hidden rounded-[20px] border bg-white',
+                      'relative flex h-full min-h-[96px] flex-col overflow-hidden rounded-[16px] border p-1.5 lg:min-h-0 lg:rounded-[14px]',
                       ISSUE_FRAME_CLASS[day.issues.tone],
+                      day.weekend && day.issues.tone === 'neutral' ? 'border-rose-200/80 bg-rose-50/50' : '',
                       day.isToday ? 'ring-2 ring-sky-400/70' : '',
                       !day.isCurrentMonth ? 'opacity-55' : '',
                     )}
                   >
-                    <div className={cn('h-1.5 w-full', ISSUE_ACCENT_CLASS[day.issues.tone])} />
-
-                    <div className="flex items-start justify-between gap-2 px-2 py-2 sm:px-2.5">
+                    <div className="flex items-start justify-between gap-1.5">
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-sm font-semibold text-stone-900 sm:text-base">
+                        <div className="flex items-baseline gap-1">
+                          <span
+                            className={cn(
+                              'text-[13px] font-semibold leading-none sm:text-[15px]',
+                              day.weekend ? 'text-rose-600' : 'text-stone-900',
+                              !day.isCurrentMonth ? 'text-stone-500' : '',
+                            )}
+                          >
                             {day.dayNumber}
                           </span>
                           {!day.isCurrentMonth ? (
-                            <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-stone-500">
+                            <span className="text-[9px] font-medium uppercase tracking-[0.08em] text-stone-500">
                               {MONTH_NAMES[language][day.month - 1].slice(0, 3)}
                             </span>
                           ) : null}
-                          {day.weekend ? (
-                            <span className="rounded-full bg-stone-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-stone-500">
-                              {t('выходные', 'weekend')}
-                            </span>
-                          ) : null}
                         </div>
-                        <div className="mt-0.5 text-[10px] text-stone-500">
+                        <div className="mt-0.5 text-[9px] font-medium leading-none text-stone-500">
                           {getMonthShiftSummaryLabel(day.shiftLikeCount, language)}
                         </div>
                       </div>
 
                       {day.issues.label ? (
                         <span className={cn(
-                          'inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em]',
+                          'inline-flex rounded-full px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.08em]',
                           ISSUE_BADGE_CLASS[day.issues.tone],
                         )}>
                           {day.issues.label}
@@ -509,7 +498,7 @@ export function ExperimentalCalendarWorkspace({ classicHref }: ExperimentalCalen
                       ) : null}
                     </div>
 
-                    <div className="grid flex-1 content-start gap-1 px-2 pb-2 sm:px-2.5 sm:pb-2.5">
+                    <div className="mt-1 grid flex-1 content-start gap-0.5">
                       {visibleAssignments.map((assignment) => {
                         const editorKey = `${day.date}:${assignment.employee.id}`;
                         const rowButton = (
@@ -517,7 +506,7 @@ export function ExperimentalCalendarWorkspace({ classicHref }: ExperimentalCalen
                             type="button"
                             disabled={!assignment.editable}
                             className={cn(
-                              'grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-[12px] border px-2 py-1.5 text-left text-[11px] transition sm:text-xs',
+                              'grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-[10px] border px-1.5 py-1 text-left text-[10px] leading-none transition sm:text-[11px]',
                               assignment.outsideEmployment
                                 ? 'border-dashed border-stone-200 bg-stone-50 text-stone-400'
                                 : STATUS_SURFACE_CLASS[assignment.status],
@@ -527,10 +516,10 @@ export function ExperimentalCalendarWorkspace({ classicHref }: ExperimentalCalen
                               ? t('Сотрудник вне диапазона на эту дату', 'Employee is out of range for this date')
                               : getShiftStatusLabel(assignment.status, language)}
                           >
-                            <span className="truncate font-medium">
+                            <span className="truncate font-medium leading-4" title={assignment.employee.name}>
                               {getAssignmentName(assignment.employee, isMobile)}
                             </span>
-                            <span className="inline-flex items-center gap-1 rounded-full bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-stone-700">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-semibold text-stone-700">
                               <span className={cn(
                                 'h-2 w-2 rounded-full border border-black/10',
                                 assignment.outsideEmployment ? 'bg-stone-200' : getStatusDotClass(assignment.status),
@@ -565,7 +554,7 @@ export function ExperimentalCalendarWorkspace({ classicHref }: ExperimentalCalen
                       })}
 
                       {hiddenAssignmentsCount > 0 ? (
-                        <div className="rounded-[12px] border border-dashed border-stone-200 bg-stone-50 px-2 py-1 text-[10px] font-medium text-stone-500">
+                        <div className="rounded-[10px] border border-dashed border-stone-200 bg-stone-50 px-1.5 py-1 text-[9px] font-medium leading-none text-stone-500">
                           {t(`ещё ${hiddenAssignmentsCount}`, `${hiddenAssignmentsCount} more`)}
                         </div>
                       ) : null}

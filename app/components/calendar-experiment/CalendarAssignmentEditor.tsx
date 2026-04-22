@@ -80,7 +80,7 @@ export function CalendarAssignmentEditor(props: CalendarAssignmentEditorProps) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
         <DrawerTrigger asChild>{trigger}</DrawerTrigger>
-        <DrawerContent className="rounded-t-3xl">
+        <DrawerContent data-testid="calendar-assignment-editor" className="rounded-t-3xl">
           <DrawerHeader className="pb-2">
             <DrawerTitle className="flex items-center gap-2 text-base">
               <Pencil className="h-4 w-4" />
@@ -106,7 +106,7 @@ export function CalendarAssignmentEditor(props: CalendarAssignmentEditorProps) {
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent align="start" className="w-72 rounded-2xl p-3">
+      <PopoverContent data-testid="calendar-assignment-editor" align="start" className="w-72 rounded-2xl p-3">
         <EditorBody
           employeeName={employeeName}
           dateLabel={dateLabel}
