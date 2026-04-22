@@ -46,6 +46,23 @@ import { getLocalISODate } from '../lib/date';
 import { loadUiPreferences, saveUiPreferences } from '../lib/preferences';
 import { errorResult, okResult, type ActionResult } from '../lib/result';
 import { buildInitials, buildSessionIdentity, getRoleLabel } from '../lib/sessionIdentity';
+import {
+  createEmptyAppDataState,
+  normalizeAppDataState,
+  withArchivedEmployee,
+  withCurrentUserNameUpdated,
+  withEmployeeAdded,
+  withEmployeeRateUpdated,
+  withEmployeeUpdated,
+  withPaymentAdded,
+  withPaymentUpdated,
+  withScheduleMonthUpdated,
+  withShiftUpserted,
+  withoutEmployee,
+  withoutPayment,
+  withoutShift,
+  type AppDataState,
+} from './appState';
 import { useAuth } from './AuthContext';
 import { useLanguage } from './LanguageContext';
 
@@ -105,46 +122,6 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const sortEmployees = (items: Employee[]): Employee[] => (
-  [...items].sort((left, right) => {
-    if (left.archived !== right.archived) {
-      return Number(left.archived) - Number(right.archived);
-    }
-
-    return left.name.localeCompare(right.name);
-  })
-);
-
-const sortRateHistory = (items: EmployeeRateHistory[]): EmployeeRateHistory[] => (
-  [...items].sort((left, right) => {
-    if (left.employeeId !== right.employeeId) {
-      return left.employeeId.localeCompare(right.employeeId);
-    }
-
-    return left.validFrom.localeCompare(right.validFrom);
-  })
-);
-
-const sortScheduleMonths = (items: ScheduleMonth[]): ScheduleMonth[] => (
-  [...items].sort((left, right) => (
-    left.year === right.year ? left.month - right.month : left.year - right.year
-  ))
-);
-
-const sortShifts = (items: Shift[]): Shift[] => (
-  [...items].sort((left, right) => left.date.localeCompare(right.date))
-);
-
-const sortPayments = (items: Payment[]): Payment[] => (
-  [...items].sort((left, right) => {
-    if (left.date !== right.date) {
-      return right.date.localeCompare(left.date);
-    }
-
-    return right.createdAt.localeCompare(left.createdAt);
-  })
-);
-
 export function AppProvider({ children }: { children: ReactNode }) {
   const {
     status: authStatus,
@@ -154,16 +131,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     rememberResolvedIdentity,
   } = useAuth();
   const { t } = useLanguage();
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [rateHistory, setRateHistory] = useState<EmployeeRateHistory[]>([]);
-  const [scheduleMonths, setScheduleMonths] = useState<ScheduleMonth[]>([]);
-  const [shifts, setShifts] = useState<Shift[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [access, setAccess] = useState<UserAccess | null>(null);
+  const [appData, setAppData] = useState<AppDataState>(createEmptyAppDataState);
   const [preferences, setPreferences] = useState(() => loadUiPreferences());
   const [status, setStatus] = useState<AppDataStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [displayNameOverride, setDisplayNameOverride] = useState<string | null>(null);
+  const { employees, rateHistory, scheduleMonths, shifts, payments, access } = appData;
 
   useEffect(() => {
     saveUiPreferences(preferences);
@@ -181,24 +154,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     if (authStatus === 'missing-config') {
-      setEmployees([]);
-      setRateHistory([]);
-      setScheduleMonths([]);
-      setShifts([]);
-      setPayments([]);
-      setAccess(null);
+      setAppData(createEmptyAppDataState());
       setStatus('error');
       setError(t('Supabase не настроен. Проверь `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`.', 'Supabase is not configured. Check `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.'));
       return;
     }
 
     if (authStatus !== 'authenticated' || !user) {
-      setEmployees([]);
-      setRateHistory([]);
-      setScheduleMonths([]);
-      setShifts([]);
-      setPayments([]);
-      setAccess(null);
+      setAppData(createEmptyAppDataState());
       setStatus('idle');
       setError(null);
       return;
@@ -218,12 +181,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      setEmployees(sortEmployees(result.data.employees));
-      setRateHistory(sortRateHistory(result.data.rateHistory));
-      setScheduleMonths(sortScheduleMonths(result.data.scheduleMonths));
-      setShifts(sortShifts(result.data.shifts));
-      setPayments(sortPayments(result.data.payments));
-      setAccess(result.data.access);
+      setAppData(normalizeAppDataState(result.data));
       setStatus('ready');
       setError(null);
     })();
@@ -349,12 +307,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return errorResult(result.error);
     }
 
-    setEmployees(sortEmployees(result.data.employees));
-    setRateHistory(sortRateHistory(result.data.rateHistory));
-    setScheduleMonths(sortScheduleMonths(result.data.scheduleMonths));
-    setShifts(sortShifts(result.data.shifts));
-    setPayments(sortPayments(result.data.payments));
-    setAccess(result.data.access);
+    setAppData(normalizeAppDataState(result.data));
     setStatus('ready');
     setError(null);
     return okResult(undefined);
@@ -385,14 +338,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return errorResult(result.error);
     }
 
-    if (result.data.employee) {
-      setEmployees((prev) => sortEmployees(prev.map((employee) => (
-        employee.id === result.data.employee!.id ? result.data.employee! : employee
-      ))));
-    }
-
-    setAccess((prev) => (
-      prev ? { ...prev, profileDisplayName: result.data.displayName } : prev
+    setAppData((prev) => withCurrentUserNameUpdated(
+      prev,
+      result.data.displayName,
+      result.data.employee,
     ));
     setDisplayNameOverride(result.data.displayName);
     setError(null);
@@ -409,13 +358,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return errorResult(result.error);
     }
 
-    setScheduleMonths((prev) => {
-      const withoutCurrent = prev.filter((item) => !(
-        item.year === result.data.year && item.month === result.data.month
-      ));
-
-      return sortScheduleMonths([...withoutCurrent, result.data]);
-    });
+    setAppData((prev) => withScheduleMonthUpdated(prev, result.data));
     setError(null);
     return okResult(undefined);
   };
@@ -432,20 +375,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return errorResult(result.error);
     }
 
-    setEmployees((prev) => sortEmployees([...prev, result.data]));
-    setRateHistory((prev) => sortRateHistory([
-      ...prev,
-      {
-        id: `local-rate:${result.data.id}:${result.data.hiredAt ?? result.data.createdAt.slice(0, 10)}`,
-        employeeId: result.data.id,
-        organizationId: result.data.organizationId,
-        rate: result.data.dailyRate,
-        validFrom: result.data.hiredAt ?? result.data.createdAt.slice(0, 10),
-        validTo: result.data.terminatedAt,
-        createdByProfileId: access?.profileId ?? null,
-        createdAt: result.data.createdAt,
-      },
-    ]));
+    setAppData((prev) => withEmployeeAdded(prev, result.data, access?.profileId ?? null));
     setError(null);
     return okResult(undefined, result.message);
   };
@@ -460,14 +390,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return errorResult(result.error);
     }
 
-    setEmployees((prev) => sortEmployees(prev.map((employee) => (
-      employee.id === id ? result.data : employee
-    ))));
-    setRateHistory((prev) => prev.map((item) => (
-      item.employeeId === id && item.validTo === null
-        ? { ...item, validTo: result.data.terminatedAt }
-        : item
-    )));
+    setAppData((prev) => withArchivedEmployee(prev, result.data));
     setError(null);
     return okResult(undefined, result.message);
   };
@@ -482,10 +405,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return errorResult(result.error);
     }
 
-    setEmployees((prev) => prev.filter((employee) => employee.id !== id));
-    setRateHistory((prev) => prev.filter((item) => item.employeeId !== id));
-    setShifts((prev) => prev.filter((shift) => shift.employeeId !== id));
-    setPayments((prev) => prev.filter((payment) => payment.employeeId !== id));
+    setAppData((prev) => withoutEmployee(prev, id));
     setError(null);
     return okResult(undefined, result.message);
   };
@@ -501,31 +421,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     const effectiveFrom = getLocalISODate();
+    const createdAt = new Date().toISOString();
 
-    setEmployees((prev) => sortEmployees(prev.map((employee) => (
-      employee.id === id ? result.data : employee
-    ))));
-    setRateHistory((prev) => {
-      const closedPrev = prev.map((item) => (
-        item.employeeId === id && item.validTo === null && item.validFrom < effectiveFrom
-          ? { ...item, validTo: effectiveFrom }
-          : item
-      ));
-
-      return sortRateHistory([
-        ...closedPrev.filter((item) => !(item.employeeId === id && item.validFrom === effectiveFrom)),
-        {
-          id: `local-rate:${id}:${effectiveFrom}`,
-          employeeId: id,
-          organizationId: result.data.organizationId,
-          rate: dailyRate,
-          validFrom: effectiveFrom,
-          validTo: null,
-          createdByProfileId: access?.profileId ?? null,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-    });
+    setAppData((prev) => withEmployeeRateUpdated(
+      prev,
+      result.data,
+      effectiveFrom,
+      access?.profileId ?? null,
+      createdAt,
+    ));
     setError(null);
     return okResult(undefined, result.message);
   };
@@ -545,14 +449,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return errorResult(result.error);
     }
 
-    setEmployees((prev) => sortEmployees(prev.map((employee) => (
-      employee.id === id ? result.data : employee
-    ))));
+    setAppData((prev) => {
+      const nextState = withEmployeeUpdated(prev, result.data);
+      if (access?.employeeId !== id || !nextState.access) {
+        return nextState;
+      }
 
+      return {
+        ...nextState,
+        access: {
+          ...nextState.access,
+          profileDisplayName: result.data.name,
+        },
+      };
+    });
     if (access?.employeeId === id) {
-      setAccess((prev) => (
-        prev ? { ...prev, profileDisplayName: result.data.name } : prev
-      ));
       setDisplayNameOverride(result.data.name);
     }
 
@@ -575,9 +486,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return errorResult(result.error);
     }
 
-    setEmployees((prev) => sortEmployees(prev.map((employee) => (
-      employee.id === id ? result.data : employee
-    ))));
+    setAppData((prev) => withEmployeeUpdated(prev, result.data));
     setError(null);
     return okResult(undefined, result.message);
   };
@@ -601,7 +510,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return errorResult(result.error);
       }
 
-      setShifts((prev) => prev.filter((shift) => !(shift.employeeId === employeeId && shift.date === date)));
+      setAppData((prev) => withoutShift(prev, employeeId, date));
       setError(null);
       return okResult(undefined);
     }
@@ -613,10 +522,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return errorResult(result.error);
     }
 
-    setShifts((prev) => {
-      const otherShifts = prev.filter((shift) => !(shift.employeeId === employeeId && shift.date === date));
-      return sortShifts([...otherShifts, result.data]);
-    });
+    setAppData((prev) => withShiftUpserted(prev, result.data));
     setError(null);
     return okResult(undefined);
   };
@@ -645,7 +551,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return errorResult(result.error);
     }
 
-    setPayments((prev) => sortPayments([result.data, ...prev]));
+    setAppData((prev) => withPaymentAdded(prev, result.data));
     setError(null);
     return okResult(undefined, result.message);
   };
@@ -660,9 +566,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return errorResult(result.error);
     }
 
-    setPayments((prev) => sortPayments(prev.map((payment) => (
-      payment.id === paymentId ? result.data : payment
-    ))));
+    setAppData((prev) => withPaymentUpdated(prev, result.data));
     setError(null);
     return okResult(undefined, result.message);
   };
@@ -677,9 +581,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return errorResult(result.error);
     }
 
-    setPayments((prev) => sortPayments(prev.map((payment) => (
-      payment.id === paymentId ? result.data : payment
-    ))));
+    setAppData((prev) => withPaymentUpdated(prev, result.data));
     setError(null);
     return okResult(undefined, result.message);
   };
@@ -694,9 +596,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return errorResult(result.error);
     }
 
-    setPayments((prev) => sortPayments(prev.map((payment) => (
-      payment.id === paymentId ? result.data : payment
-    ))));
+    setAppData((prev) => withPaymentUpdated(prev, result.data));
     setError(null);
     return okResult(undefined, result.message);
   };
@@ -708,7 +608,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return errorResult(result.error);
     }
 
-    setPayments((prev) => prev.filter((payment) => payment.id !== id));
+    setAppData((prev) => withoutPayment(prev, id));
     setError(null);
     return okResult(undefined, result.message);
   };
@@ -777,12 +677,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return errorResult(result.error);
     }
 
-    setEmployees(sortEmployees(result.data.employees));
-    setRateHistory(sortRateHistory(result.data.rateHistory));
-    setScheduleMonths(sortScheduleMonths(result.data.scheduleMonths));
-    setShifts(sortShifts(result.data.shifts));
-    setPayments(sortPayments(result.data.payments));
-    setAccess(result.data.access);
+    setAppData(normalizeAppDataState(result.data));
     setPreferences({
       selectedMonth: importedData.selectedMonth,
       selectedYear: importedData.selectedYear,
