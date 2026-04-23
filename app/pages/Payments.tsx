@@ -1,9 +1,10 @@
-import { Pencil, Trash2, Wallet } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { ChevronDown, Pencil, Trash2, Wallet } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { AddPaymentModal } from '../components/AddPaymentModal';
 import { EditPaymentModal } from '../components/EditPaymentModal';
 import { PaymentStatusBadge } from '../components/PaymentStatusBadge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../components/ui/collapsible';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import {
@@ -14,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
+import { cn } from '../components/ui/utils';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import type { Payment } from '../domain/types';
@@ -116,6 +118,8 @@ export default function PaymentsPage() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<EditPaymentState | null>(null);
+  const [openMonthKeys, setOpenMonthKeys] = useState<string[]>([]);
+  const [hasInitializedMonthState, setHasInitializedMonthState] = useState(false);
 
   const visibleEmployees = useMemo(() => {
     const active = employees.filter((employee) => !employee.archived);
@@ -148,6 +152,35 @@ export default function PaymentsPage() {
   ), [visiblePayments]);
 
   const latestMonth = paymentGroups[0] ?? null;
+
+  useEffect(() => {
+    const validMonthKeys = paymentGroups.map((group) => group.key);
+
+    setOpenMonthKeys((prev) => prev.filter((key) => validMonthKeys.includes(key)));
+
+    if (!hasInitializedMonthState && validMonthKeys.length > 0) {
+      setOpenMonthKeys([validMonthKeys[0]]);
+      setHasInitializedMonthState(true);
+    }
+  }, [hasInitializedMonthState, paymentGroups]);
+
+  const toggleMonth = (monthKey: string, isOpen: boolean) => {
+    setOpenMonthKeys((prev) => {
+      if (isOpen) {
+        return prev.includes(monthKey) ? prev : [...prev, monthKey];
+      }
+
+      return prev.filter((key) => key !== monthKey);
+    });
+  };
+
+  const expandAllMonths = () => {
+    setOpenMonthKeys(paymentGroups.map((group) => group.key));
+  };
+
+  const collapseAllMonths = () => {
+    setOpenMonthKeys([]);
+  };
 
   const handleAddPayment = async (input: Parameters<typeof addPayment>[0]) => {
     const result = await addPayment(input);
@@ -267,118 +300,171 @@ export default function PaymentsPage() {
 
         {paymentGroups.length > 0 ? (
           <section className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-xs text-muted-foreground">
+                {t(
+                  'Нажми на месяц, чтобы свернуть или раскрыть его записи.',
+                  'Click a month to collapse or expand its entries.',
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  onClick={collapseAllMonths}
+                  data-testid="collapse-all-months"
+                >
+                  {t('Свернуть все', 'Collapse all')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  onClick={expandAllMonths}
+                  data-testid="expand-all-months"
+                >
+                  {t('Развернуть все', 'Expand all')}
+                </Button>
+              </div>
+            </div>
             {paymentGroups.map((group) => (
-              <Card
+              <Collapsible
                 key={group.key}
-                className="gap-0 overflow-hidden"
+                open={openMonthKeys.includes(group.key)}
+                onOpenChange={(isOpen) => toggleMonth(group.key, isOpen)}
                 data-testid="payment-month-group"
                 data-month-key={group.key}
               >
-                <CardHeader className="flex flex-col gap-2 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-                  <div>
-                    <CardTitle className="text-base font-semibold text-stone-950">
-                      {group.label}
-                    </CardTitle>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {t('Записей', 'Records')}: {group.payments.length}
-                      {' · '}
-                      {t('Учтено в расчете', 'Counted in payroll')}: {money(group.approvedTotal, locale)}
-                    </div>
-                  </div>
-                  {group.legacyCount > 0 ? (
-                    <div className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800">
-                      {t('Особые записи', 'Special records')}: {group.legacyCount}
-                    </div>
-                  ) : null}
-                </CardHeader>
-
-                <CardContent className="overflow-x-auto p-0">
-                  <Table className="min-w-[760px] table-fixed">
-                    <TableHeader>
-                      <TableRow className="bg-stone-50/70">
-                        <TableHead className="w-[112px] px-4 py-2 text-xs">{t('Дата', 'Date')}</TableHead>
-                        <TableHead className="w-[220px] px-4 py-2 text-xs">{t('Сотрудник', 'Employee')}</TableHead>
-                        <TableHead className="w-[140px] px-4 py-2 text-xs">{t('Сумма', 'Amount')}</TableHead>
-                        <TableHead className="px-4 py-2 text-xs">{t('Комментарий', 'Comment')}</TableHead>
-                        {isOwner ? (
-                          <TableHead className="w-[132px] px-4 py-2 text-right text-xs">
-                            {t('Действия', 'Actions')}
-                          </TableHead>
+                <Card className="gap-0 overflow-hidden">
+                  <CollapsibleTrigger
+                    className="w-full text-left"
+                    data-testid={`payment-month-toggle-${group.key}`}
+                  >
+                    <CardHeader className={cn(
+                      'flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-stone-50 sm:flex-row sm:items-center sm:justify-between sm:px-5',
+                      openMonthKeys.includes(group.key) ? 'border-b' : '',
+                    )}>
+                      <div className="flex items-start gap-3">
+                        <ChevronDown
+                          className={cn(
+                            'mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200',
+                            openMonthKeys.includes(group.key) ? 'rotate-0' : '-rotate-90',
+                          )}
+                        />
+                        <div>
+                          <CardTitle className="text-base font-semibold text-stone-950">
+                            {group.label}
+                          </CardTitle>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {t('Записей', 'Records')}: {group.payments.length}
+                            {' · '}
+                            {t('Учтено в расчете', 'Counted in payroll')}: {money(group.approvedTotal, locale)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {group.legacyCount > 0 ? (
+                          <div className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800">
+                            {t('Особые записи', 'Special records')}: {group.legacyCount}
+                          </div>
                         ) : null}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {group.payments.map((payment) => {
-                        const employee = employeeById.get(payment.employeeId);
-                        const canEdit = isOwner;
-                        const canDelete = isOwner && payment.status !== 'approved';
-                        const comment = payment.comment.trim() || t('Без комментария', 'No comment');
+                      </div>
+                    </CardHeader>
+                  </CollapsibleTrigger>
 
-                        return (
-                          <TableRow key={payment.id} data-testid="payment-row">
-                            <TableCell className="px-4 py-2 text-sm font-medium text-stone-800">
-                              {payment.date}
-                            </TableCell>
-                            <TableCell className="px-4 py-2 text-sm">
-                              <div className="font-medium text-stone-900">
-                                {employee?.name ?? t('Сотрудник', 'Employee')}
-                              </div>
-                            </TableCell>
-                            <TableCell className="px-4 py-2 text-sm font-semibold text-stone-950">
-                              {money(payment.amount, locale)}
-                            </TableCell>
-                            <TableCell className="px-4 py-2 text-sm">
-                              <div className="flex min-w-0 max-w-[360px] items-center gap-2">
-                                <span className="truncate text-stone-700" title={comment}>
-                                  {comment}
-                                </span>
-                                {payment.status !== 'approved' ? (
-                                  <span data-testid="payment-legacy-status">
-                                    <PaymentStatusBadge status={payment.status} />
-                                  </span>
-                                ) : null}
-                              </div>
-                            </TableCell>
+                  <CollapsibleContent data-testid={`payment-month-content-${group.key}`}>
+                    <CardContent className="overflow-x-auto p-0">
+                      <Table className="min-w-[760px] table-fixed">
+                        <TableHeader>
+                          <TableRow className="bg-stone-50/70">
+                            <TableHead className="w-[112px] px-4 py-2 text-xs">{t('Дата', 'Date')}</TableHead>
+                            <TableHead className="w-[220px] px-4 py-2 text-xs">{t('Сотрудник', 'Employee')}</TableHead>
+                            <TableHead className="w-[140px] px-4 py-2 text-xs">{t('Сумма', 'Amount')}</TableHead>
+                            <TableHead className="px-4 py-2 text-xs">{t('Комментарий', 'Comment')}</TableHead>
                             {isOwner ? (
-                              <TableCell className="px-4 py-2 text-right" data-testid="payment-actions">
-                                <div className="flex justify-end gap-1">
-                                  {canEdit ? (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-8 px-2"
-                                      onClick={() => setEditingPayment({
-                                        paymentId: payment.id,
-                                        amount: payment.amount,
-                                        date: payment.date,
-                                        comment: payment.comment,
-                                      })}
-                                    >
-                                      <Pencil className="h-3.5 w-3.5" />
-                                      <span className="sr-only sm:not-sr-only sm:ml-1">{t('Изменить', 'Edit')}</span>
-                                    </Button>
-                                  ) : null}
-                                  {canDelete ? (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-8 px-2 text-rose-700 hover:text-rose-800"
-                                      onClick={() => void handleDeletePayment(payment.id)}
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                      <span className="sr-only sm:not-sr-only sm:ml-1">{t('Удалить', 'Delete')}</span>
-                                    </Button>
-                                  ) : null}
-                                </div>
-                              </TableCell>
+                              <TableHead className="w-[132px] px-4 py-2 text-right text-xs">
+                                {t('Действия', 'Actions')}
+                              </TableHead>
                             ) : null}
                           </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
+                        </TableHeader>
+                        <TableBody>
+                          {group.payments.map((payment) => {
+                            const employee = employeeById.get(payment.employeeId);
+                            const canEdit = isOwner;
+                            const canDelete = isOwner && payment.status !== 'approved';
+                            const comment = payment.comment.trim() || t('Без комментария', 'No comment');
+
+                            return (
+                              <TableRow key={payment.id} data-testid="payment-row">
+                                <TableCell className="px-4 py-2 text-sm font-medium text-stone-800">
+                                  {payment.date}
+                                </TableCell>
+                                <TableCell className="px-4 py-2 text-sm">
+                                  <div className="font-medium text-stone-900">
+                                    {employee?.name ?? t('Сотрудник', 'Employee')}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="px-4 py-2 text-sm font-semibold text-stone-950">
+                                  {money(payment.amount, locale)}
+                                </TableCell>
+                                <TableCell className="px-4 py-2 text-sm">
+                                  <div className="flex min-w-0 max-w-[360px] items-center gap-2">
+                                    <span className="truncate text-stone-700" title={comment}>
+                                      {comment}
+                                    </span>
+                                    {payment.status !== 'approved' ? (
+                                      <span data-testid="payment-legacy-status">
+                                        <PaymentStatusBadge status={payment.status} />
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </TableCell>
+                                {isOwner ? (
+                                  <TableCell className="px-4 py-2 text-right" data-testid="payment-actions">
+                                    <div className="flex justify-end gap-1">
+                                      {canEdit ? (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-8 px-2"
+                                          onClick={() => setEditingPayment({
+                                            paymentId: payment.id,
+                                            amount: payment.amount,
+                                            date: payment.date,
+                                            comment: payment.comment,
+                                          })}
+                                        >
+                                          <Pencil className="h-3.5 w-3.5" />
+                                          <span className="sr-only sm:not-sr-only sm:ml-1">{t('Изменить', 'Edit')}</span>
+                                        </Button>
+                                      ) : null}
+                                      {canDelete ? (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-8 px-2 text-rose-700 hover:text-rose-800"
+                                          onClick={() => void handleDeletePayment(payment.id)}
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                          <span className="sr-only sm:not-sr-only sm:ml-1">{t('Удалить', 'Delete')}</span>
+                                        </Button>
+                                      ) : null}
+                                    </div>
+                                  </TableCell>
+                                ) : null}
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
             ))}
           </section>
         ) : (
