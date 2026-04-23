@@ -387,12 +387,22 @@ test.describe('payments journal', () => {
     await expect(groups.nth(0)).toContainText('April 2026');
     await expect(groups.nth(1)).toContainText('March 2026');
 
+    await expect(page.getByTestId('payment-month-content-2026-04')).toBeVisible();
+    await expect(page.getByTestId('payment-month-content-2026-03')).not.toBeVisible();
     await expect(page.getByText('April salary payout with a deliberately long note')).toBeVisible();
-    await expect(page.getByText('Legacy pending cash note')).toBeVisible();
-    await expect(page.getByText('Rejected correction kept for history')).toBeVisible();
-    await expect(page.getByTestId('payment-legacy-status')).toHaveCount(2);
+    await expect(page.getByText('Rejected correction kept for history')).toHaveCount(0);
+    await expect(page.getByTestId('payment-legacy-status')).toHaveCount(1);
     await expect(page.getByRole('columnheader', { name: 'Status' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Approve|Reject/ })).toHaveCount(0);
+
+    await page.getByTestId('collapse-all-months').click();
+    await expect(page.getByTestId('payment-month-content-2026-04')).not.toBeVisible();
+    await expect(page.getByText('April salary payout with a deliberately long note')).toHaveCount(0);
+
+    await page.getByTestId('expand-all-months').click();
+    await expect(page.getByTestId('payment-month-content-2026-03')).toBeVisible();
+    await expect(page.getByText('Legacy pending cash note')).toBeVisible();
+    await expect(page.getByText('Rejected correction kept for history')).toBeVisible();
 
     const firstActionsBox = await page.getByTestId('payment-actions').first().boundingBox();
     expect(firstActionsBox?.width ?? 999).toBeLessThan(180);
@@ -417,6 +427,9 @@ test.describe('payments journal', () => {
       comment: 'One-cell journal payment',
       status: 'approved',
     }]);
+    await expect(page.getByTestId('payment-row')).toHaveCount(3);
+
+    await page.getByTestId('expand-all-months').click();
     await expect(page.getByTestId('payment-row')).toHaveCount(5);
   });
 
@@ -426,6 +439,7 @@ test.describe('payments journal', () => {
 
     await expect(page.getByTestId('payments-journal')).toBeVisible();
     await expect(page.getByText('April salary payout with a deliberately long note')).toBeVisible();
+    await page.getByTestId('expand-all-months').click();
     await expect(page.getByText('Rejected correction kept for history')).toBeVisible();
     await expect(page.getByText('Legacy pending cash note')).toHaveCount(0);
     await expect(page.getByTestId('add-payment-button')).toHaveCount(0);
