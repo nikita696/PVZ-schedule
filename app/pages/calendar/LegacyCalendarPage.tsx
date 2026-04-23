@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { Link, useLocation } from 'react-router';
 import { toast } from 'sonner';
 import { CompactMonthlyGrid } from '../../components/CompactMonthlyGrid';
 import { MonthYearSelector } from '../../components/MonthYearSelector';
@@ -9,10 +8,6 @@ import { useApp } from '../../context/AppContext';
 import { useLanguage } from '../../context/LanguageContext';
 import type { MonthStatus } from '../../domain/types';
 import { getMonthStatusLabels } from '../dashboardCopy';
-
-interface LegacyCalendarPageProps {
-  showExperimentalBanner?: boolean;
-}
 
 const MONTH_STATUS_META: Record<MonthStatus, { className: string }> = {
   draft: {
@@ -29,11 +24,7 @@ const MONTH_STATUS_META: Record<MonthStatus, { className: string }> = {
   },
 };
 
-export function LegacyCalendarPageView({
-  showExperimentalBanner = true,
-}: LegacyCalendarPageProps) {
-  const location = useLocation();
-  const experimentalHref = location.pathname.replace(/\/classic$/, '');
+export function LegacyCalendarPageView() {
   const { language, t } = useLanguage();
   const monthStatusLabels = getMonthStatusLabels(language);
   const {
@@ -90,28 +81,7 @@ export function LegacyCalendarPageView({
 
   return (
     <div data-testid="legacy-calendar-shell" className="bg-stone-50">
-      <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6">
-        {showExperimentalBanner ? (
-          <Card className="border-dashed border-stone-300 bg-stone-100/70">
-            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="text-sm font-semibold text-stone-900">
-                  {t('Classic fallback сохранён для безопасного сравнения.', 'Classic fallback is preserved for safe comparison.')}
-                </div>
-                <div className="text-sm text-stone-600">
-                  {t(
-                    'Новый экспериментальный календарь живёт отдельно и не удаляет текущую реализацию.',
-                    'The new experimental calendar lives separately and does not remove the current implementation.',
-                  )}
-                </div>
-              </div>
-              <Button asChild variant="outline">
-                <Link to={experimentalHref}>{t('Открыть experimental calendar', 'Open experimental calendar')}</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ) : null}
-
+      <main className="mx-auto flex max-w-[1500px] flex-col gap-3 px-3 py-4 sm:px-4">
         <Card>
           <CardContent className="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2">

@@ -6,6 +6,7 @@ const LANGUAGE_STORAGE_KEY = 'pvz-schedule.language';
 const PREFERENCES_STORAGE_KEY = 'pvz-schedule-ui-v1';
 
 type FixtureRole = 'admin' | 'employee';
+type ShiftStatusFixture = 'shift' | 'day_off' | 'sick_leave' | 'no_show' | 'replacement' | 'no_shift';
 
 interface FixtureData {
   session: Record<string, unknown>;
@@ -16,6 +17,11 @@ interface FixtureData {
   payments: Record<string, unknown>[];
   rateHistory: Record<string, unknown>[];
   scheduleMonths: Record<string, unknown>[];
+}
+
+interface RpcCalls {
+  upserts: Array<{ employeeId: string; date: string; status: ShiftStatusFixture }>;
+  deletes: Array<{ employeeId: string; date: string }>;
 }
 
 const jsonHeaders = {
@@ -38,6 +44,31 @@ const createFakeJwt = (subject: string, exp: number): string => {
   const payload = encodeBase64Url(JSON.stringify({ sub: subject, exp, role: 'authenticated' }));
   return `${header}.${payload}.signature`;
 };
+
+const createShift = (
+  id: string,
+  employeeId: string,
+  workDate: string,
+  status: ShiftStatusFixture,
+  rateSnapshot: number,
+) => ({
+  id,
+  user_id: 'user-admin',
+  organization_id: 'org-1',
+  employee_id: employeeId,
+  work_date: workDate,
+  status,
+  requested_status: status,
+  approved_status: status,
+  actual_status: null,
+  rate_snapshot: rateSnapshot,
+  created_by_profile_id: 'user-admin',
+  requested_by_profile_id: 'user-admin',
+  approved_by_profile_id: 'user-admin',
+  actual_by_profile_id: null,
+  created_at: '2026-04-22T08:00:00.000Z',
+  updated_at: '2026-04-22T08:00:00.000Z',
+});
 
 const buildFixtureData = (role: FixtureRole): FixtureData => {
   const authUserId = role === 'admin' ? 'user-admin' : 'user-employee';
@@ -152,96 +183,13 @@ const buildFixtureData = (role: FixtureRole): FixtureData => {
     },
     employees,
     shifts: [
-      {
-        id: 'shift-1',
-        user_id: 'user-admin',
-        organization_id: 'org-1',
-        employee_id: 'emp-owner',
-        work_date: '2026-05-01',
-        status: 'shift',
-        requested_status: 'shift',
-        approved_status: 'shift',
-        actual_status: null,
-        rate_snapshot: 5000,
-        created_by_profile_id: 'user-admin',
-        requested_by_profile_id: 'user-admin',
-        approved_by_profile_id: 'user-admin',
-        actual_by_profile_id: null,
-        created_at: baseNow,
-        updated_at: baseNow,
-      },
-      {
-        id: 'shift-2',
-        user_id: 'user-admin',
-        organization_id: 'org-1',
-        employee_id: 'emp-pavel',
-        work_date: '2026-05-01',
-        status: 'day_off',
-        requested_status: 'day_off',
-        approved_status: 'day_off',
-        actual_status: null,
-        rate_snapshot: 4300,
-        created_by_profile_id: 'user-admin',
-        requested_by_profile_id: 'user-admin',
-        approved_by_profile_id: 'user-admin',
-        actual_by_profile_id: null,
-        created_at: baseNow,
-        updated_at: baseNow,
-      },
-      {
-        id: 'shift-3',
-        user_id: 'user-admin',
-        organization_id: 'org-1',
-        employee_id: 'emp-alina',
-        work_date: '2026-05-01',
-        status: 'no_shift',
-        requested_status: 'no_shift',
-        approved_status: 'no_shift',
-        actual_status: null,
-        rate_snapshot: 4100,
-        created_by_profile_id: 'user-admin',
-        requested_by_profile_id: 'user-admin',
-        approved_by_profile_id: 'user-admin',
-        actual_by_profile_id: null,
-        created_at: baseNow,
-        updated_at: baseNow,
-      },
-      {
-        id: 'shift-4',
-        user_id: 'user-admin',
-        organization_id: 'org-1',
-        employee_id: 'emp-pavel',
-        work_date: '2026-05-02',
-        status: 'shift',
-        requested_status: 'shift',
-        approved_status: 'shift',
-        actual_status: null,
-        rate_snapshot: 4300,
-        created_by_profile_id: 'user-admin',
-        requested_by_profile_id: 'user-admin',
-        approved_by_profile_id: 'user-admin',
-        actual_by_profile_id: null,
-        created_at: baseNow,
-        updated_at: baseNow,
-      },
-      {
-        id: 'shift-5',
-        user_id: 'user-admin',
-        organization_id: 'org-1',
-        employee_id: 'emp-owner',
-        work_date: '2026-05-04',
-        status: 'replacement',
-        requested_status: 'replacement',
-        approved_status: 'replacement',
-        actual_status: null,
-        rate_snapshot: 5000,
-        created_by_profile_id: 'user-admin',
-        requested_by_profile_id: 'user-admin',
-        approved_by_profile_id: 'user-admin',
-        actual_by_profile_id: null,
-        created_at: baseNow,
-        updated_at: baseNow,
-      },
+      createShift('shift-1', 'emp-owner', '2026-05-01', 'shift', 5000),
+      createShift('shift-2', 'emp-pavel', '2026-05-01', 'day_off', 4300),
+      createShift('shift-3', 'emp-alina', '2026-05-01', 'no_shift', 4100),
+      createShift('shift-4', 'emp-pavel', '2026-05-02', 'shift', 4300),
+      createShift('shift-5', 'emp-owner', '2026-05-04', 'replacement', 5000),
+      createShift('shift-6', 'emp-alina', '2026-05-02', 'sick_leave', 4100),
+      createShift('shift-7', 'emp-alina', '2026-05-03', 'no_show', 4100),
     ],
     payments: [],
     rateHistory: employees.map((employee) => ({
@@ -251,7 +199,7 @@ const buildFixtureData = (role: FixtureRole): FixtureData => {
       rate: employee.daily_rate,
       valid_from: employee.hired_at,
       valid_to: null,
-      created_by_profile_id: 'user-admin',
+      created_by_profile_id: null,
       created_at: '2026-01-01T00:00:00.000Z',
     })),
     scheduleMonths: [
@@ -280,7 +228,7 @@ const fulfillJson = async (route: Route, body: unknown) => {
   });
 };
 
-const mockSupabase = async (page: Page, fixture: FixtureData) => {
+const mockSupabase = async (page: Page, fixture: FixtureData, rpcCalls: RpcCalls) => {
   await page.route(`${SUPABASE_URL}/rest/v1/**`, async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -294,6 +242,55 @@ const mockSupabase = async (page: Page, fixture: FixtureData) => {
       case '/rest/v1/rpc/ensure_profile_membership':
         await fulfillJson(route, null);
         return;
+      case '/rest/v1/rpc/upsert_shift_entry': {
+        const payload = request.postDataJSON() as {
+          employee_id_input: string;
+          work_date_input: string;
+          status_input: ShiftStatusFixture;
+        };
+        const existingIndex = fixture.shifts.findIndex((shift) => (
+          shift.employee_id === payload.employee_id_input
+          && shift.work_date === payload.work_date_input
+        ));
+        const employee = fixture.employees.find((item) => item.id === payload.employee_id_input);
+        const nextShift = createShift(
+          existingIndex >= 0 ? String(fixture.shifts[existingIndex].id) : `shift-new-${rpcCalls.upserts.length + 1}`,
+          payload.employee_id_input,
+          payload.work_date_input,
+          payload.status_input,
+          Number(employee?.daily_rate ?? 0),
+        );
+
+        if (existingIndex >= 0) {
+          fixture.shifts[existingIndex] = nextShift;
+        } else {
+          fixture.shifts.push(nextShift);
+        }
+
+        rpcCalls.upserts.push({
+          employeeId: payload.employee_id_input,
+          date: payload.work_date_input,
+          status: payload.status_input,
+        });
+        await fulfillJson(route, nextShift);
+        return;
+      }
+      case '/rest/v1/rpc/delete_shift_entry': {
+        const payload = request.postDataJSON() as {
+          employee_id_input: string;
+          work_date_input: string;
+        };
+        fixture.shifts = fixture.shifts.filter((shift) => !(
+          shift.employee_id === payload.employee_id_input
+          && shift.work_date === payload.work_date_input
+        ));
+        rpcCalls.deletes.push({
+          employeeId: payload.employee_id_input,
+          date: payload.work_date_input,
+        });
+        await fulfillJson(route, null);
+        return;
+      }
       case '/rest/v1/profiles':
         await fulfillJson(route, fixture.profile);
         return;
@@ -323,8 +320,9 @@ const mockSupabase = async (page: Page, fixture: FixtureData) => {
 
 const bootstrapCalendar = async (page: Page, role: FixtureRole) => {
   const fixture = buildFixtureData(role);
+  const rpcCalls: RpcCalls = { upserts: [], deletes: [] };
 
-  await mockSupabase(page, fixture);
+  await mockSupabase(page, fixture, rpcCalls);
   await page.addInitScript(
     ({ session, storageKey, languageStorageKey, preferencesStorageKey }) => {
       window.localStorage.clear();
@@ -343,41 +341,104 @@ const bootstrapCalendar = async (page: Page, role: FixtureRole) => {
       preferencesStorageKey: PREFERENCES_STORAGE_KEY,
     },
   );
+
+  return { fixture, rpcCalls };
 };
 
-test.describe('calendar routes and density', () => {
+const shiftCell = (page: Page, employeeId: string, date: string) => (
+  page.getByTestId(`shift-cell-${employeeId}-${date}`)
+);
+
+test.describe('table schedule calendar', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test('admin calendar rolls back to the legacy classic view', async ({ page }) => {
+  test('admin calendar renders saved shifts in the table without experimental calendar', async ({ page }) => {
     await bootstrapCalendar(page, 'admin');
     await page.goto('/admin/calendar');
 
     await expect(page.getByTestId('legacy-calendar-shell')).toBeVisible();
-    await expect(page).toHaveURL(/\/admin\/calendar$/);
+    await expect(page.getByTestId('monthly-schedule-table-shell')).toBeVisible();
     await expect(page.locator('[data-testid="experimental-calendar-shell"]')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /Open experimental calendar|Открыть experimental calendar/i })).toHaveCount(0);
-    await expect(page.getByText(/employees in the schedule|сотрудников в графике/i)).toBeVisible();
-    await expect(page.getByText(/Никита Власов/i).first()).toBeVisible();
+    await expect(page.getByTestId('monthly-schedule-header-days').locator('[data-date]')).toHaveCount(31);
+
+    await expect(page.getByText('Никита Власов').first()).toBeVisible();
+    await expect(shiftCell(page, 'emp-owner', '2026-05-01')).toHaveAttribute('data-status', 'shift');
+    await expect(shiftCell(page, 'emp-pavel', '2026-05-01')).toHaveAttribute('data-status', 'day_off');
+    await expect(shiftCell(page, 'emp-alina', '2026-05-01')).toHaveAttribute('data-status', 'no_shift');
+    await expect(shiftCell(page, 'emp-alina', '2026-05-01')).toHaveAttribute('data-has-record', 'true');
+    await expect(shiftCell(page, 'emp-owner', '2026-05-04')).toHaveAttribute('data-status', 'replacement');
+    await expect(shiftCell(page, 'emp-alina', '2026-05-02')).toHaveAttribute('data-status', 'sick_leave');
+    await expect(shiftCell(page, 'emp-alina', '2026-05-03')).toHaveAttribute('data-status', 'no_show');
   });
 
-  test('employee calendar stays compact and editable for personal schedule', async ({ page }) => {
+  test('admin edit updates exactly one saved cell through one upsert', async ({ page }) => {
+    const { rpcCalls } = await bootstrapCalendar(page, 'admin');
+    await page.goto('/admin/calendar');
+
+    const targetCell = shiftCell(page, 'emp-pavel', '2026-05-02');
+    await expect(targetCell).toHaveAttribute('data-status', 'shift');
+
+    await targetCell.click();
+    await expect(page.getByTestId('shift-status-popover')).toBeVisible();
+    await page.getByTestId('shift-option-sick_leave').click();
+
+    await expect(targetCell).toHaveAttribute('data-status', 'sick_leave');
+    await expect(shiftCell(page, 'emp-owner', '2026-05-01')).toHaveAttribute('data-status', 'shift');
+    expect(rpcCalls.upserts).toEqual([{ employeeId: 'emp-pavel', date: '2026-05-02', status: 'sick_leave' }]);
+    expect(rpcCalls.deletes).toEqual([]);
+  });
+
+  test('saved no_shift stays saved until explicit clear', async ({ page }) => {
+    const { rpcCalls } = await bootstrapCalendar(page, 'admin');
+    await page.goto('/admin/calendar');
+
+    const noShiftCell = shiftCell(page, 'emp-alina', '2026-05-01');
+    await expect(noShiftCell).toHaveAttribute('data-status', 'no_shift');
+    await expect(noShiftCell).toHaveAttribute('data-has-record', 'true');
+    expect(rpcCalls.deletes).toEqual([]);
+
+    await noShiftCell.click();
+    await expect(page.getByTestId('shift-status-popover')).toBeVisible();
+    await page.getByTestId('shift-option-none').click();
+
+    await expect(noShiftCell).toHaveAttribute('data-status', 'no_shift');
+    await expect(noShiftCell).toHaveAttribute('data-has-record', 'false');
+    expect(rpcCalls.upserts).toEqual([]);
+    expect(rpcCalls.deletes).toEqual([{ employeeId: 'emp-alina', date: '2026-05-01' }]);
+  });
+
+  test('employee calendar and shifts routes use the same table view with scoped editing', async ({ page }) => {
     await bootstrapCalendar(page, 'employee');
     await page.goto('/employee/calendar');
 
-    await expect(page.getByTestId('experimental-calendar-shell')).toBeVisible();
-    await expect(page).toHaveURL(/\/employee\/calendar$/);
+    await expect(page.getByTestId('monthly-schedule-table-shell')).toBeVisible();
+    await expect(page.locator('[data-testid="experimental-calendar-shell"]')).toHaveCount(0);
+    await expect(shiftCell(page, 'emp-owner', '2026-05-01')).toBeDisabled();
 
-    const noVerticalScroll = await page.evaluate(() => {
-      const root = document.scrollingElement ?? document.documentElement;
-      return root.scrollHeight <= window.innerHeight;
-    });
-    expect(noVerticalScroll).toBe(true);
+    const personalCell = shiftCell(page, 'emp-pavel', '2026-05-01');
+    await expect(personalCell).toHaveAttribute('data-status', 'day_off');
+    await personalCell.click();
+    await expect(page.getByTestId('shift-status-popover')).toBeVisible();
 
-    const mayFirstCard = page.locator('[data-day="2026-05-01"]');
-    await expect(mayFirstCard).toContainText('Павел Смирнов');
-    await expect(mayFirstCard).not.toContainText(/ещё 1|1 more/i);
+    await page.goto('/employee/shifts');
+    await expect(page.getByTestId('monthly-schedule-table-shell')).toBeVisible();
+    await expect(page.locator('[data-testid="experimental-calendar-shell"]')).toHaveCount(0);
+  });
 
-    await mayFirstCard.getByRole('button', { name: /Павел Смирнов/i }).click();
-    await expect(page.getByTestId('calendar-assignment-editor')).toBeVisible();
+  test('admin classic alias also renders the table schedule', async ({ page }) => {
+    await bootstrapCalendar(page, 'admin');
+
+    await page.goto('/admin/calendar/classic');
+    await expect(page.getByTestId('monthly-schedule-table-shell')).toBeVisible();
+  });
+
+  test('employee classic aliases also render the table schedule', async ({ page }) => {
+    await bootstrapCalendar(page, 'employee');
+
+    await page.goto('/employee/calendar/classic');
+    await expect(page.getByTestId('monthly-schedule-table-shell')).toBeVisible();
+
+    await page.goto('/employee/shifts/classic');
+    await expect(page.getByTestId('monthly-schedule-table-shell')).toBeVisible();
   });
 });

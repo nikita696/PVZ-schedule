@@ -1,7 +1,6 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Employee, Shift, ShiftEditorStatus, ShiftStatusDb } from '../domain/types';
 import {
-  SHIFT_STATUS_BADGE_CLASS,
   getShiftStatusLabel,
   getShiftStatusOptions,
   isShiftLikeStatus,
@@ -24,12 +23,17 @@ interface CompactMonthlyGridProps {
 interface DayMeta {
   date: string;
   dayNumber: number;
+  weekdayLabel: string;
   weekend: boolean;
   isToday: boolean;
   holidayName: string | null;
 }
 
-type ActiveEmployeeId = 'all' | string;
+interface StatusCellMeta {
+  abbr: Record<AppLanguage, string>;
+  className: string;
+  markerClassName: string;
+}
 
 const HOLIDAY_BY_MONTH_DAY: Record<string, { ru: string; en: string }> = {
   '01-01': { ru: 'Новый год', en: 'New Year' },
@@ -46,6 +50,44 @@ const HOLIDAY_BY_MONTH_DAY: Record<string, { ru: string; en: string }> = {
   '05-09': { ru: 'День Победы', en: 'Victory Day' },
   '06-12': { ru: 'День России', en: 'Russia Day' },
   '11-04': { ru: 'День народного единства', en: 'National Unity Day' },
+};
+
+const WEEKDAY_LABELS: Record<AppLanguage, string[]> = {
+  ru: ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'],
+  en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+};
+
+const STATUS_CELL_META: Record<ShiftStatusDb, StatusCellMeta> = {
+  shift: {
+    abbr: { ru: 'С', en: 'S' },
+    className: 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100',
+    markerClassName: 'bg-emerald-500',
+  },
+  day_off: {
+    abbr: { ru: 'В', en: 'O' },
+    className: 'border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100',
+    markerClassName: 'bg-sky-500',
+  },
+  sick_leave: {
+    abbr: { ru: 'Б', en: 'L' },
+    className: 'border-violet-300 bg-violet-50 text-violet-800 hover:bg-violet-100',
+    markerClassName: 'bg-violet-500',
+  },
+  no_show: {
+    abbr: { ru: 'Н', en: 'N' },
+    className: 'border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100',
+    markerClassName: 'bg-rose-500',
+  },
+  replacement: {
+    abbr: { ru: 'З', en: 'R' },
+    className: 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100',
+    markerClassName: 'bg-amber-400',
+  },
+  no_shift: {
+    abbr: { ru: '-', en: '-' },
+    className: 'border-stone-200 bg-white text-stone-300 hover:bg-stone-50',
+    markerClassName: 'bg-stone-300',
+  },
 };
 
 const isoDate = (year: number, month: number, day: number): string => (
@@ -70,23 +112,13 @@ const getEffectiveShiftStatus = (shift: Shift | undefined): ShiftStatusDb => (
   shift?.actualStatus ?? shift?.approvedStatus ?? shift?.requestedStatus ?? shift?.status ?? 'no_shift'
 );
 
-const getShiftStatus = (shifts: Shift[], employeeId: string, date: string): ShiftStatusDb => (
-  getEffectiveShiftStatus(shifts.find((shift) => shift.employeeId === employeeId && shift.date === date))
-);
-
-const splitIntoWeeks = <T,>(items: T[]): T[][] => {
-  const weeks: T[][] = [];
-  for (let index = 0; index < items.length; index += 7) {
-    weeks.push(items.slice(index, index + 7));
-  }
-  return weeks;
-};
-
 const getHolidayName = (month: number, day: number, language: AppLanguage): string | null => {
   const key = `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   const holiday = HOLIDAY_BY_MONTH_DAY[key];
   return holiday ? pickByLanguage(language, holiday.ru, holiday.en) : null;
 };
+
+const getCellKey = (employeeId: string, date: string): string => `${employeeId}:${date}`;
 
 export function CompactMonthlyGrid({
   employees,
@@ -98,36 +130,13 @@ export function CompactMonthlyGrid({
   onStatusChange,
 }: CompactMonthlyGridProps) {
   const { language, t } = useLanguage();
-  const [activeEmployeeId, setActiveEmployeeId] = useState<ActiveEmployeeId>('all');
-  const [openDayKey, setOpenDayKey] = useState<string | null>(null);
+  const [openCellKey, setOpenCellKey] = useState<string | null>(null);
 
   const statusOptions = useMemo(() => getShiftStatusOptions(language), [language]);
-
-  const editableEmployees = useMemo(() => (
-    employees.filter((employee) => !editableEmployeeIds || editableEmployeeIds.includes(employee.id))
-  ), [editableEmployeeIds, employees]);
-
-  useEffect(() => {
-    if (!editable) {
-      return;
-    }
-
-    if (editableEmployees.length === 1) {
-      const onlyEditableEmployee = editableEmployees[0];
-      if (onlyEditableEmployee && activeEmployeeId !== onlyEditableEmployee.id) {
-        setActiveEmployeeId(onlyEditableEmployee.id);
-      }
-      return;
-    }
-
-    if (activeEmployeeId !== 'all' && !editableEmployees.some((employee) => employee.id === activeEmployeeId)) {
-      setActiveEmployeeId('all');
-    }
-  }, [activeEmployeeId, editable, editableEmployees]);
-
-  const activeEmployee = activeEmployeeId === 'all'
-    ? null
-    : editableEmployees.find((employee) => employee.id === activeEmployeeId) ?? null;
+  const storedStatusOptions = useMemo(
+    () => statusOptions.filter((option) => option.value !== 'none'),
+    [statusOptions],
+  );
 
   const dayMeta = useMemo<DayMeta[]>(() => {
     const now = new Date();
@@ -142,6 +151,7 @@ export function CompactMonthlyGrid({
       return {
         date,
         dayNumber,
+        weekdayLabel: WEEKDAY_LABELS[language][weekday],
         weekend: weekday === 0 || weekday === 6,
         isToday: date === todayKey,
         holidayName: getHolidayName(month, dayNumber, language),
@@ -149,24 +159,28 @@ export function CompactMonthlyGrid({
     });
   }, [language, month, year]);
 
-  const weeks = useMemo(() => splitIntoWeeks(dayMeta), [dayMeta]);
+  const dayDateSet = useMemo(() => new Set(dayMeta.map((day) => day.date)), [dayMeta]);
 
-  const unfilledDays = useMemo(() => dayMeta.filter((day) => {
-    const eligibleEmployees = employees.filter((employee) => !isOutsideEmployment(employee, day.date));
-    if (eligibleEmployees.length === 0) return false;
-    const eligibleEmployeeIds = new Set(eligibleEmployees.map((employee) => employee.id));
+  const shiftLookup = useMemo(() => {
+    const lookup = new Map<string, Shift>();
 
-    const assignedCount = shifts.filter((shift) => (
-      shift.date === day.date
-      && eligibleEmployeeIds.has(shift.employeeId)
-      && isShiftLikeStatus(getEffectiveShiftStatus(shift))
-    )).length;
+    for (const shift of shifts) {
+      if (!dayDateSet.has(shift.date)) continue;
+      lookup.set(getCellKey(shift.employeeId, shift.date), shift);
+    }
 
-    return assignedCount === 0;
-  }), [dayMeta, employees, shifts]);
+    return lookup;
+  }, [dayDateSet, shifts]);
+
+  const editableEmployeeIdSet = useMemo(() => {
+    if (!editableEmployeeIds) {
+      return new Set(employees.map((employee) => employee.id));
+    }
+
+    return new Set(editableEmployeeIds);
+  }, [editableEmployeeIds, employees]);
 
   const workedCountByEmployee = useMemo(() => {
-    const dateKeys = new Set(dayMeta.map((day) => day.date));
     const counts = new Map<string, number>();
 
     for (const employee of employees) {
@@ -174,194 +188,249 @@ export function CompactMonthlyGrid({
     }
 
     for (const shift of shifts) {
-      if (!dateKeys.has(shift.date) || !isShiftLikeStatus(getEffectiveShiftStatus(shift))) continue;
+      if (!dayDateSet.has(shift.date) || !isShiftLikeStatus(getEffectiveShiftStatus(shift))) continue;
       counts.set(shift.employeeId, (counts.get(shift.employeeId) ?? 0) + 1);
     }
 
     return counts;
-  }, [dayMeta, employees, shifts]);
+  }, [dayDateSet, employees, shifts]);
 
-  const applyStatus = (dayDate: string, status: ShiftEditorStatus) => {
-    if (!activeEmployee || !editable || !onStatusChange) return;
-    if (isOutsideEmployment(activeEmployee, dayDate)) return;
-    onStatusChange(activeEmployee.id, dayDate, status);
-    setOpenDayKey(null);
+  const unfilledDays = useMemo(() => dayMeta.filter((day) => {
+    const eligibleEmployees = employees.filter((employee) => !isOutsideEmployment(employee, day.date));
+    if (eligibleEmployees.length === 0) return false;
+
+    return !eligibleEmployees.some((employee) => {
+      const status = getEffectiveShiftStatus(shiftLookup.get(getCellKey(employee.id, day.date)));
+      return isShiftLikeStatus(status);
+    });
+  }), [dayMeta, employees, shiftLookup]);
+
+  const totalShiftLikeCount = useMemo(() => (
+    Array.from(workedCountByEmployee.values()).reduce((sum, count) => sum + count, 0)
+  ), [workedCountByEmployee]);
+
+  const gridTemplateColumns = useMemo(
+    () => `minmax(13.5rem, 14rem) repeat(${dayMeta.length}, minmax(2.25rem, 1fr))`,
+    [dayMeta.length],
+  );
+
+  const applyStatus = (employee: Employee, day: DayMeta, status: ShiftEditorStatus) => {
+    if (!editable || !onStatusChange || !editableEmployeeIdSet.has(employee.id)) return;
+    if (isOutsideEmployment(employee, day.date)) return;
+
+    onStatusChange(employee.id, day.date, status);
+    setOpenCellKey(null);
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {statusOptions.map((status) => (
-          <div key={status.value} className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs text-stone-700">
-            <span className={cn('h-3 w-3 rounded-full border border-stone-300', status.colorClass)} />
-            <span>{status.label}</span>
+    <div data-testid="monthly-schedule-table-shell" className="space-y-3">
+      <div className="flex flex-col gap-3 rounded-xl border bg-stone-50/70 p-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="text-sm font-semibold text-stone-900">
+            {t('График на месяц', 'Monthly schedule')}
           </div>
-        ))}
-      </div>
+          <div className="mt-0.5 text-xs text-stone-600">
+            {t(
+              'Сотрудники слева, дни сверху. Клик по доступной ячейке открывает выбор статуса.',
+              'Employees are on the left, days are on top. Click an editable cell to choose a status.',
+            )}
+          </div>
+        </div>
 
-      {editable && editableEmployees.length > 1 ? (
-        <div className="rounded-xl border bg-white p-2">
-          <div className="mb-2 text-xs font-medium text-stone-700">{t('Выбери сотрудника для редактирования', 'Choose an employee to edit')}</div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveEmployeeId('all');
-                setOpenDayKey(null);
-              }}
-              className={cn(
-                'rounded-full border px-3 py-1.5 text-xs transition',
-                activeEmployeeId === 'all'
-                  ? 'border-orange-300 bg-orange-50 text-orange-700'
-                  : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50',
-              )}
-            >
-              {t('Все', 'All')}
-            </button>
-            {editableEmployees.map((employee) => (
-              <button
-                key={employee.id}
-                type="button"
-                onClick={() => {
-                  setActiveEmployeeId(employee.id);
-                  setOpenDayKey(null);
-                }}
-                className={cn(
-                  'rounded-full border px-3 py-1.5 text-xs transition',
-                  activeEmployeeId === employee.id
-                    ? 'border-orange-300 bg-orange-50 text-orange-700'
-                    : 'border-stone-200 bg-white text-stone-700 hover:bg-stone-50',
-                )}
+        <div className="flex flex-wrap items-center gap-2">
+          {storedStatusOptions.map((status) => {
+            const statusValue = status.value as ShiftStatusDb;
+            const statusMeta = STATUS_CELL_META[statusValue];
+
+            return (
+              <span
+                key={status.value}
+                className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-2.5 py-1 text-xs font-medium text-stone-700"
               >
-                {employee.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="rounded-xl border bg-white p-3">
-        <div className="mb-2 text-xs font-medium text-stone-700">{t('Смен в месяце', 'Shifts this month')}</div>
-        <div className="flex flex-wrap gap-2">
-          {employees.map((employee) => (
-            <div
-              key={`worked-count:${employee.id}`}
-              className="inline-flex items-center gap-2 rounded-full border bg-stone-50 px-3 py-1 text-xs text-stone-700"
-            >
-              <span className="font-medium">{employee.name}</span>
-              <span className="rounded-full bg-white px-2 py-0.5 text-stone-900">
-                {workedCountByEmployee.get(employee.id) ?? 0}
+                <span className={cn('h-2.5 w-2.5 rounded-full', statusMeta.markerClassName)} />
+                {status.label}
               </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
-      <div className="rounded-xl border bg-stone-50/70 p-3 text-sm text-stone-700">
-        <span className="font-medium">{t('Непокрытые дни:', 'Uncovered days:')}</span>{' '}
-        {unfilledDays.length === 0 ? t('нет', 'none') : unfilledDays.map((day) => day.dayNumber).join(', ')}
+      <div className="grid gap-2 rounded-xl border bg-white p-3 text-xs text-stone-700 sm:grid-cols-3">
+        <div>
+          <span className="font-semibold text-stone-900">{employees.length}</span>{' '}
+          {t('сотрудников в таблице', 'employees in the table')}
+        </div>
+        <div>
+          <span className="font-semibold text-stone-900">{totalShiftLikeCount}</span>{' '}
+          {t('смен в месяце', 'shifts this month')}
+        </div>
+        <div data-testid="schedule-uncovered-days" className="truncate">
+          <span className="font-semibold text-stone-900">{t('Непокрытые дни:', 'Uncovered days:')}</span>{' '}
+          {unfilledDays.length === 0 ? t('нет', 'none') : unfilledDays.map((day) => day.dayNumber).join(', ')}
+        </div>
       </div>
 
-      <div className="space-y-2">
-        {weeks.map((week, weekIndex) => (
-          <div key={`week-${weekIndex}`} className="grid grid-cols-7 gap-2">
-            {week.map((day) => {
-              const canOpenDayEditor = editable
-                && activeEmployeeId !== 'all'
-                && !!activeEmployee
-                && !isOutsideEmployment(activeEmployee, day.date);
+      <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+        <div data-testid="monthly-schedule-scroll" className="max-h-[62vh] overflow-auto">
+          <div className="min-w-[1340px]">
+            <div
+              data-testid="monthly-schedule-header-days"
+              className="sticky top-0 z-20 grid border-b border-stone-200 bg-stone-50"
+              style={{ gridTemplateColumns }}
+            >
+              <div className="sticky left-0 z-30 flex h-14 items-center border-r border-stone-200 bg-stone-50 px-4 text-xs font-semibold uppercase tracking-wide text-stone-500">
+                {t('Сотрудник', 'Employee')}
+              </div>
 
-              return (
-                <Popover
+              {dayMeta.map((day) => (
+                <div
                   key={day.date}
-                  open={openDayKey === day.date && canOpenDayEditor}
-                  onOpenChange={(nextOpen) => setOpenDayKey(nextOpen ? day.date : null)}
+                  data-date={day.date}
+                  className={cn(
+                    'flex h-14 flex-col items-center justify-center border-r border-stone-200 text-center last:border-r-0',
+                    day.weekend || day.holidayName ? 'bg-stone-100/80 text-stone-500' : 'text-stone-700',
+                    day.isToday ? 'shadow-[inset_0_-2px_0_0_rgb(251_146_60)]' : '',
+                  )}
+                  title={day.holidayName ?? undefined}
                 >
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      disabled={!canOpenDayEditor}
-                      className={cn(
-                        'rounded-xl border bg-white p-1.5 text-left transition',
-                        canOpenDayEditor ? 'cursor-pointer hover:border-orange-300 hover:bg-orange-50/30' : 'cursor-default',
-                        day.isToday ? 'ring-1 ring-orange-400' : '',
-                        !canOpenDayEditor && editable ? 'disabled:opacity-95' : '',
-                      )}
-                    >
-                      <div
+                  <span className="text-sm font-semibold leading-none">{day.dayNumber}</span>
+                  <span className="mt-1 text-[10px] font-semibold uppercase leading-none text-stone-400">
+                    {day.weekdayLabel}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div>
+              {employees.map((employee, employeeIndex) => (
+                <div
+                  key={employee.id}
+                  data-testid="monthly-schedule-row"
+                  data-employee-id={employee.id}
+                  className="grid border-b border-stone-100 last:border-b-0"
+                  style={{ gridTemplateColumns }}
+                >
+                  <div className="sticky left-0 z-10 flex min-h-16 items-center gap-3 border-r border-stone-200 bg-white px-4 py-3 shadow-[6px_0_12px_-12px_rgba(15,23,42,0.35)]">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-stone-200 bg-stone-100 text-sm font-semibold text-stone-600">
+                      {employee.isOwner ? employee.name.trim().slice(0, 1) : employeeIndex + 1}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-stone-900" title={employee.name}>
+                        {employee.name}
+                      </div>
+                      <div className="mt-0.5 flex items-center gap-2 text-[11px] text-stone-500">
+                        <span>{employee.isOwner ? t('владелец', 'owner') : t('сотрудник', 'employee')}</span>
+                        <span className="h-1 w-1 rounded-full bg-stone-300" />
+                        <span>
+                          {workedCountByEmployee.get(employee.id) ?? 0} {t('смен', 'shifts')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {dayMeta.map((day) => {
+                    const cellKey = getCellKey(employee.id, day.date);
+                    const shift = shiftLookup.get(cellKey);
+                    const status = getEffectiveShiftStatus(shift);
+                    const statusMeta = STATUS_CELL_META[status];
+                    const outsideEmployment = isOutsideEmployment(employee, day.date);
+                    const canEditCell = editable
+                      && !!onStatusChange
+                      && editableEmployeeIdSet.has(employee.id)
+                      && !outsideEmployment;
+                    const label = getShiftStatusLabel(status, language);
+
+                    const cellButton = (
+                      <button
+                        type="button"
+                        data-testid={`shift-cell-${employee.id}-${day.date}`}
+                        data-employee-id={employee.id}
+                        data-date={day.date}
+                        data-status={status}
+                        data-has-record={shift ? 'true' : 'false'}
+                        disabled={!canEditCell}
+                        aria-label={`${employee.name}, ${day.dayNumber}.${String(month).padStart(2, '0')}.${year}: ${label}`}
+                        title={outsideEmployment ? t('Сотрудник вне периода работы', 'Employee is outside employment range') : label}
                         className={cn(
-                          'mb-1.5 flex h-7 w-full items-center justify-center rounded-md text-xs font-semibold',
-                          day.weekend || day.holidayName
-                            ? 'bg-rose-100 text-rose-700'
-                            : 'bg-stone-100 text-stone-700',
+                          'm-1 flex h-9 min-w-8 items-center justify-center rounded-lg border text-[11px] font-bold transition',
+                          outsideEmployment
+                            ? 'cursor-not-allowed border-dashed border-stone-200 bg-stone-50 text-stone-300'
+                            : statusMeta.className,
+                          canEditCell
+                            ? 'cursor-pointer focus-visible:ring-2 focus-visible:ring-orange-300'
+                            : 'cursor-default disabled:opacity-100',
+                          day.isToday && !outsideEmployment ? 'ring-1 ring-orange-300' : '',
                         )}
-                        title={day.holidayName ?? undefined}
                       >
-                        {day.dayNumber}
-                      </div>
+                        {outsideEmployment ? '' : statusMeta.abbr[language]}
+                      </button>
+                    );
 
-                      <div className="space-y-1">
-                        {employees.map((employee) => {
-                          const status = getShiftStatus(shifts, employee.id, day.date);
-                          const outsideEmployment = isOutsideEmployment(employee, day.date);
-                          const isActive = activeEmployeeId === employee.id;
+                    return (
+                      <div
+                        key={cellKey}
+                        className={cn(
+                          'min-h-12 border-r border-stone-100 last:border-r-0',
+                          day.weekend || day.holidayName ? 'bg-stone-50/70' : 'bg-white',
+                        )}
+                      >
+                        <Popover
+                          open={openCellKey === cellKey && canEditCell}
+                          onOpenChange={(nextOpen) => setOpenCellKey(nextOpen ? cellKey : null)}
+                        >
+                          <PopoverTrigger asChild>
+                            {cellButton}
+                          </PopoverTrigger>
 
-                          return (
-                            <div
-                              key={`${day.date}:${employee.id}`}
-                              className={cn(
-                                'flex items-center justify-between rounded-md border px-2 py-1',
-                                outsideEmployment ? 'border-dashed border-stone-200 bg-stone-50 text-stone-400' : 'border-stone-200 bg-white text-stone-700',
-                                isActive ? 'border-orange-200 ring-1 ring-orange-300' : '',
-                              )}
+                          {canEditCell ? (
+                            <PopoverContent
+                              align="start"
+                              className="w-56 p-2"
+                              data-testid="shift-status-popover"
                             >
-                              <span className="truncate text-[11px]">{employee.name}</span>
-                              {outsideEmployment ? (
-                                <span className="text-[10px] text-stone-400">{t('вне периода', 'out of range')}</span>
-                              ) : (
-                                <span
-                                  className={cn('h-3.5 w-3.5 rounded border', SHIFT_STATUS_BADGE_CLASS[status])}
-                                  title={getShiftStatusLabel(status, language)}
-                                />
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </button>
-                  </PopoverTrigger>
+                              <div className="mb-2 border-b border-stone-100 px-2 pb-2 text-xs">
+                                <div className="font-semibold text-stone-900">{employee.name}</div>
+                                <div className="text-stone-500">
+                                  {day.dayNumber}.{String(month).padStart(2, '0')}.{year}
+                                </div>
+                              </div>
+                              <div className="grid gap-1">
+                                {statusOptions.map((option) => {
+                                  const optionStatus = option.value === 'none' ? null : STATUS_CELL_META[option.value as ShiftStatusDb];
 
-                  {day.holidayName ? (
-                    <PopoverContent align="center" side="top" className="mb-1 w-auto max-w-[220px] p-2 text-xs">
-                      {day.holidayName}
-                    </PopoverContent>
-                  ) : null}
-
-                  {canOpenDayEditor ? (
-                    <PopoverContent align="start" className="w-52 p-2">
-                      <div className="mb-2 text-xs font-medium text-stone-800">
-                        {activeEmployee?.name} • {day.dayNumber}.{String(month).padStart(2, '0')}.{year}
+                                  return (
+                                    <button
+                                      key={`${cellKey}:${option.value}`}
+                                      type="button"
+                                      data-testid={`shift-option-${option.value}`}
+                                      onClick={() => applyStatus(employee, day, option.value)}
+                                      className={cn(
+                                        'flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition hover:bg-stone-100',
+                                        option.value === status ? 'bg-stone-100 font-semibold text-stone-900' : 'text-stone-700',
+                                      )}
+                                    >
+                                      <span
+                                        className={cn(
+                                          'h-3.5 w-3.5 rounded-full border border-stone-300',
+                                          optionStatus ? optionStatus.markerClassName : 'bg-white',
+                                        )}
+                                      />
+                                      <span>{option.label}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </PopoverContent>
+                          ) : null}
+                        </Popover>
                       </div>
-                      <div className="grid gap-1">
-                        {statusOptions.map((option) => (
-                          <button
-                            key={`${day.date}:${option.value}`}
-                            type="button"
-                            onClick={() => applyStatus(day.date, option.value)}
-                            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-stone-100"
-                          >
-                            <span className={cn('h-3.5 w-3.5 rounded-full border border-stone-300', option.colorClass)} />
-                            <span>{option.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  ) : null}
-                </Popover>
-              );
-            })}
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
-        ))}
+        </div>
       </div>
     </div>
   );
