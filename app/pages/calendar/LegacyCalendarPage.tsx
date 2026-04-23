@@ -10,6 +10,10 @@ import { useLanguage } from '../../context/LanguageContext';
 import type { MonthStatus } from '../../domain/types';
 import { getMonthStatusLabels } from '../dashboardCopy';
 
+interface LegacyCalendarPageProps {
+  showExperimentalBanner?: boolean;
+}
+
 const MONTH_STATUS_META: Record<MonthStatus, { className: string }> = {
   draft: {
     className: 'bg-slate-100 text-slate-700',
@@ -25,7 +29,9 @@ const MONTH_STATUS_META: Record<MonthStatus, { className: string }> = {
   },
 };
 
-export default function LegacyCalendarPage() {
+export function LegacyCalendarPageView({
+  showExperimentalBanner = true,
+}: LegacyCalendarPageProps) {
   const location = useLocation();
   const experimentalHref = location.pathname.replace(/\/classic$/, '');
   const { language, t } = useLanguage();
@@ -83,26 +89,28 @@ export default function LegacyCalendarPage() {
   const monthMeta = MONTH_STATUS_META[selectedMonthStatus];
 
   return (
-    <div className="bg-stone-50">
+    <div data-testid="legacy-calendar-shell" className="bg-stone-50">
       <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6">
-        <Card className="border-dashed border-stone-300 bg-stone-100/70">
-          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-sm font-semibold text-stone-900">
-                {t('Classic fallback сохранён для безопасного сравнения.', 'Classic fallback is preserved for safe comparison.')}
+        {showExperimentalBanner ? (
+          <Card className="border-dashed border-stone-300 bg-stone-100/70">
+            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-stone-900">
+                  {t('Classic fallback сохранён для безопасного сравнения.', 'Classic fallback is preserved for safe comparison.')}
+                </div>
+                <div className="text-sm text-stone-600">
+                  {t(
+                    'Новый экспериментальный календарь живёт отдельно и не удаляет текущую реализацию.',
+                    'The new experimental calendar lives separately and does not remove the current implementation.',
+                  )}
+                </div>
               </div>
-              <div className="text-sm text-stone-600">
-                {t(
-                  'Новый экспериментальный календарь живёт отдельно и не удаляет текущую реализацию.',
-                  'The new experimental calendar lives separately and does not remove the current implementation.',
-                )}
-              </div>
-            </div>
-            <Button asChild variant="outline">
-              <Link to={experimentalHref}>{t('Открыть experimental calendar', 'Open experimental calendar')}</Link>
-            </Button>
-          </CardContent>
-        </Card>
+              <Button asChild variant="outline">
+                <Link to={experimentalHref}>{t('Открыть experimental calendar', 'Open experimental calendar')}</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card>
           <CardContent className="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
@@ -175,4 +183,8 @@ export default function LegacyCalendarPage() {
       </main>
     </div>
   );
+}
+
+export default function LegacyCalendarPage() {
+  return <LegacyCalendarPageView />;
 }

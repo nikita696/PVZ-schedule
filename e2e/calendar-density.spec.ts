@@ -345,35 +345,19 @@ const bootstrapCalendar = async (page: Page, role: FixtureRole) => {
   );
 };
 
-test.describe('experimental calendar density', () => {
+test.describe('calendar routes and density', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test('admin calendar fits into one screen and keeps compact dense cards', async ({ page }) => {
+  test('admin calendar rolls back to the legacy classic view', async ({ page }) => {
     await bootstrapCalendar(page, 'admin');
     await page.goto('/admin/calendar');
 
-    await expect(page.getByTestId('experimental-calendar-shell')).toBeVisible();
+    await expect(page.getByTestId('legacy-calendar-shell')).toBeVisible();
     await expect(page).toHaveURL(/\/admin\/calendar$/);
-
-    const noVerticalScroll = await page.evaluate(() => {
-      const root = document.scrollingElement ?? document.documentElement;
-      return root.scrollHeight <= window.innerHeight;
-    });
-    expect(noVerticalScroll).toBe(true);
-
-    const toolbarHeight = await page.getByTestId('calendar-toolbar').evaluate((node) => node.getBoundingClientRect().height);
-    expect(toolbarHeight).toBeLessThan(120);
-
-    const mayFirstCard = page.locator('[data-day="2026-05-01"]');
-    await expect(mayFirstCard).toContainText('Алина Воробьева');
-    await expect(mayFirstCard).toContainText('Никита Власов');
-    await expect(mayFirstCard).toContainText(/ещё 1|1 more/i);
-
-    const dayCardHeight = await mayFirstCard.evaluate((node) => node.getBoundingClientRect().height);
-    expect(dayCardHeight).toBeLessThan(100);
-
-    await mayFirstCard.getByRole('button', { name: /Никита Власов/i }).click();
-    await expect(page.getByTestId('calendar-assignment-editor')).toBeVisible();
+    await expect(page.locator('[data-testid="experimental-calendar-shell"]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Open experimental calendar|Открыть experimental calendar/i })).toHaveCount(0);
+    await expect(page.getByText(/employees in the schedule|сотрудников в графике/i)).toBeVisible();
+    await expect(page.getByText(/Никита Власов/i).first()).toBeVisible();
   });
 
   test('employee calendar stays compact and editable for personal schedule', async ({ page }) => {
