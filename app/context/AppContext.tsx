@@ -127,7 +127,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     status: authStatus,
     user,
     sessionIdentity,
-    isCompletingOAuth,
+    isCompletingAuth,
     rememberResolvedIdentity,
   } = useAuth();
   const { t } = useLanguage();
@@ -147,7 +147,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
 
   useEffect(() => {
-    if (authStatus === 'loading' || isCompletingOAuth) {
+    if (authStatus === 'loading' || isCompletingAuth) {
       setStatus('loading');
       setError(null);
       return;
@@ -189,7 +189,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       isActive = false;
     };
-  }, [authStatus, isCompletingOAuth, t, user]);
+  }, [authStatus, isCompletingAuth, t, user]);
 
   useEffect(() => {
     if (authStatus !== 'authenticated' || !access) {
@@ -264,7 +264,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const requireAccess = (): ActionResult<UserAccess> => {
     if (!access) {
-      return errorResult(t('Профиль ещё не собран. Заверши вход через Яндекс и дождись привязки роли.', 'The profile is not ready yet. Finish the Yandex sign-in flow and wait for role linking.'));
+      return errorResult(t('Профиль ещё не привязан к этому email. Проверь аккаунт или забери подготовленную передачу прав.', 'The profile is not linked to this email yet. Check the account or claim the prepared owner transfer.'));
     }
 
     return okResult(access);

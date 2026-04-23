@@ -19,6 +19,7 @@ const EmployeesPage = lazyWithRetry(() => import('./pages/Employees'), 'employee
 const CalendarPage = lazyWithRetry(() => import('./pages/Calendar'), 'calendar-page');
 const CalendarLegacyPage = lazyWithRetry(() => import('./pages/calendar/LegacyCalendarPage'), 'calendar-legacy-page');
 const PaymentsPage = lazyWithRetry(() => import('./pages/Payments'), 'payments-page');
+const SettingsPage = lazyWithRetry(() => import('./pages/Settings'), 'settings-page');
 
 function RouteLoader() {
   const { t } = useLanguage();
@@ -65,14 +66,14 @@ const getRoleLandingPath = (role: 'admin' | 'employee') => (
 );
 
 function AuthOnlyLayout() {
-  const { status: authStatus } = useAuth();
+  const { status: authStatus, passwordRecovery } = useAuth();
   const { status: appStatus, access } = useApp();
 
   if (authStatus === 'loading' || appStatus === 'loading') {
     return <RouteLoader />;
   }
 
-  if (authStatus === 'authenticated' && access) {
+  if (authStatus === 'authenticated' && access && !passwordRecovery) {
     return <Navigate to={getRoleLandingPath(access.role)} replace />;
   }
 
@@ -174,7 +175,7 @@ export const router = createBrowserRouter([
       { path: 'calendar/classic', element: withSuspense(<CalendarLegacyPage />) },
       { path: 'payments', element: withSuspense(<PaymentsPage />) },
       { path: 'finance', element: <StubPage titleRu="Финансы" titleEn="Finance" /> },
-      { path: 'settings', element: <StubPage titleRu="Настройки" titleEn="Settings" /> },
+      { path: 'settings', element: withSuspense(<SettingsPage />) },
       { path: 'import-export', element: <StubPage titleRu="Импорт / экспорт" titleEn="Import / export" /> },
       { path: 'audit', element: <StubPage titleRu="Журнал изменений" titleEn="Audit log" /> },
       { index: true, element: <Navigate to="/admin/dashboard" replace /> },

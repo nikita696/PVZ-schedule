@@ -283,9 +283,11 @@ const fetchAccessContext = async (authUserId: string): Promise<ActionResult<Acce
 
   let profile = profileResult.data;
   if (!profile || !profile.is_active) {
-    const ensureResult = await client.rpc('ensure_profile_from_auth');
+    const ensureResult = await client.rpc('ensure_profile_from_session', {
+      display_name_input: null,
+    });
     if (ensureResult.error) {
-      if (/REGISTRATION_NOT_FOUND|REGISTRATION_REQUIRED/i.test(ensureResult.error.message)) {
+      if (/REGISTRATION_NOT_FOUND|REGISTRATION_REQUIRED|OWNER_ADMIN_CLAIM_REQUIRED/i.test(ensureResult.error.message)) {
         return profile?.is_active === false
           ? errorResult(normalizeError('PROFILE_DISABLED'))
           : okResult(null);
@@ -462,19 +464,17 @@ export const fetchAppData = async (authUserId: string): Promise<ActionResult<App
   });
 };
 
-interface EnsureProfileFromAuthInput {
-  desiredRole?: 'admin' | 'employee' | null;
+interface EnsureProfileFromSessionInput {
   displayName?: string | null;
 }
 
-export const ensureProfileFromAuthRemote = async (
-  input: EnsureProfileFromAuthInput = {},
+export const ensureProfileFromSessionRemote = async (
+  input: EnsureProfileFromSessionInput = {},
 ): Promise<ActionResult<{ organizationId: string; role: 'admin' | 'employee' }>> => {
   const clientResult = getClient();
   if (!clientResult.ok) return clientResult;
 
-  const { data, error } = await clientResult.data.rpc('ensure_profile_from_auth', {
-    desired_role_input: input.desiredRole ?? null,
+  const { data, error } = await clientResult.data.rpc('ensure_profile_from_session', {
     display_name_input: input.displayName?.trim() || null,
   });
 
@@ -486,6 +486,59 @@ export const ensureProfileFromAuthRemote = async (
     organizationId: data.organization_id,
     role: data.role,
   });
+};
+
+interface OwnerAdminClaimResult {
+  claimId: string;
+  organizationId: string;
+  targetEmail?: string;
+  targetDisplayName?: string;
+  status?: string;
+  ownerEmployeeId?: string;
+}
+
+export const createOwnerAdminClaimRemote = async (
+  targetEmail: string,
+  targetDisplayName: string,
+): Promise<ActionResult<OwnerAdminClaimResult>> => {
+  const clientResult = getClient();
+  if (!clientResult.ok) return clientResult;
+
+  const { data, error } = await clientResult.data.rpc('create_owner_admin_claim', {
+    target_email_input: targetEmail.trim().toLowerCase(),
+    target_display_name_input: targetDisplayName.trim() || 'Татьяна',
+    notes_input: null,
+  });
+
+  if (error) {
+    return errorResult(normalizeError(error.message));
+  }
+
+  return okResult({
+    claimId: data.claim_id,
+    organizationId: data.organization_id,
+    targetEmail: data.target_email,
+    targetDisplayName: data.target_display_name,
+    status: data.status,
+  }, pickCurrentLanguage('Заявка на передачу создана.', 'Owner transfer claim created.'));
+};
+
+export const claimOwnerAdminFromSessionRemote = async (): Promise<ActionResult<OwnerAdminClaimResult>> => {
+  const clientResult = getClient();
+  if (!clientResult.ok) return clientResult;
+
+  const { data, error } = await clientResult.data.rpc('claim_owner_admin_from_session');
+
+  if (error) {
+    return errorResult(normalizeError(error.message));
+  }
+
+  return okResult({
+    claimId: data.claim_id,
+    organizationId: data.organization_id,
+    ownerEmployeeId: data.owner_employee_id,
+    status: 'completed',
+  }, pickCurrentLanguage('Права администратора переданы.', 'Admin ownership has been transferred.'));
 };
 
 interface CreateEmployeeInput {

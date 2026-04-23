@@ -86,6 +86,53 @@ export interface Database {
           consumed_by?: string | null;
         };
       };
+      owner_admin_claims: {
+        Row: {
+          id: string;
+          organization_id: string;
+          target_email: string;
+          target_display_name: string;
+          status: 'pending' | 'completed' | 'cancelled';
+          requested_by_profile_id: string;
+          source_admin_profile_id: string;
+          claimed_by_profile_id: string | null;
+          claimed_by_auth_user_id: string | null;
+          requested_at: string;
+          claimed_at: string | null;
+          cancelled_at: string | null;
+          notes: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          target_email: string;
+          target_display_name?: string;
+          status?: 'pending' | 'completed' | 'cancelled';
+          requested_by_profile_id: string;
+          source_admin_profile_id: string;
+          claimed_by_profile_id?: string | null;
+          claimed_by_auth_user_id?: string | null;
+          requested_at?: string;
+          claimed_at?: string | null;
+          cancelled_at?: string | null;
+          notes?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          target_email?: string;
+          target_display_name?: string;
+          status?: 'pending' | 'completed' | 'cancelled';
+          requested_by_profile_id?: string;
+          source_admin_profile_id?: string;
+          claimed_by_profile_id?: string | null;
+          claimed_by_auth_user_id?: string | null;
+          requested_at?: string;
+          claimed_at?: string | null;
+          cancelled_at?: string | null;
+          notes?: string | null;
+        };
+      };
       employees: {
         Row: {
           id: string;
@@ -390,8 +437,50 @@ export interface Database {
           desired_role: 'admin' | 'employee';
         };
       };
+      create_owner_admin_claim: {
+        Args: {
+          target_email_input: string;
+          target_display_name_input?: string | null;
+          notes_input?: string | null;
+        };
+        Returns: {
+          claim_id: string;
+          organization_id: string;
+          target_email: string;
+          target_display_name: string;
+          status: 'pending' | 'completed' | 'cancelled';
+        };
+      };
+      cancel_owner_admin_claim: {
+        Args: {
+          claim_id_input: string;
+        };
+        Returns: {
+          claim_id: string;
+          status: 'pending' | 'completed' | 'cancelled';
+        };
+      };
+      claim_owner_admin_from_session: {
+        Args: Record<string, never>;
+        Returns: {
+          claim_id: string;
+          organization_id: string;
+          role: 'admin';
+          owner_employee_id: string;
+          deactivated_admins: unknown;
+        };
+      };
       ensure_profile_from_registration: {
         Args: Record<string, never>;
+        Returns: {
+          organization_id: string;
+          role: 'admin' | 'employee';
+        };
+      };
+      ensure_profile_from_session: {
+        Args: {
+          display_name_input?: string | null;
+        };
         Returns: {
           organization_id: string;
           role: 'admin' | 'employee';

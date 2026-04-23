@@ -11,11 +11,11 @@ describe('sessionIdentity helpers', () => {
   it('builds normalized identity from auth metadata', () => {
     const identity = buildSessionIdentity({
       id: 'user-1',
-      email: 'nikita696@yandex.ru',
+      email: 'nikita@example.com',
       user_metadata: {
         name: 'Никита',
-        picture: 'https://avatars.yandex.net/get-yapic/test/islands-200',
-        sub: 'ya-sub-1',
+        picture: 'https://example.com/avatar.png',
+        sub: 'auth-sub-1',
       },
       identities: [],
       app_metadata: {},
@@ -27,10 +27,10 @@ describe('sessionIdentity helpers', () => {
     expect(identity).not.toBeNull();
     expect(identity).toMatchObject({
       authUserId: 'user-1',
-      email: 'nikita696@yandex.ru',
+      email: 'nikita@example.com',
       displayName: 'Никита',
-      avatarUrl: 'https://avatars.yandex.net/get-yapic/test/islands-200',
-      providerSubject: 'ya-sub-1',
+      avatarUrl: 'https://example.com/avatar.png',
+      providerSubject: 'auth-sub-1',
       role: 'admin',
       roleLabel: 'Администратор',
       isOwner: true,

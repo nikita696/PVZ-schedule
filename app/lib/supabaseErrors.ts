@@ -3,7 +3,7 @@
 const localized = (ru: string, en: string) => pickCurrentLanguage(ru, en);
 
 const ERROR_RULES: Array<{ pattern: RegExp; message: string }> = [
-  { pattern: /invalid login credentials/i, message: localized('Неверный email или способ входа.', 'Incorrect email or sign-in method.') },
+  { pattern: /invalid login credentials/i, message: localized('Неверный email или пароль.', 'Incorrect email or password.') },
   { pattern: /email not confirmed/i, message: localized('Подтверди email и попробуй снова.', 'Confirm your email and try again.') },
   { pattern: /user not found/i, message: localized('Пользователь не найден. Сначала зарегистрируйся.', 'User not found. Register first.') },
   { pattern: /signups not allowed for otp/i, message: localized('Пользователь не найден. Сначала зарегистрируйся.', 'User not found. Register first.') },
@@ -20,6 +20,14 @@ const ERROR_RULES: Array<{ pattern: RegExp; message: string }> = [
   { pattern: /ADMIN_REQUIRED/i, message: localized('Сначала должен зарегистрироваться администратор.', 'An administrator must register first.') },
   { pattern: /PROFILE_REQUIRED/i, message: localized('Профиль ещё не готов. Попробуй войти ещё раз.', 'The profile is not ready yet. Try signing in again.') },
   { pattern: /PROFILE_DISABLED/i, message: localized('Твой профиль отключён. Обратись к администратору.', 'Your profile is disabled. Contact the administrator.') },
+  { pattern: /OWNER_ADMIN_CLAIM_REQUIRED/i, message: localized('Для этого email подготовлена передача владельца. Забери права администратора явно.', 'An owner transfer is prepared for this email. Claim admin access explicitly.') },
+  { pattern: /OWNER_ADMIN_CLAIM_NOT_FOUND/i, message: localized('Активная передача владельца для этого email не найдена.', 'No active owner transfer was found for this email.') },
+  { pattern: /OWNER_ADMIN_CLAIM_ALREADY_PENDING/i, message: localized('Уже есть активная заявка на передачу владельца.', 'There is already an active owner transfer claim.') },
+  { pattern: /OWNER_ADMIN_CLAIM_NOT_PENDING/i, message: localized('Эта заявка уже не ожидает подтверждения.', 'This owner transfer claim is no longer pending.') },
+  { pattern: /OWNER_ADMIN_CLAIM_TARGET_IS_CURRENT_ADMIN/i, message: localized('Новый администратор должен быть отдельным аккаунтом.', 'The new admin must be a separate account.') },
+  { pattern: /OWNER_ADMIN_CLAIM_TARGET_ALREADY_EMPLOYEE|OWNER_ADMIN_CLAIM_TARGET_EMAIL_ALREADY_EMPLOYEE/i, message: localized('Этот email уже привязан к сотруднику. Сначала разрули привязку сотрудника.', 'This email is already linked to an employee. Resolve the employee link first.') },
+  { pattern: /OWNER_ADMIN_CLAIM_PROFILE_ORG_MISMATCH/i, message: localized('Этот аккаунт уже привязан к другой организации.', 'This account is already linked to another organization.') },
+  { pattern: /OWNER_EMPLOYEE_NOT_FOUND/i, message: localized('Не найдена строка владельца, которую можно безопасно перелинковать.', 'No owner employee row was found to relink safely.') },
   { pattern: /EMPLOYEE_ALREADY_LINKED/i, message: localized('Этот сотрудник уже привязан к другому аккаунту.', 'This employee is already linked to another account.') },
   { pattern: /EMPLOYEE_EMAIL_EXISTS/i, message: localized('Сотрудник с таким email уже существует.', 'An employee with this email already exists.') },
   { pattern: /EMPLOYEE_NOT_FOUND/i, message: localized('Сотрудник не найден.', 'Employee not found.') },
@@ -42,8 +50,7 @@ const ERROR_RULES: Array<{ pattern: RegExp; message: string }> = [
   { pattern: /EMPLOYEE_NAME_TOO_LONG/i, message: localized('Имя сотрудника слишком длинное. Сделай его короче.', 'The employee name is too long. Make it shorter.') },
   { pattern: /DISPLAY_NAME_REQUIRED/i, message: localized('Укажи имя для профиля.', 'Enter a display name for the profile.') },
   { pattern: /DISPLAY_NAME_TOO_LONG/i, message: localized('Имя слишком длинное. Сделай его короче.', 'The name is too long. Make it shorter.') },
-  { pattern: /unsupported provider|provider is not enabled|custom provider/i, message: localized('Yandex ID ещё не настроен в Supabase Auth.', 'Yandex ID is not configured in Supabase Auth yet.') },
-  { pattern: /access_denied/i, message: localized('Провайдер входа отклонил авторизацию.', 'The sign-in provider denied authorization.') },
+  { pattern: /signup disabled|signups not allowed/i, message: localized('Регистрация email/password отключена в Supabase Auth.', 'Email/password sign-up is disabled in Supabase Auth.') },
 ];
 
 export const translateSupabaseError = (

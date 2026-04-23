@@ -1,35 +1,23 @@
-﻿import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import type { RecentAccount, SessionIdentity, UserRole } from '../domain/types';
-import { ensureProfileFromAuthRemote } from '../data/appRepository';
+import { claimOwnerAdminFromSessionRemote } from '../data/appRepository';
 import { buildSessionIdentity, mergeRecentAccounts } from '../lib/sessionIdentity';
 import { pickCurrentLanguage } from '../lib/i18n';
-import {
-  buildAuthRedirectTo,
-  buildYandexAuthQueryParams,
-  getIncompleteYandexAuthMessage,
-  getYandexAuthSuccessMessage,
-  isPendingAuthFlowFresh,
-  readPendingYandexRoleFromUrl,
-  stripPendingYandexRoleFromUrl,
-  type PendingAuthFlowMode,
-} from '../lib/yandexAuth';
 import { errorResult, okResult, type ActionResult } from '../lib/result';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import { translateSupabaseError } from '../lib/supabaseErrors';
 import { useLanguage } from './LanguageContext';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'missing-config';
-type AuthRole = 'admin' | 'employee';
 
-interface StartYandexAuthInput {
-  displayName?: string;
-  role?: AuthRole;
+interface PasswordAuthInput {
+  email: string;
+  password: string;
 }
 
-interface StartYandexAuthOptions {
-  forceAccountSelection?: boolean;
-  mode?: PendingAuthFlowMode;
+interface SignUpInput extends PasswordAuthInput {
+  displayName?: string;
 }
 
 interface AuthContextType {
@@ -38,28 +26,18 @@ interface AuthContextType {
   user: User | null;
   sessionIdentity: SessionIdentity | null;
   recentAccounts: RecentAccount[];
-  isCompletingOAuth: boolean;
-  oauthError: string | null;
-  startYandexAuth: (
-    input?: StartYandexAuthInput,
-    options?: StartYandexAuthOptions,
-  ) => Promise<ActionResult<void>>;
+  isCompletingAuth: boolean;
+  authError: string | null;
+  passwordRecovery: boolean;
+  signInWithPassword: (input: PasswordAuthInput) => Promise<ActionResult<void>>;
+  signUpWithPassword: (input: SignUpInput) => Promise<ActionResult<void>>;
+  sendPasswordReset: (email: string) => Promise<ActionResult<void>>;
+  updatePassword: (password: string) => Promise<ActionResult<void>>;
+  claimOwnerAdmin: () => Promise<ActionResult<void>>;
   rememberResolvedIdentity: (input: { role: UserRole; isOwner?: boolean }) => void;
-  clearOAuthError: () => void;
+  clearAuthError: () => void;
   signOut: () => Promise<ActionResult<void>>;
   switchAccount: () => Promise<ActionResult<void>>;
-}
-
-interface PendingYandexRegistration {
-  role: AuthRole;
-  displayName: string;
-  createdAt: string;
-}
-
-interface PendingAuthFlow {
-  mode: PendingAuthFlowMode;
-  forceAccountSelection: boolean;
-  startedAt: string;
 }
 
 interface ResolvedIdentityState {
@@ -70,11 +48,7 @@ interface ResolvedIdentityState {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const DEFAULT_APP_URL = 'https://pvz-schedule.vercel.app';
-const DEFAULT_YANDEX_PROVIDER = 'custom:yandex';
-const DEFAULT_YANDEX_SCOPES = 'login:email login:info';
-const PENDING_YANDEX_STORAGE_KEY = 'pvz-schedule.pending-yandex-registration';
 const RECENT_ACCOUNTS_STORAGE_KEY = 'pvz-schedule.recent-accounts';
-const PENDING_AUTH_FLOW_STORAGE_KEY = 'pvz-schedule.pending-auth-flow';
 
 const getAppUrl = (): string => {
   if (typeof window === 'undefined') {
@@ -89,145 +63,12 @@ const getAppUrl = (): string => {
   return window.location.origin.replace(/\/+$/, '');
 };
 
-const getYandexProvider = (): string => (
-  import.meta.env.VITE_SUPABASE_YANDEX_PROVIDER?.trim() || DEFAULT_YANDEX_PROVIDER
-);
-
-const getYandexScopes = (): string => (
-  import.meta.env.VITE_SUPABASE_YANDEX_SCOPES?.trim() || DEFAULT_YANDEX_SCOPES
-);
-
 const ensureSupabaseClient = (): ActionResult<NonNullable<typeof supabase>> => {
   if (!supabase) {
     return errorResult(pickCurrentLanguage('Supabase не настроен. Проверь переменные окружения.', 'Supabase is not configured. Check the environment variables.'));
   }
 
   return okResult(supabase);
-};
-
-const readPendingYandexRegistration = (): PendingYandexRegistration | null => {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  const raw = window.localStorage.getItem(PENDING_YANDEX_STORAGE_KEY);
-  if (!raw) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as Partial<PendingYandexRegistration>;
-    if (parsed.role !== 'admin' && parsed.role !== 'employee') {
-      return null;
-    }
-
-    return {
-      role: parsed.role,
-      displayName: typeof parsed.displayName === 'string' ? parsed.displayName : '',
-      createdAt: typeof parsed.createdAt === 'string' ? parsed.createdAt : new Date().toISOString(),
-    };
-  } catch {
-    return null;
-  }
-};
-
-const readPendingYandexRegistrationFromLocation = (): PendingYandexRegistration | null => {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  const role = readPendingYandexRoleFromUrl(window.location.href);
-  if (!role) {
-    return null;
-  }
-
-  return {
-    role,
-    displayName: '',
-    createdAt: new Date().toISOString(),
-  };
-};
-
-const savePendingYandexRegistration = (input: StartYandexAuthInput) => {
-  if (typeof window === 'undefined' || !input.role) {
-    return;
-  }
-
-  const payload: PendingYandexRegistration = {
-    role: input.role,
-    displayName: input.displayName?.trim() ?? '',
-    createdAt: new Date().toISOString(),
-  };
-
-  window.localStorage.setItem(PENDING_YANDEX_STORAGE_KEY, JSON.stringify(payload));
-};
-
-const clearPendingYandexRegistration = () => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.removeItem(PENDING_YANDEX_STORAGE_KEY);
-};
-
-const clearPendingYandexRegistrationFromLocation = () => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  const nextUrl = stripPendingYandexRoleFromUrl(window.location.href);
-  if (nextUrl !== window.location.href) {
-    window.history.replaceState(window.history.state, '', nextUrl);
-  }
-};
-
-const savePendingAuthFlow = (input: PendingAuthFlow) => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.sessionStorage.setItem(PENDING_AUTH_FLOW_STORAGE_KEY, JSON.stringify(input));
-};
-
-const clearPendingAuthFlow = () => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.sessionStorage.removeItem(PENDING_AUTH_FLOW_STORAGE_KEY);
-};
-
-const readPendingAuthFlow = (): PendingAuthFlow | null => {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  const raw = window.sessionStorage.getItem(PENDING_AUTH_FLOW_STORAGE_KEY);
-  if (!raw) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as Partial<PendingAuthFlow>;
-    if ((parsed.mode !== 'login' && parsed.mode !== 'switch-account') || typeof parsed.startedAt !== 'string') {
-      clearPendingAuthFlow();
-      return null;
-    }
-
-    if (!isPendingAuthFlowFresh(parsed.startedAt)) {
-      clearPendingAuthFlow();
-      return null;
-    }
-
-    return {
-      mode: parsed.mode,
-      forceAccountSelection: parsed.forceAccountSelection === true,
-      startedAt: parsed.startedAt,
-    };
-  } catch {
-    clearPendingAuthFlow();
-    return null;
-  }
 };
 
 const readRecentAccounts = (): RecentAccount[] => {
@@ -308,12 +149,15 @@ const readAuthErrorFromLocation = (): string | null => {
   return translateSupabaseError(decodeURIComponent(rawMessage.replace(/\+/g, ' ')));
 };
 
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { t } = useLanguage();
   const [session, setSession] = useState<Session | null>(null);
   const [status, setStatus] = useState<AuthStatus>(isSupabaseConfigured ? 'loading' : 'missing-config');
-  const [isCompletingOAuth, setIsCompletingOAuth] = useState(false);
-  const [oauthError, setOAuthError] = useState<string | null>(null);
+  const [isCompletingAuth, setIsCompletingAuth] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
   const [recentAccounts, setRecentAccounts] = useState<RecentAccount[]>(() => readRecentAccounts());
   const [resolvedIdentity, setResolvedIdentity] = useState<ResolvedIdentityState | null>(null);
   const sessionUserId = session?.user?.id ?? null;
@@ -336,7 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(null);
         setResolvedIdentity(null);
         setStatus('unauthenticated');
-        setOAuthError(translateSupabaseError(error.message));
+        setAuthError(translateSupabaseError(error.message));
         return;
       }
 
@@ -345,10 +189,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStatus(data.session ? 'authenticated' : 'unauthenticated');
     })();
 
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession);
       setResolvedIdentity(null);
       setStatus(nextSession ? 'authenticated' : 'unauthenticated');
+
+      if (event === 'PASSWORD_RECOVERY') {
+        setPasswordRecovery(true);
+      }
+
+      if (event === 'SIGNED_OUT') {
+        setPasswordRecovery(false);
+      }
     });
 
     return () => {
@@ -360,113 +212,122 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const locationError = readAuthErrorFromLocation();
     if (locationError) {
-      clearPendingAuthFlow();
-      setOAuthError(locationError);
+      setAuthError(locationError);
     }
   }, [sessionUserId]);
 
-  useEffect(() => {
-    if (sessionUserId) {
-      clearPendingAuthFlow();
-      setIsCompletingOAuth(false);
-      return;
-    }
-
-    if (status !== 'unauthenticated' || isCompletingOAuth || oauthError) {
-      return;
-    }
-
-    const pendingAuthFlow = readPendingAuthFlow();
-    if (!pendingAuthFlow) {
-      return;
-    }
-
-    clearPendingAuthFlow();
-    setOAuthError(getIncompleteYandexAuthMessage(pendingAuthFlow.mode));
-  }, [isCompletingOAuth, oauthError, sessionUserId, status]);
-
-  useEffect(() => {
-    if (!sessionUserId) {
-      setIsCompletingOAuth(false);
-      return;
-    }
-
-    const pendingRegistration = readPendingYandexRegistration() ?? readPendingYandexRegistrationFromLocation();
-    if (!pendingRegistration) {
-      setIsCompletingOAuth(false);
-      return;
-    }
-
-    let isActive = true;
-    setIsCompletingOAuth(true);
-    setOAuthError(null);
-
-    void (async () => {
-      const result = await ensureProfileFromAuthRemote({
-        desiredRole: pendingRegistration.role,
-        displayName: pendingRegistration.displayName,
-      });
-
-      if (!isActive) {
-        return;
-      }
-
-      clearPendingYandexRegistration();
-      clearPendingYandexRegistrationFromLocation();
-
-      if (!result.ok) {
-        setOAuthError(result.error);
-        setIsCompletingOAuth(false);
-        return;
-      }
-
-      setOAuthError(null);
-      setIsCompletingOAuth(false);
-    })();
-
-    return () => {
-      isActive = false;
-    };
-  }, [sessionUserId]);
-
-  const startYandexAuth = useCallback(async (
-    input?: StartYandexAuthInput,
-    options?: StartYandexAuthOptions,
-  ): Promise<ActionResult<void>> => {
+  const signInWithPassword = useCallback(async (input: PasswordAuthInput): Promise<ActionResult<void>> => {
     const clientResult = ensureSupabaseClient();
     if (!clientResult.ok) return clientResult;
 
-    if (input?.role) {
-      savePendingYandexRegistration(input);
-    } else {
-      clearPendingYandexRegistration();
-    }
+    setIsCompletingAuth(true);
+    setAuthError(null);
 
-    setOAuthError(null);
-
-    const shouldForceAccountSelection = options?.forceAccountSelection === true;
-    savePendingAuthFlow({
-      mode: options?.mode ?? 'login',
-      forceAccountSelection: shouldForceAccountSelection,
-      startedAt: new Date().toISOString(),
+    const { error } = await clientResult.data.auth.signInWithPassword({
+      email: normalizeEmail(input.email),
+      password: input.password,
     });
 
-    const { error } = await clientResult.data.auth.signInWithOAuth({
-      provider: getYandexProvider() as never,
+    setIsCompletingAuth(false);
+
+    if (error) {
+      const message = translateSupabaseError(error.message);
+      setAuthError(message);
+      return errorResult(message);
+    }
+
+    return okResult(undefined, t('Вход выполнен.', 'Signed in.'));
+  }, [t]);
+
+  const signUpWithPassword = useCallback(async (input: SignUpInput): Promise<ActionResult<void>> => {
+    const clientResult = ensureSupabaseClient();
+    if (!clientResult.ok) return clientResult;
+
+    setIsCompletingAuth(true);
+    setAuthError(null);
+
+    const displayName = input.displayName?.trim();
+    const { data, error } = await clientResult.data.auth.signUp({
+      email: normalizeEmail(input.email),
+      password: input.password,
       options: {
-        redirectTo: buildAuthRedirectTo(getAppUrl(), input?.role),
-        scopes: getYandexScopes(),
-        queryParams: buildYandexAuthQueryParams(shouldForceAccountSelection),
+        emailRedirectTo: `${getAppUrl()}/auth/login`,
+        data: displayName ? { display_name: displayName } : undefined,
       },
     });
 
+    setIsCompletingAuth(false);
+
     if (error) {
-      clearPendingAuthFlow();
-      clearPendingYandexRegistration();
-      return errorResult(translateSupabaseError(error.message));
+      const message = translateSupabaseError(error.message);
+      setAuthError(message);
+      return errorResult(message);
     }
 
-    return okResult(undefined, getYandexAuthSuccessMessage(shouldForceAccountSelection));
+    if (!data.session) {
+      return okResult(undefined, t('Аккаунт создан. Проверь почту для подтверждения.', 'Account created. Check your email to confirm it.'));
+    }
+
+    return okResult(undefined, t('Аккаунт создан, вход выполнен.', 'Account created and signed in.'));
+  }, [t]);
+
+  const sendPasswordReset = useCallback(async (email: string): Promise<ActionResult<void>> => {
+    const clientResult = ensureSupabaseClient();
+    if (!clientResult.ok) return clientResult;
+
+    setIsCompletingAuth(true);
+    setAuthError(null);
+
+    const { error } = await clientResult.data.auth.resetPasswordForEmail(normalizeEmail(email), {
+      redirectTo: `${getAppUrl()}/auth/login`,
+    });
+
+    setIsCompletingAuth(false);
+
+    if (error) {
+      const message = translateSupabaseError(error.message);
+      setAuthError(message);
+      return errorResult(message);
+    }
+
+    return okResult(undefined, t('Ссылка для сброса пароля отправлена.', 'Password reset link sent.'));
+  }, [t]);
+
+  const updatePassword = useCallback(async (password: string): Promise<ActionResult<void>> => {
+    const clientResult = ensureSupabaseClient();
+    if (!clientResult.ok) return clientResult;
+
+    setIsCompletingAuth(true);
+    setAuthError(null);
+
+    const { error } = await clientResult.data.auth.updateUser({ password });
+
+    setIsCompletingAuth(false);
+
+    if (error) {
+      const message = translateSupabaseError(error.message);
+      setAuthError(message);
+      return errorResult(message);
+    }
+
+    setPasswordRecovery(false);
+    return okResult(undefined, t('Пароль обновлён.', 'Password updated.'));
+  }, [t]);
+
+  const claimOwnerAdmin = useCallback(async (): Promise<ActionResult<void>> => {
+    setIsCompletingAuth(true);
+    setAuthError(null);
+
+    const result = await claimOwnerAdminFromSessionRemote();
+
+    setIsCompletingAuth(false);
+
+    if (!result.ok) {
+      setAuthError(result.error);
+      return errorResult(result.error);
+    }
+
+    return okResult(undefined, result.message);
   }, []);
 
   const rememberResolvedIdentity = useCallback((input: { role: UserRole; isOwner?: boolean }) => {
@@ -495,19 +356,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [session?.user]);
 
-  const clearOAuthError = useCallback(() => {
-    setOAuthError(null);
+  const clearAuthError = useCallback(() => {
+    setAuthError(null);
   }, []);
 
   const signOutLocal = useCallback(async (): Promise<ActionResult<void>> => {
     const clientResult = ensureSupabaseClient();
     if (!clientResult.ok) return clientResult;
 
-    clearPendingAuthFlow();
-    clearPendingYandexRegistration();
-    clearPendingYandexRegistrationFromLocation();
-    setOAuthError(null);
+    setAuthError(null);
     setResolvedIdentity(null);
+    setPasswordRecovery(false);
 
     const { error } = await clientResult.data.auth.signOut({ scope: 'local' });
     if (error) return errorResult(translateSupabaseError(error.message));
@@ -524,12 +383,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return okResult(undefined, t('Ты вышел из аккаунта.', 'You have signed out.'));
   }, [signOutLocal, t]);
 
-  const switchAccount = useCallback(async (): Promise<ActionResult<void>> => (
-    startYandexAuth(undefined, {
-      forceAccountSelection: true,
-      mode: 'switch-account',
-    })
-  ), [startYandexAuth]);
+  const switchAccount = useCallback(async (): Promise<ActionResult<void>> => {
+    const result = await signOutLocal();
+    if (!result.ok) {
+      return result;
+    }
+
+    return okResult(undefined, t('Теперь можно войти другим аккаунтом.', 'You can now sign in with another account.'));
+  }, [signOutLocal, t]);
 
   const value = useMemo<AuthContextType>(() => ({
     status,
@@ -537,25 +398,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: session?.user ?? null,
     sessionIdentity,
     recentAccounts,
-    isCompletingOAuth,
-    oauthError,
-    startYandexAuth,
+    isCompletingAuth,
+    authError,
+    passwordRecovery,
+    signInWithPassword,
+    signUpWithPassword,
+    sendPasswordReset,
+    updatePassword,
+    claimOwnerAdmin,
     rememberResolvedIdentity,
-    clearOAuthError,
+    clearAuthError,
     signOut,
     switchAccount,
   }), [
-    clearOAuthError,
-    isCompletingOAuth,
-    oauthError,
+    authError,
+    claimOwnerAdmin,
+    clearAuthError,
+    isCompletingAuth,
+    passwordRecovery,
     recentAccounts,
     rememberResolvedIdentity,
+    sendPasswordReset,
     session,
     sessionIdentity,
+    signInWithPassword,
     signOut,
-    startYandexAuth,
+    signUpWithPassword,
     status,
     switchAccount,
+    updatePassword,
   ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

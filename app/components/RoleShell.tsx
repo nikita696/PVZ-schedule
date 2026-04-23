@@ -1,4 +1,4 @@
-import { CalendarDays, CreditCard, Home, LogOut, RefreshCw, UsersRound } from 'lucide-react';
+import { CalendarDays, CreditCard, Home, LogOut, RefreshCw, Settings, UsersRound } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
@@ -65,6 +65,13 @@ export function RoleShell({ role, children }: RoleShellProps) {
             label: t('Выплаты', 'Payments'),
             icon: CreditCard,
             title: t('Выплаты', 'Payments'),
+            roleBadge: t('Администратор', 'Admin'),
+          },
+          {
+            to: '/admin/settings',
+            label: t('Настройки', 'Settings'),
+            icon: Settings,
+            title: t('Настройки', 'Settings'),
             roleBadge: t('Администратор', 'Admin'),
           },
         ]
@@ -135,7 +142,8 @@ export function RoleShell({ role, children }: RoleShellProps) {
       return;
     }
 
-    toast.success(result.message ?? t('Открываю Яндекс ID с выбором аккаунта...', 'Opening Yandex ID account chooser...'));
+    toast.success(result.message ?? t('Открыл вход для другого аккаунта.', 'Ready to sign in with another account.'));
+    navigate('/auth/login', { replace: true });
   };
 
   return (
