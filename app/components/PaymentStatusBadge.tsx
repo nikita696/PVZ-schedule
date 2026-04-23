@@ -11,15 +11,15 @@ export function PaymentStatusBadge({ status }: PaymentStatusBadgeProps) {
 
   const statusMeta: Record<PaymentStatus, { label: string; className: string }> = {
     pending: {
-      label: t('На подтверждении', 'Pending'),
+      label: t('Ожидает', 'Pending'),
       className: 'border-amber-200 bg-amber-50 text-amber-700',
     },
     approved: {
-      label: t('Подтверждена', 'Approved'),
+      label: t('Учтена', 'Counted'),
       className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
     },
     rejected: {
-      label: t('Отклонена', 'Rejected'),
+      label: t('Не учитывается', 'Not counted'),
       className: 'border-rose-200 bg-rose-50 text-rose-700',
     },
   };
