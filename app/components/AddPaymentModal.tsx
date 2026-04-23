@@ -88,11 +88,11 @@ export function AddPaymentModal({
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t('Добавить выплату', 'Add payment')}</DialogTitle>
+          <DialogTitle>{t('Добавить выплату сотруднику', 'Add employee payment')}</DialogTitle>
           <DialogDescription>
             {t(
-              'Сотрудник создаёт запрос на выплату, а администратор потом подтверждает его.',
-              'An employee creates a payment request and the administrator confirms it later.',
+              'Зафиксируй дату, сумму и комментарий. Запись сохранится в журнале выплат.',
+              'Record the date, amount, and comment. The entry will be saved to the payment journal.',
             )}
           </DialogDescription>
         </DialogHeader>
@@ -161,7 +161,7 @@ export function AddPaymentModal({
             {t('Отмена', 'Cancel')}
           </Button>
           <Button onClick={() => void handleSubmit()} disabled={!canSubmit}>
-            {submitting ? t('Сохраняю...', 'Saving...') : t('Сохранить выплату', 'Save payment')}
+            {submitting ? t('Сохраняю...', 'Saving...') : t('Зафиксировать выплату', 'Record payment')}
           </Button>
         </DialogFooter>
       </DialogContent>

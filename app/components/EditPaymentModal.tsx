@@ -80,8 +80,8 @@ export function EditPaymentModal({
           <DialogTitle>{t('Изменить выплату', 'Edit payment')}</DialogTitle>
           <DialogDescription>
             {t(
-              'Можно поправить сумму, дату и комментарий до финального подтверждения.',
-              'You can edit the amount, date, and comment before final approval.',
+              'Можно поправить сумму, дату и комментарий записи в журнале.',
+              'You can edit the amount, date, and comment for this journal entry.',
             )}
           </DialogDescription>
         </DialogHeader>
