@@ -1,12 +1,33 @@
-import { useMemo } from 'react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock3,
+  FileSpreadsheet,
+  WalletCards,
+  XCircle,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router';
 import { toast } from 'sonner';
+import { AddPaymentModal } from '../components/AddPaymentModal';
 import { MonthYearSelector } from '../components/MonthYearSelector';
+import { PaymentStatusBadge } from '../components/PaymentStatusBadge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table';
+import { cn } from '../components/ui/utils';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
+import { buildDashboardPayrollSummary, type DashboardPayrollEmployeeRow } from '../domain/dashboardPayroll';
 import { isShiftLikeStatus } from '../domain/shiftStatus';
-import type { Employee, EmployeeDebtSnapshot, EmployeeStats, Payment, Shift } from '../domain/types';
+import type { AddPaymentInput, Employee, EmployeeStats, Payment, Shift } from '../domain/types';
 import { getLocalISODate } from '../lib/date';
 import { getMonthStatusLabels, getDashboardCopy } from './dashboardCopy';
 
@@ -30,6 +51,25 @@ const resolveShiftStatus = (shift: Shift) => (
   shift.actualStatus ?? shift.approvedStatus ?? shift.requestedStatus ?? shift.status
 );
 
+const formatMonthLabel = (month: number, year: number, locale: string): string => {
+  const label = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' })
+    .format(new Date(year, month - 1, 1));
+  return label.charAt(0).toUpperCase() + label.slice(1);
+};
+
+const sortPaymentsDesc = (payments: Payment[]): Payment[] => (
+  [...payments].sort((left, right) => {
+    if (left.date !== right.date) return right.date.localeCompare(left.date);
+    return right.createdAt.localeCompare(left.createdAt);
+  })
+);
+
+interface PaymentDraft {
+  employeeId: string;
+  amount: number;
+  comment: string;
+}
+
 export default function DashboardPage() {
   const { language, locale, t } = useLanguage();
   const copy = getDashboardCopy(language);
@@ -37,6 +77,7 @@ export default function DashboardPage() {
 
   const {
     employees,
+    rateHistory,
     shifts,
     payments,
     currentUserSummary,
@@ -45,14 +86,20 @@ export default function DashboardPage() {
     selectedMonthStatus,
     setSelectedMonth,
     setSelectedYear,
+    setSelectedMonthStatus,
+    addPayment,
     getEmployeeStats,
-    getEmployeeDebtSnapshot,
     exportEmployeePayslipXlsx,
     isOwner,
     myEmployeeId,
   } = useApp();
+  const [paymentDraft, setPaymentDraft] = useState<PaymentDraft | null>(null);
 
-  const activeEmployees = useMemo(() => employees.filter((employee) => !employee.archived), [employees]);
+  const monthLabel = useMemo(
+    () => formatMonthLabel(selectedMonth, selectedYear, locale),
+    [locale, selectedMonth, selectedYear],
+  );
+
   const myEmployee = useMemo(
     () => {
       if (myEmployeeId) {
@@ -79,29 +126,21 @@ export default function DashboardPage() {
     },
     [currentUserSummary?.authUserId, currentUserSummary?.email, employees, isOwner, myEmployeeId],
   );
-  const myDebtSnapshot = useMemo(
-    () => (myEmployee ? getEmployeeDebtSnapshot(myEmployee.id) : null),
-    [getEmployeeDebtSnapshot, myEmployee],
-  );
 
-  const monthStats = useMemo(() => {
-    let earnedActual = 0;
-    let paidApproved = 0;
-    let dueNow = 0;
-
-    for (const employee of activeEmployees) {
-      const stats = getEmployeeStats(employee.id, selectedMonth, selectedYear);
-      earnedActual += stats.earnedActual;
-      paidApproved += stats.paidApproved;
-      dueNow += stats.dueNow;
-    }
-
-    return {
-      earnedActual,
-      paidApproved,
-      dueNow,
-    };
-  }, [activeEmployees, getEmployeeStats, selectedMonth, selectedYear]);
+  const payrollSummary = useMemo(() => buildDashboardPayrollSummary({
+    employees,
+    rateHistory,
+    shifts,
+    payments,
+  }, selectedMonth, selectedYear, selectedMonthStatus), [
+    employees,
+    payments,
+    rateHistory,
+    selectedMonth,
+    selectedMonthStatus,
+    selectedYear,
+    shifts,
+  ]);
 
   const monthWorkdayTotal = useMemo(() => {
     const scheduledDays = new Set<string>();
@@ -120,12 +159,6 @@ export default function DashboardPage() {
 
     return scheduledDays.size;
   }, [selectedMonth, selectedYear, shifts]);
-
-  const pendingPaymentsCount = useMemo(() => (
-    payments.filter((payment) => (
-      payment.status === 'pending' && isInMonth(payment.date, selectedMonth, selectedYear)
-    )).length
-  ), [payments, selectedMonth, selectedYear]);
 
   const todayInfo = useMemo(() => {
     const today = getLocalISODate();
@@ -156,68 +189,80 @@ export default function DashboardPage() {
     toast.success(copy.messages.payslipExported);
   };
 
+  const handleMonthStatusChange = async (status: 'approved' | 'closed') => {
+    const result = await setSelectedMonthStatus(status);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+
+    toast.success(status === 'closed'
+      ? t('Месяц закрыт.', 'Month closed.')
+      : t('График месяца утвержден.', 'Month schedule approved.'));
+  };
+
+  const handleAddPayment = async (input: AddPaymentInput) => {
+    const result = await addPayment(input);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+
+    setPaymentDraft(null);
+    toast.success(result.message ?? t('Выплата сохранена.', 'Payment saved.'));
+  };
+
+  const handleOpenBalancePayment = (row: DashboardPayrollEmployeeRow) => {
+    setPaymentDraft({
+      employeeId: row.employee.id,
+      amount: row.outstandingDue,
+      comment: t(`Закрытие зарплаты за ${monthLabel}`, `Payroll closing for ${monthLabel}`),
+    });
+  };
+
   return (
-    <div className="bg-stone-50">
+    <div className="min-h-screen bg-stone-50">
       <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6">
-        <Card>
-          <CardContent className="flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">
-                {t('Месяц', 'Month')}: {monthStatusLabels[selectedMonthStatus]}
-              </div>
-            </div>
-
-            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-              <MonthYearSelector
-                month={selectedMonth}
-                year={selectedYear}
-                onMonthChange={setSelectedMonth}
-                onYearChange={setSelectedYear}
-              />
-
-              {!isOwner && myEmployee ? (
-                <Button onClick={() => void handleExport(myEmployee.id)}>{copy.common.myPayslip}</Button>
-              ) : null}
-            </div>
-          </CardContent>
-        </Card>
+        <DashboardToolbar
+          month={selectedMonth}
+          year={selectedYear}
+          statusLabel={monthStatusLabels[selectedMonthStatus]}
+          onMonthChange={setSelectedMonth}
+          onYearChange={setSelectedYear}
+        />
 
         {isOwner ? (
           <>
-            {myEmployee ? (
-              <EmployeeDebtCard
-                snapshot={myDebtSnapshot}
-                copy={copy}
-                locale={locale}
-              />
-            ) : null}
+            <AdminPayrollDashboard
+              summary={payrollSummary}
+              monthLabel={monthLabel}
+              statusLabel={monthStatusLabels[selectedMonthStatus]}
+              locale={locale}
+              onApprove={() => void handleMonthStatusChange('approved')}
+              onCloseMonth={() => void handleMonthStatusChange('closed')}
+              onPayBalance={handleOpenBalancePayment}
+            />
 
-            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard label={copy.admin.stats.earnedActual} value={money(monthStats.earnedActual, locale)} />
-              <StatCard label={copy.admin.stats.paidApproved} value={money(monthStats.paidApproved, locale)} />
-              <StatCard label={copy.admin.stats.dueNow} value={money(monthStats.dueNow, locale)} />
-              <StatCard label={copy.admin.stats.pendingPayments} value={String(pendingPaymentsCount)} />
-            </section>
+            <TodayStrip todayInfo={todayInfo} />
 
-            <Card>
-              <CardHeader>
-                <CardTitle>{copy.admin.today.title}</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
-                <InfoLine label={copy.admin.today.planned} value={todayInfo.planned.join(', ') || copy.admin.today.nobody} />
-                <InfoLine label={copy.admin.today.sick} value={todayInfo.sick.join(', ') || copy.admin.today.none} />
-                <InfoLine label={copy.admin.today.dayOff} value={todayInfo.dayOff.join(', ') || copy.admin.today.none} />
-                <InfoLine label={copy.admin.today.coverage} value={todayInfo.issue ? copy.admin.today.issue : copy.admin.today.closed} />
-              </CardContent>
-            </Card>
+            <AddPaymentModal
+              open={paymentDraft !== null}
+              employees={employees}
+              fixedEmployeeId={paymentDraft?.employeeId ?? null}
+              initialAmount={paymentDraft?.amount ?? null}
+              initialComment={paymentDraft?.comment ?? ''}
+              onClose={() => setPaymentDraft(null)}
+              onSubmit={handleAddPayment}
+            />
           </>
         ) : (
           <EmployeeDashboard
             employee={myEmployee}
-            debtSnapshot={myDebtSnapshot}
             stats={myEmployee ? getEmployeeStats(myEmployee.id, selectedMonth, selectedYear) : null}
             monthWorkdayTotal={monthWorkdayTotal}
             payments={myEmployee ? payments.filter((payment) => payment.employeeId === myEmployee.id) : []}
+            month={selectedMonth}
+            year={selectedYear}
             copy={copy}
             locale={locale}
             onExport={() => {
@@ -232,123 +277,372 @@ export default function DashboardPage() {
   );
 }
 
-function StatCard({
-  label,
-  value,
-  detail,
-  helper,
+function DashboardToolbar({
+  month,
+  year,
+  statusLabel,
+  onMonthChange,
+  onYearChange,
 }: {
-  label: string;
-  value: string;
-  detail?: string;
-  helper?: string;
+  month: number;
+  year: number;
+  statusLabel: string;
+  onMonthChange: (month: number) => void;
+  onYearChange: (year: number) => void;
 }) {
+  const { t } = useLanguage();
+
   return (
-    <Card className="border-stone-200/80 shadow-sm shadow-stone-100/60">
-      <CardContent className="p-4">
-        <div className="text-xs font-medium text-muted-foreground">{label}</div>
-        <div className="mt-2 flex items-end gap-2">
-          <div className="text-2xl font-semibold leading-none tabular-nums">{value}</div>
-          {detail ? (
-            <div className="flex items-center gap-2 pb-0.5 text-sm text-stone-400">
-              <span>/</span>
-              <span className="font-medium text-stone-500 tabular-nums">{detail}</span>
-            </div>
-          ) : null}
+    <Card className="rounded-lg">
+      <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-stone-900 px-3 py-1 text-xs font-semibold text-white">
+            {t('Зарплатная сводка', 'Payroll overview')}
+          </span>
+          <span className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-semibold text-stone-700">
+            {t('Месяц', 'Month')}: {statusLabel}
+          </span>
         </div>
-        {helper ? (
-          <div className="mt-2 text-xs text-stone-500">{helper}</div>
-        ) : null}
+
+        <MonthYearSelector
+          month={month}
+          year={year}
+          onMonthChange={onMonthChange}
+          onYearChange={onYearChange}
+        />
       </CardContent>
     </Card>
   );
 }
 
-function InfoLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-stone-200 bg-white p-4">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-2 font-medium text-stone-900">{value}</div>
-    </div>
-  );
-}
-
-function CompactMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-3">
-      <div className="text-xs font-medium text-stone-500">{label}</div>
-      <div className="mt-2 text-xl font-semibold leading-none text-stone-950 tabular-nums">{value}</div>
-    </div>
-  );
-}
-
-function EmployeeDebtCard({
-  snapshot,
-  copy,
+function AdminPayrollDashboard({
+  summary,
+  monthLabel,
+  statusLabel,
   locale,
+  onApprove,
+  onCloseMonth,
+  onPayBalance,
 }: {
-  snapshot: EmployeeDebtSnapshot | null;
-  copy: ReturnType<typeof getDashboardCopy>;
+  summary: ReturnType<typeof buildDashboardPayrollSummary>;
+  monthLabel: string;
+  statusLabel: string;
   locale: string;
+  onApprove: () => void;
+  onCloseMonth: () => void;
+  onPayBalance: (row: DashboardPayrollEmployeeRow) => void;
 }) {
-  return (
-    <Card className="border-stone-200/80 shadow-sm shadow-stone-100/60">
-      <CardContent className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <div className="text-xs font-medium uppercase tracking-[0.16em] text-stone-500">
-            {copy.employee.debtCard.title}
-          </div>
-          <div className="mt-2 text-3xl font-semibold leading-none text-stone-950 tabular-nums">
-            {money(snapshot?.debtToDate ?? 0, locale)}
-          </div>
-          <div className="mt-2 max-w-2xl text-sm text-stone-500">
-            {copy.employee.debtCard.helper}
-          </div>
-          <div className="mt-2 text-xs text-stone-500">
-            {copy.employee.debtCard.formula(
-              money(snapshot?.accruedToDate ?? 0, locale),
-              money(snapshot?.paidToDate ?? 0, locale),
-            )}
-          </div>
-        </div>
+  const { t } = useLanguage();
+  const closeState = summary.closeState;
+  const closeActionLabel = closeState.isClosed
+    ? t('Месяц закрыт', 'Month closed')
+    : closeState.canApprove
+      ? t('Утвердить график', 'Approve schedule')
+      : t('Закрыть месяц', 'Close month');
+  const closeActionDisabled = closeState.isClosed || (!closeState.canApprove && !closeState.canClose);
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[320px]">
-          <CompactMetric
-            label={copy.employee.debtCard.totalShifts}
-            value={String(snapshot?.workedCountTotalToDate ?? 0)}
+  return (
+    <div className="flex flex-col gap-4" data-testid="owner-payroll-dashboard">
+      <Card className="rounded-lg" data-testid="payroll-close-master">
+        <CardContent className="grid gap-5 p-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)] lg:p-5">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                {monthLabel}
+              </span>
+              <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">
+                {statusLabel}
+              </span>
+            </div>
+
+            <div className="mt-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
+                {t('Осталось выплатить за месяц', 'Remaining payroll for the month')}
+              </div>
+              <div className="mt-2 text-4xl font-semibold leading-none text-stone-950 tabular-nums sm:text-5xl">
+                {money(summary.totals.outstandingDue, locale)}
+              </div>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">
+                {t(
+                  `Расчет: начислено ${money(summary.totals.earnedActual, locale)} - подтвержденные выплаты ${money(summary.totals.paidApproved, locale)} = остаток ${money(summary.totals.outstandingDue, locale)}. Заявки на выплату не уменьшают долг, пока они не подтверждены.`,
+                  `Calculation: accrued ${money(summary.totals.earnedActual, locale)} - approved payments ${money(summary.totals.paidApproved, locale)} = remaining ${money(summary.totals.outstandingDue, locale)}. Payment requests do not reduce the balance until approved.`,
+                )}
+              </p>
+            </div>
+
+            <div className="mt-5 grid gap-2 sm:grid-cols-3">
+              <CompactFact
+                label={t('Уже выплачено', 'Already paid')}
+                value={money(summary.totals.paidApproved, locale)}
+              />
+              <CompactFact
+                label={t('Заявки ждут', 'Requests pending')}
+                value={`${summary.pendingPayments.count} / ${money(summary.pendingPayments.amount, locale)}`}
+              />
+              <CompactFact
+                label={t('Резерв до конца месяца', 'Reserve to month end')}
+                value={money(summary.totals.reserveToMonthEnd, locale)}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-stone-200 bg-white p-4">
+            <div className="text-sm font-semibold text-stone-950">
+              {t('Готовность к закрытию', 'Ready to close')}
+            </div>
+            <div className="mt-3 grid gap-2">
+              <ChecklistItem
+                ok={closeState.scheduleApproved}
+                label={t('График утвержден', 'Schedule approved')}
+                detail={closeState.scheduleApproved
+                  ? t('Можно закрывать зарплату.', 'Payroll can be closed.')
+                  : t('Сначала утверди график месяца.', 'Approve the month schedule first.')}
+              />
+              <ChecklistItem
+                ok={!closeState.hasPendingPayments}
+                label={t('Нет заявок на выплату', 'No pending payment requests')}
+                detail={closeState.hasPendingPayments
+                  ? t('Разбери заявки во вкладке выплат.', 'Resolve requests in Payments.')
+                  : t('Все заявки разобраны.', 'All requests are resolved.')}
+              />
+              <ChecklistItem
+                ok={!closeState.hasOutstandingDue}
+                label={t('Остатки по сотрудникам закрыты', 'Employee balances are clear')}
+                detail={closeState.hasOutstandingDue
+                  ? t('Выплати остатки из таблицы ниже.', 'Pay the balances from the table below.')
+                  : t('Положительных долгов нет.', 'No positive balances remain.')}
+              />
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2">
+              <Button
+                className="w-full"
+                disabled={closeActionDisabled}
+                onClick={closeState.canApprove ? onApprove : onCloseMonth}
+                data-testid="close-month-button"
+              >
+                {closeState.canApprove ? <CheckCircle2 className="h-4 w-4" /> : <WalletCards className="h-4 w-4" />}
+                {closeActionLabel}
+              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button asChild variant="outline" size="sm">
+                  <Link to="/admin/calendar">{t('Календарь', 'Calendar')}</Link>
+                </Button>
+                <Button asChild variant="outline" size="sm">
+                  <Link to="/admin/payments">{t('Выплаты', 'Payments')}</Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-lg">
+        <CardHeader className="px-4 pt-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <CardTitle className="text-base font-semibold">
+                {t('Расчет по сотрудникам', 'Employee payroll')}
+              </CardTitle>
+              <p className="mt-1 text-sm text-stone-500">
+                {t('Каждая строка показывает начисление, выплаты и остаток за выбранный месяц.', 'Each row shows accrued pay, approved payments, and remaining balance for the selected month.')}
+              </p>
+            </div>
+            <div className="text-xs text-stone-500">
+              {t('Формула', 'Formula')}: {t('начислено - выплачено = остаток', 'accrued - paid = balance')}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="overflow-x-auto p-0">
+          <Table className="min-w-[900px] table-fixed">
+            <TableHeader>
+              <TableRow className="bg-stone-50/80">
+                <TableHead className="w-[190px] px-4 py-2">{t('Сотрудник', 'Employee')}</TableHead>
+                <TableHead className="w-[92px] px-4 py-2 text-center">{t('Смены', 'Shifts')}</TableHead>
+                <TableHead className="w-[118px] px-4 py-2 text-right">{t('Ставка', 'Rate')}</TableHead>
+                <TableHead className="w-[130px] px-4 py-2 text-right">{t('Начислено', 'Accrued')}</TableHead>
+                <TableHead className="w-[130px] px-4 py-2 text-right">{t('Выплачено', 'Paid')}</TableHead>
+                <TableHead className="w-[130px] px-4 py-2 text-right">{t('Остаток', 'Balance')}</TableHead>
+                <TableHead className="w-[130px] px-4 py-2 text-right">{t('Прогноз', 'Forecast')}</TableHead>
+                <TableHead className="w-[150px] px-4 py-2 text-right">{t('Действие', 'Action')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {summary.rows.map((row) => (
+                <TableRow key={row.employee.id} data-testid="payroll-employee-row" data-employee-id={row.employee.id}>
+                  <TableCell className="px-4 py-3">
+                    <div className="font-medium text-stone-950">{row.employee.name}</div>
+                    <div className="mt-0.5 truncate text-xs text-stone-500">{row.employee.workEmail ?? '-'}</div>
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-center font-medium tabular-nums">
+                    {row.stats.workedCount}
+                    {row.stats.plannedCount > 0 ? (
+                      <span className="text-stone-400"> +{row.stats.plannedCount}</span>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-right tabular-nums">{money(row.employee.dailyRate, locale)}</TableCell>
+                  <TableCell className="px-4 py-3 text-right tabular-nums">{money(row.stats.earnedActual, locale)}</TableCell>
+                  <TableCell className="px-4 py-3 text-right tabular-nums">{money(row.stats.paidApproved, locale)}</TableCell>
+                  <TableCell className={cn(
+                    'px-4 py-3 text-right font-semibold tabular-nums',
+                    row.stats.dueNow > 0 ? 'text-rose-700' : 'text-stone-950',
+                  )}>
+                    {money(row.stats.dueNow, locale)}
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-right tabular-nums">{money(row.stats.forecastTotal, locale)}</TableCell>
+                  <TableCell className="px-4 py-3 text-right">
+                    {row.outstandingDue > 0 ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8"
+                        onClick={() => onPayBalance(row)}
+                        data-testid={`payroll-pay-balance-${row.employee.id}`}
+                      >
+                        <WalletCards className="h-3.5 w-3.5" />
+                        {t('Выплатить', 'Pay')}
+                      </Button>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        {t('Закрыто', 'Clear')}
+                      </span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-lg">
+        <CardContent className="grid gap-3 p-4 sm:grid-cols-3">
+          <BudgetFact
+            label={t('Уже заработано', 'Earned so far')}
+            value={money(summary.totals.earnedActual, locale)}
+            helper={t('Только фактически отработанные смены.', 'Worked shifts only.')}
           />
-          <CompactMetric
-            label={copy.employee.debtCard.currentMonthShifts}
-            value={String(snapshot?.workedCountCurrentMonthToDate ?? 0)}
+          <BudgetFact
+            label={t('Будущие смены', 'Future shifts')}
+            value={money(summary.totals.plannedFutureAmount, locale)}
+            helper={t('Запланированные смены до конца выбранного месяца.', 'Planned shifts through the selected month.')}
           />
+          <BudgetFact
+            label={t('Фонд месяца', 'Month payroll fund')}
+            value={money(summary.totals.forecastTotal, locale)}
+            helper={t('Начислено сейчас + будущие смены.', 'Current accrued pay plus future shifts.')}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function CompactFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2">
+      <div className="text-[11px] font-medium uppercase tracking-wide text-stone-500">{label}</div>
+      <div className="mt-1 text-sm font-semibold text-stone-950 tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+function BudgetFact({ label, value, helper }: { label: string; value: string; helper: string }) {
+  return (
+    <div>
+      <div className="text-xs font-medium text-stone-500">{label}</div>
+      <div className="mt-1 text-xl font-semibold text-stone-950 tabular-nums">{value}</div>
+      <div className="mt-1 text-xs leading-5 text-stone-500">{helper}</div>
+    </div>
+  );
+}
+
+function ChecklistItem({ ok, label, detail }: { ok: boolean; label: string; detail: string }) {
+  return (
+    <div className="flex gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2">
+      {ok ? (
+        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+      ) : (
+        <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+      )}
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-stone-950">{label}</div>
+        <div className="mt-0.5 text-xs leading-5 text-stone-500">{detail}</div>
+      </div>
+    </div>
+  );
+}
+
+function TodayStrip({
+  todayInfo,
+}: {
+  todayInfo: {
+    planned: string[];
+    sick: string[];
+    dayOff: string[];
+    issue: boolean;
+  };
+}) {
+  const { t } = useLanguage();
+
+  return (
+    <Card className="rounded-lg">
+      <CardContent className="grid gap-3 p-4 text-sm md:grid-cols-[auto_1fr_1fr_1fr] md:items-center">
+        <div className="flex items-center gap-2 font-semibold text-stone-950">
+          {todayInfo.issue ? (
+            <AlertCircle className="h-4 w-4 text-rose-600" />
+          ) : (
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+          )}
+          {t('Сегодня', 'Today')}
         </div>
+        <InlineInfo label={t('На смене', 'On shift')} value={todayInfo.planned.join(', ') || t('никого', 'nobody')} />
+        <InlineInfo label={t('Больничный', 'Sick leave')} value={todayInfo.sick.join(', ') || t('нет', 'none')} />
+        <InlineInfo
+          label={t('Покрытие', 'Coverage')}
+          value={todayInfo.issue ? t('нет назначенной смены', 'no assigned shift') : t('день закрыт', 'day covered')}
+        />
       </CardContent>
     </Card>
+  );
+}
+
+function InlineInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <span className="text-xs font-medium text-stone-500">{label}: </span>
+      <span className="font-medium text-stone-900">{value}</span>
+    </div>
   );
 }
 
 function EmployeeDashboard({
   employee,
-  debtSnapshot,
   stats,
   monthWorkdayTotal,
   payments,
+  month,
+  year,
   copy,
   locale,
   onExport,
 }: {
   employee: Employee | null;
-  debtSnapshot: EmployeeDebtSnapshot | null;
   stats: EmployeeStats | null;
   monthWorkdayTotal: number;
   payments: Payment[];
+  month: number;
+  year: number;
   copy: ReturnType<typeof getDashboardCopy>;
   locale: string;
   onExport: () => void;
 }) {
+  const { t } = useLanguage();
+
   if (!employee || !stats) {
     return (
-      <Card>
+      <Card className="rounded-lg">
         <CardContent className="p-5 text-sm text-muted-foreground">
           {copy.employee.unlinked}
         </CardContent>
@@ -356,41 +650,112 @@ function EmployeeDashboard({
     );
   }
 
-  const pendingCount = payments.filter((payment) => payment.status === 'pending').length;
+  const monthPayments = sortPaymentsDesc(payments.filter((payment) => isInMonth(payment.date, month, year)));
+  const recentPayments = monthPayments.slice(0, 4);
+  const pendingCount = monthPayments.filter((payment) => payment.status === 'pending').length;
+  const plannedFutureAmount = Math.max(0, stats.forecastTotal - stats.earnedActual);
 
   return (
-    <>
-      <EmployeeDebtCard snapshot={debtSnapshot} copy={copy} locale={locale} />
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard
-          label={copy.employee.stats.workedCount}
-          value={String(stats.workedCount + stats.plannedCount)}
-          detail={String(monthWorkdayTotal)}
-          helper={copy.employee.stats.workedCountHint}
-        />
-        <StatCard label={copy.employee.stats.earnedActual} value={money(stats.earnedActual, locale)} />
-        <StatCard label={copy.employee.stats.paidApproved} value={money(stats.paidApproved, locale)} />
-        <StatCard label={copy.employee.stats.dueNow} value={money(stats.dueNow, locale)} />
-        <StatCard label={copy.employee.stats.forecastTotal} value={money(stats.forecastTotal, locale)} />
-      </section>
-
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
-        <StatCard label={copy.employee.stats.sickCount} value={String(stats.sickCount)} />
-        <StatCard label={copy.employee.stats.dayOffCount} value={String(stats.dayOffCount)} />
-      </section>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{copy.employee.exportTitle}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <div className="text-sm text-muted-foreground">
-            {copy.employee.pendingPayments(pendingCount)}
+    <div className="grid gap-4" data-testid="employee-payroll-dashboard">
+      <Card className="rounded-lg">
+        <CardContent className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-stone-900 px-3 py-1 text-xs font-semibold text-white">
+                {t('Мой расчет', 'My payroll')}
+              </span>
+              <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">
+                {employee.name}
+              </span>
+            </div>
+            <div className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
+              {t('Осталось к выплате', 'Remaining balance')}
+            </div>
+            <div className="mt-2 text-4xl font-semibold leading-none text-stone-950 tabular-nums">
+              {money(stats.dueNow, locale)}
+            </div>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-600" data-testid="employee-payroll-formula">
+              {t(
+                `Как считается: мои оплачиваемые смены по ставкам = ${money(stats.earnedActual, locale)}. Из них уже подтверждено выплат ${money(stats.paidApproved, locale)}, остаток ${money(stats.dueNow, locale)}.`,
+                `Calculation: my payable shifts by rates = ${money(stats.earnedActual, locale)}. Approved payments are ${money(stats.paidApproved, locale)}, remaining balance is ${money(stats.dueNow, locale)}.`,
+              )}
+            </p>
           </div>
-          <Button onClick={onExport}>{copy.employee.downloadPayslip}</Button>
+
+          <Button variant="outline" onClick={onExport} className="justify-self-start lg:justify-self-end">
+            <FileSpreadsheet className="h-4 w-4" />
+            {copy.employee.downloadPayslip}
+          </Button>
         </CardContent>
       </Card>
-    </>
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <EmployeeFact
+          label={copy.employee.stats.workedCount}
+          value={`${stats.workedCount} / ${monthWorkdayTotal}`}
+          helper={copy.employee.stats.workedCountHint}
+        />
+        <EmployeeFact label={copy.employee.stats.earnedActual} value={money(stats.earnedActual, locale)} />
+        <EmployeeFact label={copy.employee.stats.paidApproved} value={money(stats.paidApproved, locale)} />
+        <EmployeeFact label={copy.employee.stats.dueNow} value={money(stats.dueNow, locale)} />
+        <EmployeeFact
+          label={copy.employee.stats.forecastTotal}
+          value={money(stats.forecastTotal, locale)}
+          helper={plannedFutureAmount > 0
+            ? t(`Будущие смены: ${money(plannedFutureAmount, locale)}`, `Future shifts: ${money(plannedFutureAmount, locale)}`)
+            : t('Будущих смен по графику нет.', 'No future shifts are scheduled.')}
+        />
+      </section>
+
+      <Card className="rounded-lg">
+        <CardHeader className="px-4 pt-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <CardTitle className="text-base font-semibold">
+              {t('Мои выплаты за месяц', 'My payments this month')}
+            </CardTitle>
+            <div className="flex items-center gap-1 text-xs text-stone-500">
+              <Clock3 className="h-3.5 w-3.5" />
+              {copy.employee.pendingPayments(pendingCount)}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="px-4 pb-4">
+          {recentPayments.length > 0 ? (
+            <div className="grid gap-2">
+              {recentPayments.map((payment) => (
+                <div
+                  key={payment.id}
+                  className="grid gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm sm:grid-cols-[104px_1fr_auto] sm:items-center"
+                  data-testid="employee-payment-row"
+                >
+                  <div className="font-medium text-stone-700">{payment.date}</div>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-stone-950 tabular-nums">{money(payment.amount, locale)}</div>
+                    <div className="truncate text-xs text-stone-500">{payment.comment.trim() || t('Без комментария', 'No comment')}</div>
+                  </div>
+                  <PaymentStatusBadge status={payment.status} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50 px-3 py-4 text-sm text-stone-500">
+              {t('За выбранный месяц выплат пока нет.', 'There are no payments for the selected month yet.')}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function EmployeeFact({ label, value, helper }: { label: string; value: string; helper?: string }) {
+  return (
+    <div className="rounded-lg border border-stone-200 bg-white p-3">
+      <div className="text-xs font-medium text-stone-500">{label}</div>
+      <div className="mt-1 text-xl font-semibold text-stone-950 tabular-nums">{value}</div>
+      {helper ? (
+        <div className="mt-1 text-xs leading-5 text-stone-500">{helper}</div>
+      ) : null}
+    </div>
   );
 }

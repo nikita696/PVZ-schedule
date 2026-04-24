@@ -18,6 +18,9 @@ interface AddPaymentModalProps {
   open: boolean;
   employees: Employee[];
   fixedEmployeeId?: string | null;
+  initialAmount?: number | null;
+  initialComment?: string;
+  initialDate?: string;
   onClose: () => void;
   onSubmit: (input: AddPaymentInput) => Promise<void>;
 }
@@ -26,6 +29,9 @@ export function AddPaymentModal({
   open,
   employees,
   fixedEmployeeId = null,
+  initialAmount = null,
+  initialComment = '',
+  initialDate,
   onClose,
   onSubmit,
 }: AddPaymentModalProps) {
@@ -51,11 +57,11 @@ export function AddPaymentModal({
 
     const firstEmployee = activeEmployees[0];
     setEmployeeId(fixedEmployeeId ?? firstEmployee?.id ?? '');
-    setAmount('');
-    setDate(getLocalISODate());
-    setComment('');
+    setAmount(initialAmount && initialAmount > 0 ? String(initialAmount) : '');
+    setDate(initialDate ?? getLocalISODate());
+    setComment(initialComment);
     setSubmitting(false);
-  }, [activeEmployees, fixedEmployeeId, open]);
+  }, [activeEmployees, fixedEmployeeId, initialAmount, initialComment, initialDate, open]);
 
   const handleSubmit = async () => {
     const nextAmount = Number(amount);
