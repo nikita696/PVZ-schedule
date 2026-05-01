@@ -59,7 +59,7 @@ export const getDashboardCopy = (language: AppLanguage) => ({
       nobody: pickByLanguage(language, 'никого', 'nobody'),
       none: pickByLanguage(language, 'нет', 'none'),
       issue: pickByLanguage(language, 'нет назначенной смены', 'no assigned shift'),
-      closed: pickByLanguage(language, 'день закрыт', 'day covered'),
+      closed: pickByLanguage(language, 'смена назначена', 'shift assigned'),
     },
   },
   employee: {

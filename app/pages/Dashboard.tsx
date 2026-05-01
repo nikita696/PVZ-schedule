@@ -4,10 +4,8 @@ import {
   Clock3,
   FileSpreadsheet,
   WalletCards,
-  XCircle,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { AddPaymentModal } from '../components/AddPaymentModal';
 import { MonthYearSelector } from '../components/MonthYearSelector';
@@ -86,7 +84,6 @@ export default function DashboardPage() {
     selectedMonthStatus,
     setSelectedMonth,
     setSelectedYear,
-    setSelectedMonthStatus,
     addPayment,
     getEmployeeStats,
     exportEmployeePayslipXlsx,
@@ -132,12 +129,11 @@ export default function DashboardPage() {
     rateHistory,
     shifts,
     payments,
-  }, selectedMonth, selectedYear, selectedMonthStatus), [
+  }, selectedMonth, selectedYear), [
     employees,
     payments,
     rateHistory,
     selectedMonth,
-    selectedMonthStatus,
     selectedYear,
     shifts,
   ]);
@@ -189,18 +185,6 @@ export default function DashboardPage() {
     toast.success(copy.messages.payslipExported);
   };
 
-  const handleMonthStatusChange = async (status: 'approved' | 'closed') => {
-    const result = await setSelectedMonthStatus(status);
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
-    }
-
-    toast.success(status === 'closed'
-      ? t('Месяц закрыт.', 'Month closed.')
-      : t('График месяца утвержден.', 'Month schedule approved.'));
-  };
-
   const handleAddPayment = async (input: AddPaymentInput) => {
     const result = await addPayment(input);
     if (!result.ok) {
@@ -216,7 +200,7 @@ export default function DashboardPage() {
     setPaymentDraft({
       employeeId: row.employee.id,
       amount: row.outstandingDue,
-      comment: t(`Закрытие зарплаты за ${monthLabel}`, `Payroll closing for ${monthLabel}`),
+      comment: t(`Выплата зарплаты за ${monthLabel}`, `Payroll payment for ${monthLabel}`),
     });
   };
 
@@ -238,8 +222,6 @@ export default function DashboardPage() {
               monthLabel={monthLabel}
               statusLabel={monthStatusLabels[selectedMonthStatus]}
               locale={locale}
-              onApprove={() => void handleMonthStatusChange('approved')}
-              onCloseMonth={() => void handleMonthStatusChange('closed')}
               onPayBalance={handleOpenBalancePayment}
             />
 
@@ -320,31 +302,20 @@ function AdminPayrollDashboard({
   monthLabel,
   statusLabel,
   locale,
-  onApprove,
-  onCloseMonth,
   onPayBalance,
 }: {
   summary: ReturnType<typeof buildDashboardPayrollSummary>;
   monthLabel: string;
   statusLabel: string;
   locale: string;
-  onApprove: () => void;
-  onCloseMonth: () => void;
   onPayBalance: (row: DashboardPayrollEmployeeRow) => void;
 }) {
   const { t } = useLanguage();
-  const closeState = summary.closeState;
-  const closeActionLabel = closeState.isClosed
-    ? t('Месяц закрыт', 'Month closed')
-    : closeState.canApprove
-      ? t('Утвердить график', 'Approve schedule')
-      : t('Закрыть месяц', 'Close month');
-  const closeActionDisabled = closeState.isClosed || (!closeState.canApprove && !closeState.canClose);
 
   return (
     <div className="flex flex-col gap-4" data-testid="owner-payroll-dashboard">
-      <Card className="rounded-lg" data-testid="payroll-close-master">
-        <CardContent className="grid gap-5 p-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)] lg:p-5">
+      <Card className="rounded-lg" data-testid="payroll-calculator">
+        <CardContent className="p-4 lg:p-5">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
@@ -383,55 +354,6 @@ function AdminPayrollDashboard({
                 label={t('Резерв до конца месяца', 'Reserve to month end')}
                 value={money(summary.totals.reserveToMonthEnd, locale)}
               />
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-stone-200 bg-white p-4">
-            <div className="text-sm font-semibold text-stone-950">
-              {t('Готовность к закрытию', 'Ready to close')}
-            </div>
-            <div className="mt-3 grid gap-2">
-              <ChecklistItem
-                ok={closeState.scheduleApproved}
-                label={t('График утвержден', 'Schedule approved')}
-                detail={closeState.scheduleApproved
-                  ? t('Можно закрывать зарплату.', 'Payroll can be closed.')
-                  : t('Сначала утверди график месяца.', 'Approve the month schedule first.')}
-              />
-              <ChecklistItem
-                ok={!closeState.hasPendingPayments}
-                label={t('Нет заявок на выплату', 'No pending payment requests')}
-                detail={closeState.hasPendingPayments
-                  ? t('Разбери заявки во вкладке выплат.', 'Resolve requests in Payments.')
-                  : t('Все заявки разобраны.', 'All requests are resolved.')}
-              />
-              <ChecklistItem
-                ok={!closeState.hasOutstandingDue}
-                label={t('Остатки по сотрудникам закрыты', 'Employee balances are clear')}
-                detail={closeState.hasOutstandingDue
-                  ? t('Выплати остатки из таблицы ниже.', 'Pay the balances from the table below.')
-                  : t('Положительных долгов нет.', 'No positive balances remain.')}
-              />
-            </div>
-
-            <div className="mt-4 flex flex-col gap-2">
-              <Button
-                className="w-full"
-                disabled={closeActionDisabled}
-                onClick={closeState.canApprove ? onApprove : onCloseMonth}
-                data-testid="close-month-button"
-              >
-                {closeState.canApprove ? <CheckCircle2 className="h-4 w-4" /> : <WalletCards className="h-4 w-4" />}
-                {closeActionLabel}
-              </Button>
-              <div className="grid grid-cols-2 gap-2">
-                <Button asChild variant="outline" size="sm">
-                  <Link to="/admin/calendar">{t('Календарь', 'Calendar')}</Link>
-                </Button>
-                <Button asChild variant="outline" size="sm">
-                  <Link to="/admin/payments">{t('Выплаты', 'Payments')}</Link>
-                </Button>
-              </div>
             </div>
           </div>
         </CardContent>
@@ -505,7 +427,7 @@ function AdminPayrollDashboard({
                     ) : (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
                         <CheckCircle2 className="h-3.5 w-3.5" />
-                        {t('Закрыто', 'Clear')}
+                        {t('Выплачено', 'Paid')}
                       </span>
                     )}
                   </TableCell>
@@ -558,22 +480,6 @@ function BudgetFact({ label, value, helper }: { label: string; value: string; he
   );
 }
 
-function ChecklistItem({ ok, label, detail }: { ok: boolean; label: string; detail: string }) {
-  return (
-    <div className="flex gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2">
-      {ok ? (
-        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-      ) : (
-        <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
-      )}
-      <div className="min-w-0">
-        <div className="text-sm font-medium text-stone-950">{label}</div>
-        <div className="mt-0.5 text-xs leading-5 text-stone-500">{detail}</div>
-      </div>
-    </div>
-  );
-}
-
 function TodayStrip({
   todayInfo,
 }: {
@@ -601,7 +507,7 @@ function TodayStrip({
         <InlineInfo label={t('Больничный', 'Sick leave')} value={todayInfo.sick.join(', ') || t('нет', 'none')} />
         <InlineInfo
           label={t('Покрытие', 'Coverage')}
-          value={todayInfo.issue ? t('нет назначенной смены', 'no assigned shift') : t('день закрыт', 'day covered')}
+          value={todayInfo.issue ? t('нет назначенной смены', 'no assigned shift') : t('смена назначена', 'shift assigned')}
         />
       </CardContent>
     </Card>

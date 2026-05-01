@@ -243,8 +243,8 @@ export default function PaymentsPage() {
                 </h1>
                 <p className="mt-1 hidden max-w-2xl text-sm text-muted-foreground sm:block">
                   {t(
-                    'Компактная история фактических выплат без лишних действий и больших карточек.',
-                    'A compact history of recorded payments without extra actions or large cards.',
+                    'Формула расчета зарплат: начислено за смены - подтвержденные выплаты = остаток. Только подтвержденные записи из этого журнала уменьшают долг.',
+                    'Payroll formula: accrued shift pay - approved payments = remaining balance. Only approved records from this journal reduce the balance.',
                   )}
                 </p>
               </div>

@@ -88,22 +88,17 @@ describe('buildDashboardPayrollSummary', () => {
         payment('payment-nick-rejected', 'emp-nick', 9000, 'rejected'),
         payment('payment-pavel-approved', 'emp-pavel', 4000, 'approved'),
       ],
-    }, 4, 2025, 'approved');
+    }, 4, 2025);
 
     expect(summary.rows.map((row) => row.employee.id)).toEqual(['emp-nick', 'emp-pavel']);
     expect(summary.totals.earnedActual).toBe(14000);
     expect(summary.totals.paidApproved).toBe(10000);
     expect(summary.totals.outstandingDue).toBe(4000);
     expect(summary.pendingPayments).toEqual({ count: 1, amount: 1000 });
-    expect(summary.closeState).toMatchObject({
-      scheduleApproved: true,
-      hasPendingPayments: true,
-      hasOutstandingDue: true,
-      canClose: false,
-    });
+    expect(summary.totals.reserveToMonthEnd).toBe(4000);
   });
 
-  it('allows closing only after schedule approval, no pending requests, and no positive balances', () => {
+  it('does not treat pending or rejected payments as approved payroll money', () => {
     const source = {
       employees,
       shifts: [
@@ -111,20 +106,18 @@ describe('buildDashboardPayrollSummary', () => {
         shift('shift-pavel-1', 'emp-pavel', '2025-04-03', 4000),
       ],
       payments: [
-        payment('payment-nick-approved', 'emp-nick', 5000, 'approved'),
+        payment('payment-nick-pending', 'emp-nick', 5000, 'pending'),
+        payment('payment-nick-rejected', 'emp-nick', 5000, 'rejected'),
         payment('payment-pavel-approved', 'emp-pavel', 4000, 'approved'),
       ],
     };
 
-    expect(buildDashboardPayrollSummary(source, 4, 2025, 'draft').closeState).toMatchObject({
-      scheduleApproved: false,
-      canApprove: true,
-      canClose: false,
-    });
-    expect(buildDashboardPayrollSummary(source, 4, 2025, 'approved').closeState).toMatchObject({
-      scheduleApproved: true,
-      canClose: true,
-    });
+    const summary = buildDashboardPayrollSummary(source, 4, 2025);
+
+    expect(summary.totals.earnedActual).toBe(9000);
+    expect(summary.totals.paidApproved).toBe(4000);
+    expect(summary.totals.outstandingDue).toBe(5000);
+    expect(summary.pendingPayments).toEqual({ count: 1, amount: 5000 });
   });
 
   it('keeps an owner row only when it has payroll activity in the month', () => {
@@ -132,7 +125,7 @@ describe('buildDashboardPayrollSummary', () => {
       employees,
       shifts: [shift('shift-owner', 'emp-owner', '2025-04-01', 3000)],
       payments: [],
-    }, 4, 2025, 'approved');
+    }, 4, 2025);
 
     expect(summary.rows.map((row) => row.employee.id)).toContain('emp-owner');
   });

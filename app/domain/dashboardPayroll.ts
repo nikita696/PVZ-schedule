@@ -1,5 +1,5 @@
 import { getEmployeeStats } from './payroll';
-import type { Employee, EmployeeRateHistory, EmployeeStats, MonthStatus, Payment, Shift } from './types';
+import type { Employee, EmployeeRateHistory, EmployeeStats, Payment, Shift } from './types';
 
 export interface DashboardPayrollSource {
   employees: Employee[];
@@ -35,14 +35,6 @@ export interface DashboardPayrollSummary {
     count: number;
     amount: number;
   };
-  closeState: {
-    scheduleApproved: boolean;
-    isClosed: boolean;
-    hasPendingPayments: boolean;
-    hasOutstandingDue: boolean;
-    canApprove: boolean;
-    canClose: boolean;
-  };
 }
 
 const isInMonth = (date: string, month: number, year: number): boolean => {
@@ -74,7 +66,6 @@ export const buildDashboardPayrollSummary = (
   source: DashboardPayrollSource,
   month: number,
   year: number,
-  monthStatus: MonthStatus,
 ): DashboardPayrollSummary => {
   const rows = source.employees
     .map((employee): DashboardPayrollEmployeeRow => {
@@ -135,25 +126,12 @@ export const buildDashboardPayrollSummary = (
     plannedCount: 0,
   });
 
-  const scheduleApproved = monthStatus === 'approved' || monthStatus === 'closed';
-  const isClosed = monthStatus === 'closed';
-  const hasPendingPayments = pendingMonthPayments.length > 0;
-  const hasOutstandingDue = totals.outstandingDue > 0;
-
   return {
     rows,
     totals,
     pendingPayments: {
       count: pendingMonthPayments.length,
       amount: pendingMonthPayments.reduce((sum, payment) => sum + payment.amount, 0),
-    },
-    closeState: {
-      scheduleApproved,
-      isClosed,
-      hasPendingPayments,
-      hasOutstandingDue,
-      canApprove: monthStatus === 'draft' || monthStatus === 'pending_approval',
-      canClose: monthStatus === 'approved' && !hasPendingPayments && !hasOutstandingDue,
     },
   };
 };

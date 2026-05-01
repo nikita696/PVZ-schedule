@@ -374,17 +374,18 @@ const bootstrapDashboard = async (page: Page, role: FixtureRole) => {
 test.describe('dashboard payroll redesign', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test('admin sees payroll closing master and employee balances', async ({ page }) => {
+  test('admin sees payroll calculator and employee balances without month closing controls', async ({ page }) => {
     await bootstrapDashboard(page, 'admin');
     await page.goto('/admin/dashboard');
 
     await expect(page.getByTestId('owner-payroll-dashboard')).toBeVisible();
-    await expect(page.getByTestId('payroll-close-master')).toContainText('Remaining payroll for the month');
+    await expect(page.getByTestId('payroll-calculator')).toContainText('Remaining payroll for the month');
     await expect(page.getByTestId('payroll-employee-row')).toHaveCount(2);
     await expect(page.getByText('Tatiana Owner')).toHaveCount(1);
     await expect(page.getByTestId('payroll-employee-row').filter({ hasText: 'Tatiana Owner' })).toHaveCount(0);
     await expect(page.getByTestId('payroll-employee-row').filter({ hasText: 'Nick' })).toContainText('RUB');
-    await expect(page.getByTestId('close-month-button')).toBeDisabled();
+    await expect(page.getByText('Ready to close')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Close month|Month closed/ })).toHaveCount(0);
   });
 
   test('pay balance opens a prefilled payment dialog', async ({ page }) => {
@@ -395,7 +396,7 @@ test.describe('dashboard payroll redesign', () => {
     await expect(page.locator('[role="dialog"]')).toBeVisible();
     await expect(page.locator('#payment-employee')).toHaveValue('emp-nick');
     await expect(page.locator('#payment-amount')).toHaveValue('4000');
-    await expect(page.locator('#payment-comment')).toHaveValue(/Payroll closing for April 2026/);
+    await expect(page.locator('#payment-comment')).toHaveValue(/Payroll payment for April 2026/);
 
     await page.locator('[role="dialog"]').getByRole('button', { name: 'Record payment' }).click();
 
@@ -423,7 +424,7 @@ test.describe('dashboard payroll redesign', () => {
     await bootstrapDashboard(page, 'admin');
     await page.goto('/admin/dashboard');
 
-    await expect(page.getByTestId('payroll-close-master')).toBeVisible();
+    await expect(page.getByTestId('payroll-calculator')).toBeVisible();
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
     const viewportWidth = await page.evaluate(() => window.innerWidth);
     expect(scrollWidth).toBeLessThanOrEqual(viewportWidth + 2);

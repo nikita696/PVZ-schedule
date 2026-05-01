@@ -344,11 +344,6 @@ export function ExperimentalCalendarWorkspace({ classicHref }: ExperimentalCalen
                           {t('Утвердить', 'Approve')}
                         </Button>
                       ) : null}
-                      {selectedMonthStatus === 'approved' ? (
-                        <Button size="sm" variant="outline" className="h-9 rounded-full px-3" onClick={() => void handleMonthStatusChange('closed')}>
-                          {t('Закрыть', 'Close')}
-                        </Button>
-                      ) : null}
                       {selectedMonthStatus === 'pending_approval' ? (
                         <Button size="sm" variant="ghost" className="h-9 rounded-full px-3" onClick={() => void handleMonthStatusChange('draft')}>
                           {t('В черновик', 'Back to draft')}

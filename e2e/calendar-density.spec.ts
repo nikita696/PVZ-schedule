@@ -407,40 +407,39 @@ test.describe('calendar routes', () => {
     expect(rpcCalls.deletes).toEqual([{ employeeId: 'emp-alina', date: '2026-05-01' }]);
   });
 
-  test('employee calendar route uses the experimental workspace with readable Russian copy', async ({ page }) => {
-    await bootstrapCalendar(page, 'employee');
+  test('employee calendar route uses the classic table schedule with scoped editing', async ({ page }) => {
+    const { rpcCalls } = await bootstrapCalendar(page, 'employee');
     await page.goto('/employee/calendar');
 
-    await expect(page.getByTestId('experimental-calendar-shell')).toBeVisible();
-    await expect(page.getByTestId('legacy-calendar-shell')).toHaveCount(0);
-    await expect(page.getByText('Рабочий календарь')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Сегодня' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Старая версия' })).toBeVisible();
-    await expect(page.getByText('Мой график').first()).toBeVisible();
+    await expect(page.getByTestId('legacy-calendar-shell')).toBeVisible();
+    await expect(page.getByTestId('monthly-schedule-table-shell')).toBeVisible();
+    await expect(page.locator('[data-testid="experimental-calendar-shell"]')).toHaveCount(0);
+    await expect(page.locator('a[href$="/classic"]')).toHaveCount(0);
 
-    const mayFirstCard = page.locator('[data-day="2026-05-01"]');
-    await expect(mayFirstCard).toContainText('Павел Смирнов');
-    await expect(mayFirstCard).toContainText('Вых');
-    await expect(mayFirstCard).not.toContainText(/ещё 1|1 more/i);
+    const ownCell = shiftCell(page, 'emp-pavel', '2026-05-01');
+    const ownerCell = shiftCell(page, 'emp-owner', '2026-05-01');
+    await expect(ownCell).toHaveAttribute('data-status', 'day_off');
+    await expect(ownerCell).toHaveAttribute('data-status', 'shift');
+    await expect(ownerCell).toBeDisabled();
 
-    await mayFirstCard.getByRole('button', { name: /Павел Смирнов/i }).click();
-    await expect(page.getByTestId('calendar-assignment-editor')).toBeVisible();
-    await expect(page.getByText('Текущий статус: Выходной')).toBeVisible();
+    await ownCell.click();
+    await expect(page.getByTestId('shift-status-popover')).toBeVisible();
+    await page.getByTestId('shift-option-sick_leave').click();
+
+    await expect(ownCell).toHaveAttribute('data-status', 'sick_leave');
+    expect(rpcCalls.upserts).toEqual([{ employeeId: 'emp-pavel', date: '2026-05-01', status: 'sick_leave' }]);
   });
 
-  test('employee shifts route uses the same experimental workspace with scoped editing', async ({ page }) => {
+  test('employee shifts route uses the same classic table schedule with scoped editing', async ({ page }) => {
     await bootstrapCalendar(page, 'employee');
     await page.goto('/employee/shifts');
 
-    await expect(page.getByTestId('experimental-calendar-shell')).toBeVisible();
-    await expect(page.getByTestId('legacy-calendar-shell')).toHaveCount(0);
+    await expect(page.getByTestId('legacy-calendar-shell')).toBeVisible();
+    await expect(page.getByTestId('monthly-schedule-table-shell')).toBeVisible();
+    await expect(page.locator('[data-testid="experimental-calendar-shell"]')).toHaveCount(0);
 
-    const mayFirstCard = page.locator('[data-day="2026-05-01"]');
-    await expect(mayFirstCard).toContainText('Павел Смирнов');
-    await mayFirstCard.getByRole('button', { name: /Павел Смирнов/i }).click();
-    await expect(page.getByTestId('calendar-assignment-editor')).toBeVisible();
-
-    await expect(page.locator('[data-day="2026-05-01"]').getByRole('button', { name: /Никита Власов/i })).toHaveCount(0);
+    await expect(shiftCell(page, 'emp-pavel', '2026-05-01')).toBeEnabled();
+    await expect(shiftCell(page, 'emp-owner', '2026-05-01')).toBeDisabled();
   });
 
   test('admin classic alias also renders the table schedule', async ({ page }) => {

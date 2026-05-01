@@ -115,11 +115,6 @@ export function LegacyCalendarPageView() {
                       {t('Утвердить месяц', 'Approve month')}
                     </Button>
                   ) : null}
-                  {selectedMonthStatus === 'approved' ? (
-                    <Button variant="outline" onClick={() => void handleMonthStatusChange('closed')}>
-                      {t('Закрыть месяц', 'Close month')}
-                    </Button>
-                  ) : null}
                   {selectedMonthStatus === 'pending_approval' ? (
                     <Button variant="outline" onClick={() => void handleMonthStatusChange('draft')}>
                       {t('Вернуть в черновик', 'Return to draft')}
