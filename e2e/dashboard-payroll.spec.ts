@@ -225,6 +225,7 @@ const buildFixtureData = (role: FixtureRole): FixtureData => {
     payments: [
       createPaymentRow('payment-nick-approved', 'emp-nick', 6000, '2026-04-10', 'Salary advance', 'approved', '2026-04-10T09:00:00.000Z'),
       createPaymentRow('payment-nick-pending', 'emp-nick', 1000, '2026-04-11', 'Employee request', 'pending', '2026-04-11T09:00:00.000Z'),
+      createPaymentRow('payment-nick-march-approved', 'emp-nick', 2500, '2026-03-29', 'Previous month carry', 'approved', '2026-03-29T09:00:00.000Z'),
       createPaymentRow('payment-pavel-approved', 'emp-pavel', 4500, '2026-04-12', 'April payout', 'approved', '2026-04-12T09:00:00.000Z'),
     ],
     rateHistory: employees.map((employee) => ({
@@ -400,7 +401,7 @@ test.describe('dashboard payroll redesign', () => {
 
     await page.locator('[role="dialog"]').getByRole('button', { name: 'Record payment' }).click();
 
-    expect(rpcCalls.creates).toHaveLength(1);
+    await expect.poll(() => rpcCalls.creates.length).toBe(1);
     expect(rpcCalls.creates[0]).toMatchObject({
       employeeId: 'emp-nick',
       amount: 4000,
@@ -413,7 +414,10 @@ test.describe('dashboard payroll redesign', () => {
 
     await expect(page.getByTestId('employee-payroll-dashboard')).toBeVisible();
     await expect(page.getByTestId('owner-payroll-dashboard')).toHaveCount(0);
-    await expect(page.getByTestId('employee-payroll-formula')).toContainText('Calculation: my payable shifts by rates');
+    await expect(page.getByTestId('employee-payroll-dashboard')).toContainText('RUB 1,500');
+    await expect(page.getByTestId('employee-payroll-formula')).toContainText('Calculation to date');
+    await expect(page.getByTestId('employee-payroll-formula')).toContainText('Selected month separately');
+    await expect(page.getByTestId('employee-payroll-formula')).toContainText('RUB 4,000');
     await expect(page.getByTestId('employee-payment-row')).toHaveCount(2);
     await expect(page.getByText('April payout')).toHaveCount(0);
     await expect(page.getByTestId('payroll-pay-balance-emp-nick')).toHaveCount(0);

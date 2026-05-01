@@ -25,7 +25,7 @@ import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { buildDashboardPayrollSummary, type DashboardPayrollEmployeeRow } from '../domain/dashboardPayroll';
 import { isShiftLikeStatus } from '../domain/shiftStatus';
-import type { AddPaymentInput, Employee, EmployeeStats, Payment, Shift } from '../domain/types';
+import type { AddPaymentInput, Employee, EmployeeDebtSnapshot, EmployeeStats, Payment, Shift } from '../domain/types';
 import { getLocalISODate } from '../lib/date';
 import { getMonthStatusLabels, getDashboardCopy } from './dashboardCopy';
 
@@ -86,6 +86,7 @@ export default function DashboardPage() {
     setSelectedYear,
     addPayment,
     getEmployeeStats,
+    getEmployeeDebtSnapshot,
     exportEmployeePayslipXlsx,
     isOwner,
     myEmployeeId,
@@ -241,6 +242,7 @@ export default function DashboardPage() {
           <EmployeeDashboard
             employee={myEmployee}
             stats={myEmployee ? getEmployeeStats(myEmployee.id, selectedMonth, selectedYear) : null}
+            debtSnapshot={myEmployee ? getEmployeeDebtSnapshot(myEmployee.id) : null}
             monthWorkdayTotal={monthWorkdayTotal}
             payments={myEmployee ? payments.filter((payment) => payment.employeeId === myEmployee.id) : []}
             month={selectedMonth}
@@ -526,6 +528,7 @@ function InlineInfo({ label, value }: { label: string; value: string }) {
 function EmployeeDashboard({
   employee,
   stats,
+  debtSnapshot,
   monthWorkdayTotal,
   payments,
   month,
@@ -536,6 +539,7 @@ function EmployeeDashboard({
 }: {
   employee: Employee | null;
   stats: EmployeeStats | null;
+  debtSnapshot: EmployeeDebtSnapshot | null;
   monthWorkdayTotal: number;
   payments: Payment[];
   month: number;
@@ -546,7 +550,7 @@ function EmployeeDashboard({
 }) {
   const { t } = useLanguage();
 
-  if (!employee || !stats) {
+  if (!employee || !stats || !debtSnapshot) {
     return (
       <Card className="rounded-lg">
         <CardContent className="p-5 text-sm text-muted-foreground">
@@ -575,15 +579,15 @@ function EmployeeDashboard({
               </span>
             </div>
             <div className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
-              {t('Осталось к выплате', 'Remaining balance')}
+              {t('Баланс на сегодня', 'Balance to date')}
             </div>
             <div className="mt-2 text-4xl font-semibold leading-none text-stone-950 tabular-nums">
-              {money(stats.dueNow, locale)}
+              {money(debtSnapshot.debtToDate, locale)}
             </div>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-600" data-testid="employee-payroll-formula">
               {t(
-                `Как считается: мои оплачиваемые смены по ставкам = ${money(stats.earnedActual, locale)}. Из них уже подтверждено выплат ${money(stats.paidApproved, locale)}, остаток ${money(stats.dueNow, locale)}.`,
-                `Calculation: my payable shifts by rates = ${money(stats.earnedActual, locale)}. Approved payments are ${money(stats.paidApproved, locale)}, remaining balance is ${money(stats.dueNow, locale)}.`,
+                `Как считается на сегодня: все отработанные смены (${debtSnapshot.workedCountTotalToDate}) по ставкам = ${money(debtSnapshot.accruedToDate, locale)}. Минус подтвержденные выплаты ${money(debtSnapshot.paidToDate, locale)} = ${money(debtSnapshot.debtToDate, locale)}. Выбранный месяц отдельно: начислено ${money(stats.earnedActual, locale)} - выплаты ${money(stats.paidApproved, locale)} = ${money(stats.dueNow, locale)}.`,
+                `Calculation to date: all worked shifts (${debtSnapshot.workedCountTotalToDate}) by rates = ${money(debtSnapshot.accruedToDate, locale)}. Minus approved payments ${money(debtSnapshot.paidToDate, locale)} = ${money(debtSnapshot.debtToDate, locale)}. Selected month separately: accrued ${money(stats.earnedActual, locale)} - payments ${money(stats.paidApproved, locale)} = ${money(stats.dueNow, locale)}.`,
               )}
             </p>
           </div>
@@ -603,7 +607,7 @@ function EmployeeDashboard({
         />
         <EmployeeFact label={copy.employee.stats.earnedActual} value={money(stats.earnedActual, locale)} />
         <EmployeeFact label={copy.employee.stats.paidApproved} value={money(stats.paidApproved, locale)} />
-        <EmployeeFact label={copy.employee.stats.dueNow} value={money(stats.dueNow, locale)} />
+        <EmployeeFact label={t('Остаток выбранного месяца', 'Selected month balance')} value={money(stats.dueNow, locale)} />
         <EmployeeFact
           label={copy.employee.stats.forecastTotal}
           value={money(stats.forecastTotal, locale)}

@@ -195,7 +195,7 @@ export const getEmployeeDebtSnapshot = (
   const paidToDate = source.payments
     .filter((payment) => (
       payment.employeeId === employeeId &&
-      payment.status !== 'rejected' &&
+      payment.status === 'approved' &&
       payment.date <= todayDate
     ))
     .reduce((sum, payment) => sum + payment.amount, 0);

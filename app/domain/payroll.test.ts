@@ -387,13 +387,13 @@ describe('payroll domain', () => {
     });
   });
 
-  it('builds debt snapshot as of today with pending payments and historical rates', () => {
+  it('builds debt snapshot as of today with approved payments and historical rates', () => {
     expect(getEmployeeDebtSnapshot(source, 'employee-1', '2025-02-10')).toEqual({
       workedCountTotalToDate: 3,
       workedCountCurrentMonthToDate: 1,
       accruedToDate: 8000,
-      paidToDate: 4400,
-      debtToDate: 3600,
+      paidToDate: 3000,
+      debtToDate: 5000,
     });
   });
 });
