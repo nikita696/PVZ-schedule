@@ -79,7 +79,7 @@ export const getDashboardCopy = (language: AppLanguage) => ({
     },
     stats: {
       workedCount: pickByLanguage(language, 'Отработано дней', 'Worked days'),
-      workedCountHint: pickByLanguage(language, 'мои смены / дней по графику', 'my shifts / scheduled days'),
+      workedCountHint: pickByLanguage(language, 'мои смены / дней по графику / отработано всего', 'my shifts / scheduled shifts / worked total'),
       earnedActual: pickByLanguage(language, 'Заработано', 'Earned'),
       paidApproved: pickByLanguage(language, 'Выплачено', 'Paid'),
       dueNow: pickByLanguage(language, 'Долг ПВЗ', 'Amount due'),

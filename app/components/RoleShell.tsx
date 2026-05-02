@@ -108,11 +108,6 @@ export function RoleShell({ role, children }: RoleShellProps) {
   ), [location.pathname]);
   const isCalendarWorkspace = /^\/(admin|employee)\/calendar(\/classic)?$/.test(normalizedPathname);
 
-  const routeLabel = useMemo(() => {
-    const matchedLink = links.find((link) => normalizedPathname.startsWith(link.to));
-    return matchedLink?.label ?? matchedLink?.roleBadge ?? t('Пользователь', 'User');
-  }, [links, normalizedPathname, t]);
-
   const pageMeta = useMemo(() => {
     const matchedLink = links.find((link) => normalizedPathname.startsWith(link.to));
     return matchedLink ?? null;
@@ -170,9 +165,6 @@ export function RoleShell({ role, children }: RoleShellProps) {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={cn('rounded-full px-3 py-1 text-xs font-semibold', shellMeta.badgeClassName)}>
                     {pageMeta?.roleBadge ?? t('Пользователь', 'User')}
-                  </span>
-                  <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">
-                    {pageMeta?.title ?? routeLabel}
                   </span>
                 </div>
                 <div className="mt-1 truncate text-sm font-semibold text-stone-900">

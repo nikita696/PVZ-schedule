@@ -35,14 +35,9 @@ const money = (value: number, locale: string) => new Intl.NumberFormat(locale, {
   maximumFractionDigits: 0,
 }).format(value);
 
-const getMonthYear = (date: string) => {
-  const [year, month] = date.split('-').map(Number);
-  return { year, month };
-};
-
-const isInMonth = (date: string, month: number, year: number) => {
-  const parsed = getMonthYear(date);
-  return parsed.month === month && parsed.year === year;
+const isPaymentInMonth = (date: string, month: number, year: number) => {
+  const [paymentYear, paymentMonth] = date.split('-').map(Number);
+  return paymentMonth === month && paymentYear === year;
 };
 
 const resolveShiftStatus = (shift: Shift) => (
@@ -139,24 +134,6 @@ export default function DashboardPage() {
     shifts,
   ]);
 
-  const monthWorkdayTotal = useMemo(() => {
-    const scheduledDays = new Set<string>();
-
-    for (const shift of shifts) {
-      if (!isInMonth(shift.date, selectedMonth, selectedYear)) {
-        continue;
-      }
-
-      if (!isShiftLikeStatus(resolveShiftStatus(shift))) {
-        continue;
-      }
-
-      scheduledDays.add(shift.date);
-    }
-
-    return scheduledDays.size;
-  }, [selectedMonth, selectedYear, shifts]);
-
   const todayInfo = useMemo(() => {
     const today = getLocalISODate();
     const todayShifts = shifts.filter((shift) => shift.date === today);
@@ -211,7 +188,7 @@ export default function DashboardPage() {
         <DashboardToolbar
           month={selectedMonth}
           year={selectedYear}
-          statusLabel={monthStatusLabels[selectedMonthStatus]}
+          statusLabel={isOwner ? monthStatusLabels[selectedMonthStatus] : null}
           onMonthChange={setSelectedMonth}
           onYearChange={setSelectedYear}
         />
@@ -243,7 +220,6 @@ export default function DashboardPage() {
             employee={myEmployee}
             stats={myEmployee ? getEmployeeStats(myEmployee.id, selectedMonth, selectedYear) : null}
             debtSnapshot={myEmployee ? getEmployeeDebtSnapshot(myEmployee.id) : null}
-            monthWorkdayTotal={monthWorkdayTotal}
             payments={myEmployee ? payments.filter((payment) => payment.employeeId === myEmployee.id) : []}
             month={selectedMonth}
             year={selectedYear}
@@ -270,7 +246,7 @@ function DashboardToolbar({
 }: {
   month: number;
   year: number;
-  statusLabel: string;
+  statusLabel: string | null;
   onMonthChange: (month: number) => void;
   onYearChange: (year: number) => void;
 }) {
@@ -283,9 +259,11 @@ function DashboardToolbar({
           <span className="rounded-full bg-stone-900 px-3 py-1 text-xs font-semibold text-white">
             {t('Зарплатная сводка', 'Payroll overview')}
           </span>
-          <span className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-semibold text-stone-700">
-            {t('Месяц', 'Month')}: {statusLabel}
-          </span>
+          {statusLabel ? (
+            <span className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-semibold text-stone-700">
+              {t('Месяц', 'Month')}: {statusLabel}
+            </span>
+          ) : null}
         </div>
 
         <MonthYearSelector
@@ -529,7 +507,6 @@ function EmployeeDashboard({
   employee,
   stats,
   debtSnapshot,
-  monthWorkdayTotal,
   payments,
   month,
   year,
@@ -540,7 +517,6 @@ function EmployeeDashboard({
   employee: Employee | null;
   stats: EmployeeStats | null;
   debtSnapshot: EmployeeDebtSnapshot | null;
-  monthWorkdayTotal: number;
   payments: Payment[];
   month: number;
   year: number;
@@ -560,10 +536,27 @@ function EmployeeDashboard({
     );
   }
 
-  const monthPayments = sortPaymentsDesc(payments.filter((payment) => isInMonth(payment.date, month, year)));
+  const monthPayments = sortPaymentsDesc(payments.filter((payment) => isPaymentInMonth(payment.date, month, year)));
   const recentPayments = monthPayments.slice(0, 4);
   const pendingCount = monthPayments.filter((payment) => payment.status === 'pending').length;
   const plannedFutureAmount = Math.max(0, stats.forecastTotal - stats.earnedActual);
+  const selectedMonthScheduledCount = stats.workedCount + stats.plannedCount;
+  const earnedAverageRate = stats.workedCount > 0 && stats.earnedActual % stats.workedCount === 0
+    ? money(stats.earnedActual / stats.workedCount, locale)
+    : null;
+  const plannedAverageRate = stats.plannedCount > 0 && plannedFutureAmount % stats.plannedCount === 0
+    ? money(plannedFutureAmount / stats.plannedCount, locale)
+    : null;
+  const earnedHelper = stats.workedCount > 0
+    ? earnedAverageRate
+      ? t(`${stats.workedCount} смены × ${earnedAverageRate}`, `${stats.workedCount} shifts × ${earnedAverageRate}`)
+      : t(`сумма ставок ${stats.workedCount} отработанных смен`, `sum of rates for ${stats.workedCount} worked shifts`)
+    : t('отработанных смен в выбранном месяце пока нет', 'no worked shifts in the selected month yet');
+  const plannedFutureHelper = stats.plannedCount > 0
+    ? plannedAverageRate
+      ? t(`начислено ${money(stats.earnedActual, locale)} + будущие смены ${stats.plannedCount} × ${plannedAverageRate}`, `accrued ${money(stats.earnedActual, locale)} + future shifts ${stats.plannedCount} × ${plannedAverageRate}`)
+      : t(`начислено ${money(stats.earnedActual, locale)} + будущие смены ${money(plannedFutureAmount, locale)}`, `accrued ${money(stats.earnedActual, locale)} + future shifts ${money(plannedFutureAmount, locale)}`)
+    : t(`начислено ${money(stats.earnedActual, locale)}; будущих смен нет`, `accrued ${money(stats.earnedActual, locale)}; no future shifts`);
 
   return (
     <div className="grid gap-4" data-testid="employee-payroll-dashboard">
@@ -574,9 +567,6 @@ function EmployeeDashboard({
               <span className="rounded-full bg-stone-900 px-3 py-1 text-xs font-semibold text-white">
                 {t('Мой расчет', 'My payroll')}
               </span>
-              <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-700">
-                {employee.name}
-              </span>
             </div>
             <div className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
               {t('Баланс на сегодня', 'Balance to date')}
@@ -586,8 +576,8 @@ function EmployeeDashboard({
             </div>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-600" data-testid="employee-payroll-formula">
               {t(
-                `Как считается на сегодня: все отработанные смены (${debtSnapshot.workedCountTotalToDate}) по ставкам = ${money(debtSnapshot.accruedToDate, locale)}. Минус подтвержденные выплаты ${money(debtSnapshot.paidToDate, locale)} = ${money(debtSnapshot.debtToDate, locale)}. Выбранный месяц отдельно: начислено ${money(stats.earnedActual, locale)} - выплаты ${money(stats.paidApproved, locale)} = ${money(stats.dueNow, locale)}.`,
-                `Calculation to date: all worked shifts (${debtSnapshot.workedCountTotalToDate}) by rates = ${money(debtSnapshot.accruedToDate, locale)}. Minus approved payments ${money(debtSnapshot.paidToDate, locale)} = ${money(debtSnapshot.debtToDate, locale)}. Selected month separately: accrued ${money(stats.earnedActual, locale)} - payments ${money(stats.paidApproved, locale)} = ${money(stats.dueNow, locale)}.`,
+                'Формула: баланс на сегодня = все отработанные смены по ставкам - подтвержденные выплаты. Выбранный месяц ниже считается отдельно.',
+                'Formula: balance to date = all worked shifts by rates - approved payments. The selected month is calculated separately below.',
               )}
             </p>
           </div>
@@ -602,18 +592,28 @@ function EmployeeDashboard({
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <EmployeeFact
           label={copy.employee.stats.workedCount}
-          value={`${stats.workedCount} / ${monthWorkdayTotal} · ${t('всего', 'total')} ${debtSnapshot.workedCountTotalToDate}`}
+          value={`${stats.workedCount}/${selectedMonthScheduledCount}/${debtSnapshot.workedCountTotalToDate}`}
           helper={copy.employee.stats.workedCountHint}
         />
-        <EmployeeFact label={copy.employee.stats.earnedActual} value={money(stats.earnedActual, locale)} />
-        <EmployeeFact label={copy.employee.stats.paidApproved} value={money(stats.paidApproved, locale)} />
-        <EmployeeFact label={t('Остаток выбранного месяца', 'Selected month balance')} value={money(stats.dueNow, locale)} />
         <EmployeeFact
-          label={copy.employee.stats.forecastTotal}
+          label={t('Начислено за месяц', 'Accrued this month')}
+          value={money(stats.earnedActual, locale)}
+          helper={earnedHelper}
+        />
+        <EmployeeFact
+          label={t('Выплачено за месяц', 'Paid this month')}
+          value={money(stats.paidApproved, locale)}
+          helper={t('только подтвержденные выплаты', 'approved payments only')}
+        />
+        <EmployeeFact
+          label={t('Остаток за месяц', 'Month balance')}
+          value={money(stats.dueNow, locale)}
+          helper={t(`начислено ${money(stats.earnedActual, locale)} - выплаты ${money(stats.paidApproved, locale)}`, `accrued ${money(stats.earnedActual, locale)} - payments ${money(stats.paidApproved, locale)}`)}
+        />
+        <EmployeeFact
+          label={t('План по графику', 'Schedule plan')}
           value={money(stats.forecastTotal, locale)}
-          helper={plannedFutureAmount > 0
-            ? t(`Будущие смены: ${money(plannedFutureAmount, locale)}`, `Future shifts: ${money(plannedFutureAmount, locale)}`)
-            : t('Будущих смен по графику нет.', 'No future shifts are scheduled.')}
+          helper={plannedFutureHelper}
         />
       </section>
 

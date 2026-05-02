@@ -415,10 +415,12 @@ test.describe('dashboard payroll redesign', () => {
     await expect(page.getByTestId('employee-payroll-dashboard')).toBeVisible();
     await expect(page.getByTestId('owner-payroll-dashboard')).toHaveCount(0);
     await expect(page.getByTestId('employee-payroll-dashboard')).toContainText('RUB 1,500');
-    await expect(page.getByTestId('employee-payroll-formula')).toContainText('Calculation to date');
-    await expect(page.getByTestId('employee-payroll-formula')).toContainText('Selected month separately');
-    await expect(page.getByTestId('employee-payroll-formula')).toContainText('RUB 4,000');
-    await expect(page.getByText('2 / 3 · total 2')).toBeVisible();
+    await expect(page.getByTestId('employee-payroll-formula')).toContainText('Formula: balance to date');
+    await expect(page.getByTestId('employee-payroll-formula')).not.toContainText('RUB');
+    await expect(page.getByText('2/2/2')).toBeVisible();
+    await expect(page.getByText('my shifts / scheduled shifts / worked total')).toBeVisible();
+    await expect(page.getByText('2 shifts × RUB 5,000')).toBeVisible();
+    await expect(page.getByText('accrued RUB 10,000 - payments RUB 6,000')).toBeVisible();
     await expect(page.getByTestId('employee-payment-row')).toHaveCount(2);
     await expect(page.getByText('April payout')).toHaveCount(0);
     await expect(page.getByTestId('payroll-pay-balance-emp-nick')).toHaveCount(0);

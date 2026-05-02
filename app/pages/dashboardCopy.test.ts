@@ -32,9 +32,9 @@ describe('dashboardCopy', () => {
     const en = getDashboardCopy('en');
 
     expect(ru.employee.stats.workedCount).toBe('Отработано дней');
-    expect(ru.employee.stats.workedCountHint).toBe('мои смены / дней по графику');
+    expect(ru.employee.stats.workedCountHint).toBe('мои смены / дней по графику / отработано всего');
     expect(en.employee.stats.workedCount).toBe('Worked days');
-    expect(en.employee.stats.workedCountHint).toBe('my shifts / scheduled days');
+    expect(en.employee.stats.workedCountHint).toBe('my shifts / scheduled shifts / worked total');
   });
 
   it('keeps debt calculator copy readable in both languages', () => {
