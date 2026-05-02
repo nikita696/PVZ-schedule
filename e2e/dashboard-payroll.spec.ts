@@ -418,6 +418,7 @@ test.describe('dashboard payroll redesign', () => {
     await expect(page.getByTestId('employee-payroll-formula')).toContainText('Calculation to date');
     await expect(page.getByTestId('employee-payroll-formula')).toContainText('Selected month separately');
     await expect(page.getByTestId('employee-payroll-formula')).toContainText('RUB 4,000');
+    await expect(page.getByText('2 / 3 · total 2')).toBeVisible();
     await expect(page.getByTestId('employee-payment-row')).toHaveCount(2);
     await expect(page.getByText('April payout')).toHaveCount(0);
     await expect(page.getByTestId('payroll-pay-balance-emp-nick')).toHaveCount(0);

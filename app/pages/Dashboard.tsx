@@ -602,7 +602,7 @@ function EmployeeDashboard({
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <EmployeeFact
           label={copy.employee.stats.workedCount}
-          value={`${stats.workedCount} / ${monthWorkdayTotal}`}
+          value={`${stats.workedCount} / ${monthWorkdayTotal} · ${t('всего', 'total')} ${debtSnapshot.workedCountTotalToDate}`}
           helper={copy.employee.stats.workedCountHint}
         />
         <EmployeeFact label={copy.employee.stats.earnedActual} value={money(stats.earnedActual, locale)} />
